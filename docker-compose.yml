@@ -1,0 +1,74 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  # Web dashboard service
+  web:
+    build: .
+    container_name: cdon-web
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    environment:
+      - SERVICE_MODE=web
+      - DB_PATH=/app/data/cdon_movies.db
+      - TZ=Europe/Helsinki
+    command: python monitor.py web
+    restart: unless-stopped
+    networks:
+      - cdon-net
+
+  # Price monitor service (runs periodically)
+  monitor:
+    build: .
+    container_name: cdon-monitor
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    environment:
+      - SERVICE_MODE=monitor
+      - DB_PATH=/app/data/cdon_movies.db
+      - CHECK_INTERVAL_HOURS=6
+      - TZ=Europe/Helsinki
+      # Email configuration (optional)
+      - EMAIL_ENABLED=false
+      - EMAIL_FROM=${EMAIL_FROM:-}
+      - EMAIL_TO=${EMAIL_TO:-}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD:-}
+      - SMTP_SERVER=${SMTP_SERVER:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      # Discord webhook (optional)
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK:-}
+    command: python monitor.py monitor
+    restart: unless-stopped
+    depends_on:
+      - web
+    networks:
+      - cdon-net
+
+  # One-time crawler (use for initial setup or manual runs)
+  crawler:
+    build: .
+    container_name: cdon-crawler
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    environment:
+      - SERVICE_MODE=crawl
+      - DB_PATH=/app/data/cdon_movies.db
+      - TZ=Europe/Helsinki
+    command: python monitor.py crawl
+    profiles:
+      - crawler
+    networks:
+      - cdon-net
+
+networks:
+  cdon-net:
+    driver: bridge
+
+volumes:
+  data:
+    driver: local

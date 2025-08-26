@@ -1,0 +1,58 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Database
+data/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Backups
+backups/
+*.tar.gz
+*.zip
+
+# SSL certificates
+ssl/
+*.pem
+*.crt
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Docker/Podman
+.docker/
+
+# Migration packages
+cdon-migration-*.tar.gz
+
+# Test files
+test_*
+*.test
+
+# Temporary files
+tmp/
+temp/
