@@ -19,7 +19,7 @@ from pathlib import Path
 import sys
 
 # Import the main scraper
-from cdon_scraper import CDONScraper
+from cdon_scraper_v2 import CDONScraper
 
 # Configuration from environment variables
 CONFIG = {

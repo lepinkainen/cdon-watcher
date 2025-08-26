@@ -25,7 +25,9 @@ tar -czf $MIGRATION_PACKAGE \
     docker-compose.yml \
     docker-compose.prod.yml \
     requirements.txt \
-    cdon_scraper.py \
+    cdon_scraper_v2.py \
+    listing_crawler.py \
+    product_parser.py \
     monitor.py \
     nginx.conf \
     scripts/run-prod.sh \

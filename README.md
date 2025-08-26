@@ -120,7 +120,9 @@ CHECK_INTERVAL_HOURS=6
 
 ```
 cdon-watcher/
-├── cdon_scraper.py           # Main scraper logic
+├── cdon_scraper_v2.py        # Hybrid scraper orchestrator
+├── listing_crawler.py        # Playwright-based listing crawler  
+├── product_parser.py         # Pure Python product parser
 ├── monitor.py                # Price monitor & web app
 ├── Dockerfile                # Container definition
 ├── docker-compose.yml        # Service orchestration
@@ -213,7 +215,7 @@ python monitor.py monitor   # Run price monitor
 ```
 
 ### Modifying Scraper Logic
-Edit `cdon_scraper.py` and restart containers:
+Edit the hybrid scraper components and restart containers:
 ```bash
 podman-compose restart
 ```

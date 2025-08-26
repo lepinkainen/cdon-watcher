@@ -43,7 +43,9 @@ RUN useradd -m -u 1000 tracker && \
     chown -R tracker:tracker /app
 
 # Copy application files
-COPY --chown=tracker:tracker cdon_scraper.py .
+COPY --chown=tracker:tracker cdon_scraper_v2.py .
+COPY --chown=tracker:tracker listing_crawler.py .
+COPY --chown=tracker:tracker product_parser.py .
 COPY --chown=tracker:tracker monitor.py .
 
 # Create directory for database (will be mounted as volume)
