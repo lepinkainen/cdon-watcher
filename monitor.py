@@ -705,9 +705,9 @@ def main():
             # Run initial crawl
             async def crawl():
                 scraper = CDONScraper(CONFIG['db_path'])
-                max_pages = int(os.environ.get('MAX_PAGES_PER_CATEGORY', 5))
+                max_pages = int(os.environ.get('MAX_PAGES_PER_CATEGORY', 10))
                 await scraper.crawl_category("https://cdon.fi/elokuvat/?facets=property_preset_media_format%3Ablu-ray&q=", max_pages=max_pages)
-                await scraper.crawl_category("https://cdon.fi/elokuvat/?facets=property_preset_media_format%3A4k-uhd&q=", max_pages=max_pages)
+                await scraper.crawl_category("https://cdon.fi/elokuvat/?facets=property_preset_media_format%3A4k%20ultra%20hd&q=", max_pages=max_pages)
             asyncio.run(crawl())
     else:
         print("""

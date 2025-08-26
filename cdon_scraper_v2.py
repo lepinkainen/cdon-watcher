@@ -381,8 +381,8 @@ async def main():
     logger.info("Starting hybrid crawl demo...")
 
     movies = await scraper.crawl_category(
-        bluray_url, max_pages=1
-    )  # Just 1 page for demo
+        bluray_url, max_pages=2
+    )  # Just 2 pages for demo
     logger.info(f"Demo complete: found {len(movies)} Blu-ray movies")
 
     # Show some results
