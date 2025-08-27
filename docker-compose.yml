@@ -15,7 +15,9 @@ services:
       - SERVICE_MODE=web
       - DB_PATH=/app/data/cdon_movies.db
       - TZ=Europe/Helsinki
-    command: python -m src.cdon_watcher.monitor web
+      - PATH=/app/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
+      - PYTHONPATH=/app
+    command: python -m cdon_watcher.monitor web
     restart: unless-stopped
     networks:
       - cdon-net
@@ -32,6 +34,8 @@ services:
       - DB_PATH=/app/data/cdon_movies.db
       - CHECK_INTERVAL_HOURS=6
       - TZ=Europe/Helsinki
+      - PATH=/app/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
+      - PYTHONPATH=/app
       # Email configuration (optional)
       - EMAIL_ENABLED=false
       - EMAIL_FROM=${EMAIL_FROM:-}
@@ -41,7 +45,7 @@ services:
       - SMTP_PORT=${SMTP_PORT:-587}
       # Discord webhook (optional)
       - DISCORD_WEBHOOK=${DISCORD_WEBHOOK:-}
-    command: python -m src.cdon_watcher.monitor monitor
+    command: python -m cdon_watcher.monitor monitor
     restart: unless-stopped
     depends_on:
       - web
@@ -59,7 +63,9 @@ services:
       - SERVICE_MODE=crawl
       - DB_PATH=/app/data/cdon_movies.db
       - TZ=Europe/Helsinki
-    command: python -m src.cdon_watcher.monitor crawl
+      - PATH=/app/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
+      - PYTHONPATH=/app
+    command: python -m cdon_watcher.monitor crawl
     profiles:
       - crawler
     networks:

@@ -37,20 +37,26 @@ COPY pyproject.toml uv.lock ./
 
 # Install uv and dependencies
 RUN pip install --no-cache-dir uv
-RUN uv sync --frozen --no-dev
+
+# Create non-root user for security (before using it in COPY)
+RUN useradd -m -u 1000 tracker
+
+# Copy application files first (needed for uv sync to work with local package)
+COPY --chown=tracker:tracker src/ /app/src/
+
+# Install dependencies and the package (not in editable mode for containers)
+RUN uv sync --frozen --no-dev --no-editable
 
 # Install Playwright browsers (needs to run as root)
 RUN /app/.venv/bin/playwright install chromium
 
-# Create non-root user for security
-RUN useradd -m -u 1000 tracker && \
-    chown -R tracker:tracker /app
+# Set ownership of app directory
+RUN chown -R tracker:tracker /app
 
 # Switch to non-root user
 USER tracker
 
-# Copy application files
-COPY --chown=tracker:tracker src/ /app/src/
+# Application files already copied above for uv sync
 
 # Create directory for database (will be mounted as volume)
 RUN mkdir -p /app/data && chown tracker:tracker /app/data
@@ -67,4 +73,4 @@ ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8080
 
 # Default command (can be overridden)
-CMD ["python", "-m", "src.cdon_watcher.monitor", "web"]
+CMD ["python", "-m", "cdon_watcher.monitor", "web"]

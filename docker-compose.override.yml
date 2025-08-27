@@ -10,13 +10,22 @@ services:
     volumes:
       # Mount source code for hot reload in development
       - ./src:/app/src
+    # Override command to use src path when volume mounted
+    command: python -m src.cdon_watcher.monitor web
     
   monitor:
     # Shorter interval for testing
     environment:
       - CHECK_INTERVAL_HOURS=1
+    volumes:
+      # Mount source code for development
+      - ./src:/app/src
+    # Override command to use src path when volume mounted
+    command: python -m src.cdon_watcher.monitor monitor
 
   crawler:
     # Mount source code for development
     volumes:
       - ./src:/app/src
+    # Override command to use src path when volume mounted
+    command: python -m src.cdon_watcher.monitor crawl
