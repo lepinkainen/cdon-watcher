@@ -220,6 +220,19 @@ HTML_TEMPLATE = '''
             cursor: pointer;
             font-size: 0.9em;
         }
+        .ignore-button {
+            padding: 5px 15px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+        .ignore-button:hover {
+            background: #c82333;
+        }
         .price-history {
             margin-top: 10px;
             font-size: 0.85em;
@@ -284,6 +297,20 @@ HTML_TEMPLATE = '''
                 <div class="loading">Loading watchlist...</div>
             </div>
         </div>
+        
+        <div class="section">
+            <h2>💵 Top 20 Cheapest Blu-rays</h2>
+            <div id="cheapest-blurays-container" class="movie-grid">
+                <div class="loading">Loading cheapest Blu-rays...</div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>🎞️ Top 20 Cheapest 4K Blu-rays</h2>
+            <div id="cheapest-4k-blurays-container" class="movie-grid">
+                <div class="loading">Loading cheapest 4K Blu-rays...</div>
+            </div>
+        </div>
     </div>
     
     <script>
@@ -293,6 +320,8 @@ HTML_TEMPLATE = '''
             loadAlerts();
             loadDeals();
             loadWatchlist();
+            loadCheapestBlurays();
+            loadCheapest4KBlurays();
         });
         
         async function loadStats() {
@@ -365,13 +394,39 @@ HTML_TEMPLATE = '''
             container.innerHTML = movies.map(movie => createMovieCard(movie)).join('');
         }
         
-        function createMovieCard(movie, showTarget = false) {
+        async function loadCheapestBlurays() {
+            const response = await fetch('/api/cheapest-blurays');
+            const movies = await response.json();
+            const container = document.getElementById('cheapest-blurays-container');
+            
+            if (movies.length === 0) {
+                container.innerHTML = '<p style="color: #666;">No Blu-rays found</p>';
+                return;
+            }
+            
+            container.innerHTML = movies.map(movie => createMovieCard(movie, false, true)).join('');
+        }
+        
+        async function loadCheapest4KBlurays() {
+            const response = await fetch('/api/cheapest-4k-blurays');
+            const movies = await response.json();
+            const container = document.getElementById('cheapest-4k-blurays-container');
+            
+            if (movies.length === 0) {
+                container.innerHTML = '<p style="color: #666;">No 4K Blu-rays found</p>';
+                return;
+            }
+            
+            container.innerHTML = movies.map(movie => createMovieCard(movie, false, true)).join('');
+        }
+
+        function createMovieCard(movie, showTarget = false, showIgnore = false) {
             const priceChange = movie.price_change || 0;
             const priceClass = priceChange < 0 ? 'price-down' : priceChange > 0 ? 'price-up' : '';
             const priceSymbol = priceChange < 0 ? '↓' : priceChange > 0 ? '↑' : '';
             
             return `
-                <div class="movie-card">
+                <div class="movie-card" id="movie-card-${movie.id}">
                     <div class="movie-title">${movie.title}</div>
                     <span class="movie-format">${movie.format}</span>
                     <div class="price-info">
@@ -392,6 +447,7 @@ HTML_TEMPLATE = '''
                         <input type="number" step="0.01" placeholder="Target €" id="target-${movie.id}">
                         <button onclick="addToWatchlist(${movie.id})">Add to Watchlist</button>
                     </div>
+                    ${showIgnore ? `<button class="ignore-button" onclick="ignoreMovie(${movie.id})">Ignore</button>` : ''}
                     <a href="${movie.url}" target="_blank" class="movie-link">View on CDON →</a>
                 </div>
             `;
@@ -414,6 +470,27 @@ HTML_TEMPLATE = '''
                 alert('Added to watchlist!');
                 loadWatchlist();
                 loadStats();
+            }
+        }
+
+        async function ignoreMovie(movieId) {
+            if (!confirm('Are you sure you want to ignore this movie? It will be removed from cheapest views.')) {
+                return;
+            }
+            
+            const response = await fetch('/api/ignore-movie', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({movie_id: movieId})
+            });
+            
+            if (response.ok) {
+                // Remove the movie card from the view
+                const movieCard = document.getElementById(`movie-card-${movieId}`);
+                if (movieCard) {
+                    movieCard.remove();
+                }
+                alert('Movie ignored and removed from cheapest views');
             }
         }
     </script>
@@ -678,6 +755,103 @@ def api_search():
     scraper = CDONScraper(CONFIG['db_path'])
     results = scraper.search_movies(query)
     return jsonify(results)
+
+@app.route('/api/cheapest-blurays')
+def api_cheapest_blurays():
+    conn = sqlite3.connect(CONFIG['db_path'])
+    cursor = conn.cursor()
+    
+    # Get top 20 cheapest regular Blu-rays (not ignored)
+    cursor.execute('''
+        SELECT m.*, 
+               (SELECT price FROM price_history WHERE movie_id = m.id ORDER BY checked_at DESC LIMIT 1) as current_price,
+               (SELECT MIN(price) FROM price_history WHERE movie_id = m.id) as lowest_price,
+               (SELECT MAX(price) FROM price_history WHERE movie_id = m.id) as highest_price
+        FROM movies m
+        WHERE m.id NOT IN (SELECT movie_id FROM ignored_movies)
+        AND (m.format LIKE '%Blu-ray%' AND m.format NOT LIKE '%4K%' AND m.format NOT LIKE '%Ultra HD%')
+        AND EXISTS (SELECT 1 FROM price_history WHERE movie_id = m.id)
+        ORDER BY (SELECT price FROM price_history WHERE movie_id = m.id ORDER BY checked_at DESC LIMIT 1) ASC
+        LIMIT 20
+    ''')
+    
+    movies = []
+    for row in cursor.fetchall():
+        movies.append({
+            'id': row[0],
+            'title': row[2],
+            'format': row[3],
+            'url': row[4],
+            'current_price': row[8],
+            'lowest_price': row[9],
+            'highest_price': row[10]
+        })
+    
+    conn.close()
+    return jsonify(movies)
+
+@app.route('/api/cheapest-4k-blurays')
+def api_cheapest_4k_blurays():
+    conn = sqlite3.connect(CONFIG['db_path'])
+    cursor = conn.cursor()
+    
+    # Get top 20 cheapest 4K Blu-rays (not ignored)
+    cursor.execute('''
+        SELECT m.*, 
+               (SELECT price FROM price_history WHERE movie_id = m.id ORDER BY checked_at DESC LIMIT 1) as current_price,
+               (SELECT MIN(price) FROM price_history WHERE movie_id = m.id) as lowest_price,
+               (SELECT MAX(price) FROM price_history WHERE movie_id = m.id) as highest_price
+        FROM movies m
+        WHERE m.id NOT IN (SELECT movie_id FROM ignored_movies)
+        AND (m.format LIKE '%4K%' OR m.format LIKE '%Ultra HD%')
+        AND EXISTS (SELECT 1 FROM price_history WHERE movie_id = m.id)
+        ORDER BY (SELECT price FROM price_history WHERE movie_id = m.id ORDER BY checked_at DESC LIMIT 1) ASC
+        LIMIT 20
+    ''')
+    
+    movies = []
+    for row in cursor.fetchall():
+        movies.append({
+            'id': row[0],
+            'title': row[2],
+            'format': row[3],
+            'url': row[4],
+            'current_price': row[8],
+            'lowest_price': row[9],
+            'highest_price': row[10]
+        })
+    
+    conn.close()
+    return jsonify(movies)
+
+@app.route('/api/ignore-movie', methods=['POST'])
+def api_ignore_movie():
+    data = request.json
+    conn = sqlite3.connect(CONFIG['db_path'])
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT OR IGNORE INTO ignored_movies (movie_id)
+        VALUES (?)
+    ''', (data['movie_id'],))
+    
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+@app.route('/api/unignore-movie', methods=['POST'])
+def api_unignore_movie():
+    data = request.json
+    conn = sqlite3.connect(CONFIG['db_path'])
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        DELETE FROM ignored_movies WHERE movie_id = ?
+    ''', (data['movie_id'],))
+    
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
 
 async def run_monitor():
     """Run the price monitor"""

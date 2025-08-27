@@ -87,14 +87,24 @@ class CDONScraper:
             )
         """)
 
+        # Ignored movies table for cheapest views
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ignored_movies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                movie_id INTEGER UNIQUE,
+                ignored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (movie_id) REFERENCES movies (id)
+            )
+        """)
+
         conn.commit()
         conn.close()
         logger.info(f"Database initialized at {self.db_path}")
 
     async def crawl_category(
         self, category_url: str, max_pages: int = 5
-    ) -> List[Movie]:
-        """Main crawl workflow: get URLs then parse products"""
+    ) -> int:
+        """Main crawl workflow: get URLs then parse products, returns count of saved movies"""
         logger.info(f"Starting hybrid crawl of {category_url}")
 
         # Step 1: Use listing crawler to get product URLs
@@ -105,22 +115,30 @@ class CDONScraper:
 
         if not product_urls:
             logger.warning("No product URLs found")
-            return []
+            return 0
 
         logger.info(f"Found {len(product_urls)} product URLs")
 
-        # Step 2: Use product parser to extract details from each URL
-        logger.info("Phase 2: Parsing product details with pure Python...")
-        movies = []
+        # Step 2: Use product parser to extract details and save incrementally
+        logger.info("Phase 2: Parsing product details and saving incrementally...")
+        saved_count = 0
 
         for i, url in enumerate(product_urls, 1):
             try:
-                logger.debug(f"Processing {i}/{len(product_urls)}: {url}")
+                logger.info(f"Processing {i}/{len(product_urls)}: {url}")
                 movie = self.product_parser.parse_product_page(url)
 
                 if movie and self.is_bluray_format(movie.title, movie.format):
-                    movies.append(movie)
-                    logger.debug(f"✓ Added: {movie.title} - €{movie.price}")
+                    # Save immediately after successful parsing
+                    if self.save_single_movie(movie):
+                        saved_count += 1
+                        logger.info(f"✓ Saved ({saved_count}): {movie.title} - €{movie.price}")
+                        
+                        # Progress report every 10 movies
+                        if saved_count % 10 == 0:
+                            logger.info(f"Progress: {saved_count} movies saved so far")
+                    else:
+                        logger.warning(f"✗ Failed to save: {movie.title}")
                 else:
                     logger.debug("✗ Skipped: not a Blu-ray or parsing failed")
 
@@ -128,13 +146,8 @@ class CDONScraper:
                 logger.error(f"Error parsing {url}: {e}")
                 continue
 
-        logger.info(f"Phase 2 complete: extracted {len(movies)} valid Blu-ray movies")
-
-        # Step 3: Save to database
-        if movies:
-            self.save_movies(movies)
-
-        return movies
+        logger.info(f"Crawl complete: saved {saved_count} Blu-ray movies to database")
+        return saved_count
 
     def is_bluray_format(self, title: str, format: str) -> bool:
         """Check if the item is a Blu-ray or 4K Blu-ray (reuse existing logic)"""
@@ -143,6 +156,79 @@ class CDONScraper:
             or "blu-ray" in title.lower()
             or "bluray" in title.lower()
         )
+
+    def save_single_movie(self, movie: Movie) -> bool:
+        """Save a single movie to database and return success status"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        try:
+            # Insert or update movie
+            cursor.execute(
+                """
+                INSERT OR IGNORE INTO movies (product_id, title, format, url, image_url)
+                VALUES (?, ?, ?, ?, ?)
+            """,
+                (
+                    movie.product_id,
+                    movie.title,
+                    movie.format,
+                    movie.url,
+                    movie.image_url,
+                ),
+            )
+
+            # Get movie ID
+            if movie.product_id:
+                cursor.execute(
+                    "SELECT id FROM movies WHERE product_id = ?",
+                    (movie.product_id,),
+                )
+            else:
+                cursor.execute(
+                    "SELECT id FROM movies WHERE title = ? AND format = ?",
+                    (movie.title, movie.format),
+                )
+
+            movie_id = cursor.fetchone()
+            if movie_id:
+                movie_id = movie_id[0]
+
+                # Update last_updated timestamp
+                cursor.execute(
+                    "UPDATE movies SET last_updated = CURRENT_TIMESTAMP WHERE id = ?",
+                    (movie_id,),
+                )
+
+                # Insert price history
+                cursor.execute(
+                    """
+                    INSERT INTO price_history (movie_id, price, original_price, availability)
+                    VALUES (?, ?, ?, ?)
+                """,
+                    (
+                        movie_id,
+                        movie.price,
+                        movie.original_price,
+                        movie.availability,
+                    ),
+                )
+
+                # Check for price drops
+                self.check_price_alerts(cursor, movie_id, movie.price)
+
+                conn.commit()
+                logger.debug(f"✓ Saved: {movie.title} - €{movie.price}")
+                return True
+            else:
+                logger.warning(f"Could not find movie ID after insert for: {movie.title}")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error saving movie {movie.title}: {e}")
+            return False
+        finally:
+            conn.close()
 
     def save_movies(self, movies: List[Movie]):
         """Save movies to database (keep existing logic)"""
@@ -380,14 +466,19 @@ async def main():
     )
     logger.info("Starting hybrid crawl demo...")
 
-    movies = await scraper.crawl_category(
+    saved_count = await scraper.crawl_category(
         bluray_url, max_pages=2
     )  # Just 2 pages for demo
-    logger.info(f"Demo complete: found {len(movies)} Blu-ray movies")
+    logger.info(f"Demo complete: saved {saved_count} Blu-ray movies to database")
 
-    # Show some results
-    for movie in movies[:5]:  # Show first 5
-        print(f"- {movie.title} - €{movie.price} ({movie.format})")
+    # Show some recent results from database
+    recent_movies = scraper.search_movies("")[:5]  # Get last 5 movies
+    if recent_movies:
+        print("\nRecent movies added to database:")
+        for movie in recent_movies:
+            print(f"- {movie['title']} - €{movie['current_price']} ({movie['format']})")
+    else:
+        print("\nNo movies found in database")
 
     scraper.close()
 
