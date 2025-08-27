@@ -128,3 +128,5 @@ podman-compose logs -f web
 - **Testing**: Comprehensive test suite with real URL validation
 - **Maintenance**: Easy test case management, JSON-based configuration
 - always use `uv run python` to run code
+
+- always run the web dashboard in a container. rebuild and restart the container when necessary

@@ -134,6 +134,7 @@ HTML_TEMPLATE = '''
             border-radius: 8px;
             padding: 15px;
             transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
         }
         .movie-card:hover {
             transform: translateY(-2px);
@@ -242,6 +243,87 @@ HTML_TEMPLATE = '''
             text-align: center;
             padding: 20px;
             color: #666;
+        }
+        
+        /* Notification system */
+        .notification-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 350px;
+        }
+        
+        .notification {
+            background: #28a745;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            margin-bottom: 10px;
+            transform: translateX(400px);
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .notification.show {
+            transform: translateX(0);
+        }
+        
+        .notification.error {
+            background: #dc3545;
+        }
+        
+        .notification.warning {
+            background: #ffc107;
+            color: #212529;
+        }
+        
+        .notification.info {
+            background: #17a2b8;
+        }
+        
+        .notification-close {
+            background: none;
+            border: none;
+            color: inherit;
+            font-size: 18px;
+            cursor: pointer;
+            margin-left: 10px;
+            opacity: 0.7;
+        }
+        
+        .notification-close:hover {
+            opacity: 1;
+        }
+        
+        /* Remove from watchlist button */
+        .remove-from-watchlist {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.7;
+            transition: opacity 0.2s, background-color 0.2s;
+        }
+        
+        .remove-from-watchlist:hover {
+            opacity: 1;
+            background: #c82333;
         }
     </style>
 </head>
@@ -427,6 +509,7 @@ HTML_TEMPLATE = '''
             
             return `
                 <div class="movie-card" id="movie-card-${movie.id}">
+                    ${showTarget ? `<button class="remove-from-watchlist" onclick="removeFromWatchlist(${movie.id})" title="Remove from watchlist">×</button>` : ''}
                     <div class="movie-title">${movie.title}</div>
                     <span class="movie-format">${movie.format}</span>
                     <div class="price-info">
@@ -443,10 +526,12 @@ HTML_TEMPLATE = '''
                             Target: €${movie.target_price.toFixed(2)}
                         </div>
                     ` : ''}
-                    <div class="watchlist-form">
-                        <input type="number" step="0.01" placeholder="Target €" id="target-${movie.id}">
-                        <button onclick="addToWatchlist(${movie.id})">Add to Watchlist</button>
-                    </div>
+                    ${!showTarget ? `
+                        <div class="watchlist-form">
+                            <input type="number" step="0.01" placeholder="Target €" id="target-${movie.id}">
+                            <button onclick="addToWatchlist(${movie.id})">Add to Watchlist</button>
+                        </div>
+                    ` : ''}
                     ${showIgnore ? `<button class="ignore-button" onclick="ignoreMovie(${movie.id})">Ignore</button>` : ''}
                     <a href="${movie.url}" target="_blank" class="movie-link">View on CDON →</a>
                 </div>
@@ -456,7 +541,7 @@ HTML_TEMPLATE = '''
         async function addToWatchlist(movieId) {
             const targetPrice = document.getElementById(`target-${movieId}`).value;
             if (!targetPrice) {
-                alert('Please enter a target price');
+                showNotification('Please enter a target price', 'warning');
                 return;
             }
             
@@ -467,9 +552,31 @@ HTML_TEMPLATE = '''
             });
             
             if (response.ok) {
-                alert('Added to watchlist!');
+                showNotification('Added to watchlist!');
                 loadWatchlist();
                 loadStats();
+            }
+        }
+
+        async function removeFromWatchlist(movieId) {
+            if (!confirm('Remove this movie from your watchlist?')) {
+                return;
+            }
+            
+            const response = await fetch(`/api/watchlist/${movieId}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                // Remove the movie card from the watchlist view
+                const movieCard = document.getElementById(`movie-card-${movieId}`);
+                if (movieCard) {
+                    movieCard.remove();
+                }
+                showNotification('Removed from watchlist');
+                loadStats(); // Update the watchlist count
+            } else {
+                showNotification('Failed to remove from watchlist', 'error');
             }
         }
 
@@ -490,10 +597,54 @@ HTML_TEMPLATE = '''
                 if (movieCard) {
                     movieCard.remove();
                 }
-                alert('Movie ignored and removed from cheapest views');
+                showNotification('Movie ignored and removed from cheapest views');
             }
         }
+        
+        // Notification system
+        function showNotification(message, type = 'success', duration = 4000) {
+            // Create notification container if it doesn't exist
+            let container = document.querySelector('.notification-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.className = 'notification-container';
+                document.body.appendChild(container);
+            }
+            
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            
+            const messageSpan = document.createElement('span');
+            messageSpan.textContent = message;
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'notification-close';
+            closeBtn.innerHTML = '×';
+            closeBtn.onclick = () => hideNotification(notification);
+            
+            notification.appendChild(messageSpan);
+            notification.appendChild(closeBtn);
+            container.appendChild(notification);
+            
+            // Show notification with animation
+            setTimeout(() => notification.classList.add('show'), 10);
+            
+            // Auto-hide after duration
+            setTimeout(() => hideNotification(notification), duration);
+        }
+        
+        function hideNotification(notification) {
+            notification.classList.remove('show');
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }
     </script>
+    
+    <!-- Notification container will be added dynamically -->
 </body>
 </html>
 '''
@@ -744,6 +895,19 @@ def api_add_watchlist():
         INSERT OR REPLACE INTO watchlist (movie_id, target_price)
         VALUES (?, ?)
     ''', (data['movie_id'], data['target_price']))
+    
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+@app.route('/api/watchlist/<int:movie_id>', methods=['DELETE'])
+def api_remove_watchlist(movie_id):
+    conn = sqlite3.connect(CONFIG['db_path'])
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        DELETE FROM watchlist WHERE movie_id = ?
+    ''', (movie_id,))
     
     conn.commit()
     conn.close()
