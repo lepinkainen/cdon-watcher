@@ -175,8 +175,6 @@ async def test_product_parser_cli(urls: list[str]):
                 print(f"  ✓ Title: {movie.title}")
                 print(f"  ✓ Price: €{movie.price}")
                 print(f"  ✓ Format: {movie.format}")
-                if movie.original_price:
-                    print(f"  ✓ Original Price: €{movie.original_price}")
 
                 # Check for vihdoin arki issue
                 if "vihdoin arki" in movie.title.lower():

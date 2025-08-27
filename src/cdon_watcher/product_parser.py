@@ -20,7 +20,6 @@ class Movie:
 
     title: str
     price: float
-    original_price: float | None
     url: str
     format: str  # 'Blu-ray' or '4K Blu-ray'
     availability: str
@@ -65,7 +64,6 @@ class ProductParser:
                 logger.warning(f"No price found for {url}")
                 return None
 
-            original_price = self._extract_original_price(soup)
             format_type = self._determine_format(title)
             availability = self._extract_availability(soup)
             image_url = self._extract_image_url(soup)
@@ -74,7 +72,6 @@ class ProductParser:
             return Movie(
                 title=title,
                 price=price,
-                original_price=original_price,
                 url=url,
                 format=format_type,
                 availability=availability,
@@ -184,27 +181,6 @@ class ProductParser:
 
         return None
 
-    def _extract_original_price(self, soup: BeautifulSoup) -> float | None:
-        """Extract original/strikethrough price if on sale"""
-        original_selectors = [
-            ".original-price",
-            ".old-price",
-            '[class*="original"]',
-            "del",
-            "s",
-            '[style*="line-through"]',
-        ]
-
-        for selector in original_selectors:
-            elements = soup.select(selector)
-            for element in elements:
-                price_text = element.get_text(strip=True)
-                price = self._extract_price_from_text(price_text)
-                if price is not None:
-                    logger.debug(f"Found original price: €{price}")
-                    return price
-
-        return None
 
     def _extract_price_from_text(self, price_text: str) -> float | None:
         """Extract numeric price from text (reuse existing logic)"""
@@ -314,8 +290,6 @@ if __name__ == "__main__":
             print(f"Title: {movie.title}")
             print(f"Price: €{movie.price}")
             print(f"Format: {movie.format}")
-            if movie.original_price:
-                print(f"Original Price: €{movie.original_price}")
         else:
             print("Failed to parse")
 

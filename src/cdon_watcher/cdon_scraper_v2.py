@@ -52,7 +52,6 @@ class CDONScraper:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 movie_id INTEGER,
                 price REAL,
-                original_price REAL,
                 availability TEXT,
                 checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (movie_id) REFERENCES movies (id)
@@ -95,9 +94,53 @@ class CDONScraper:
             )
         """)
 
+        # Migration: Remove original_price column if it exists
+        self._migrate_remove_original_price_column(cursor)
+
         conn.commit()
         conn.close()
         logger.info(f"Database initialized at {self.db_path}")
+
+    def _migrate_remove_original_price_column(self, cursor):
+        """Migration to remove original_price column from price_history table if it exists"""
+        try:
+            # Check if original_price column exists
+            cursor.execute("PRAGMA table_info(price_history)")
+            columns = cursor.fetchall()
+            column_names = [column[1] for column in columns]
+            
+            if "original_price" in column_names:
+                logger.info("Migrating price_history table to remove original_price column...")
+                
+                # Create new table without original_price
+                cursor.execute("""
+                    CREATE TABLE price_history_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        movie_id INTEGER,
+                        price REAL,
+                        availability TEXT,
+                        checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (movie_id) REFERENCES movies (id)
+                    )
+                """)
+                
+                # Copy data excluding original_price column
+                cursor.execute("""
+                    INSERT INTO price_history_new (id, movie_id, price, availability, checked_at)
+                    SELECT id, movie_id, price, availability, checked_at
+                    FROM price_history
+                """)
+                
+                # Drop old table and rename new one
+                cursor.execute("DROP TABLE price_history")
+                cursor.execute("ALTER TABLE price_history_new RENAME TO price_history")
+                
+                logger.info("Successfully migrated price_history table")
+            else:
+                logger.debug("price_history table already has correct schema")
+                
+        except Exception as e:
+            logger.warning(f"Migration warning (non-critical): {e}")
 
     async def crawl_category(self, category_url: str, max_pages: int = 5) -> int:
         """Main crawl workflow: get URLs then parse products, returns count of saved movies"""
@@ -193,13 +236,12 @@ class CDONScraper:
                 # Insert price history
                 cursor.execute(
                     """
-                    INSERT INTO price_history (movie_id, price, original_price, availability)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO price_history (movie_id, price, availability)
+                    VALUES (?, ?, ?)
                 """,
                     (
                         movie_id,
                         movie.price,
-                        movie.original_price,
                         movie.availability,
                     ),
                 )
@@ -267,13 +309,12 @@ class CDONScraper:
                     # Insert price history
                     cursor.execute(
                         """
-                        INSERT INTO price_history (movie_id, price, original_price, availability)
-                        VALUES (?, ?, ?, ?)
+                        INSERT INTO price_history (movie_id, price, availability)
+                        VALUES (?, ?, ?)
                     """,
                         (
                             movie_id,
                             movie.price,
-                            movie.original_price,
                             movie.availability,
                         ),
                     )

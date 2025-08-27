@@ -182,8 +182,6 @@ async def test_single_url_cli(url: str):
             print(f"✓ Title: {movie.title}")
             print(f"✓ Price: €{movie.price}")
             print(f"✓ Format: {movie.format}")
-            if movie.original_price:
-                print(f"✓ Original Price: €{movie.original_price}")
             print(f"✓ URL: {movie.url}")
 
             if "vihdoin arki" in movie.title.lower():
