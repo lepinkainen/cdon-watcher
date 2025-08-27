@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Essential Commands
 
 ### Development Environment Setup
+
 ```bash
 # Install dependencies using uv (recommended)
 uv sync --extra test
@@ -18,6 +19,7 @@ playwright install chromium
 ```
 
 ### Testing Commands
+
 ```bash
 # Fast unit tests (no network)
 uv run pytest test_basic.py -v
@@ -39,11 +41,13 @@ uv run python add_test_case.py add --url "..." --title "Movie Title" --price-min
 ```
 
 ### Container Management
+
 - **Build**: `./scripts/build.sh` (auto-detects Podman/Docker)
 - **Development**: `./scripts/run-dev.sh` (macOS with Podman)
 - **Production**: `./scripts/run-prod.sh` (Linux with Docker)
 
 ### Core Application Commands
+
 ```bash
 # Run hybrid scraper (recommended)
 uv run python cdon_scraper_v2.py
@@ -69,6 +73,7 @@ podman-compose logs -f web
 ### Core Components
 
 #### **Hybrid Scraper Architecture (v2)**
+
 - **listing_crawler.py**: Playwright-based category page crawler (collects product URLs)
 - **product_parser.py**: Pure Python product page parser (extracts title/price via requests + BeautifulSoup)  
 - **cdon_scraper_v2.py**: Orchestrator combining both parsers + database operations
@@ -76,11 +81,13 @@ podman-compose logs -f web
 - **SQLite database**: Stores movies, price history, and watchlist data
 
 ### Service Architecture
+
 - **web service**: Flask dashboard (port 8080) with API endpoints
 - **monitor service**: Background price checker (runs every 6 hours)
 - **crawler service**: Hybrid scraper for database population
 
 ### Key Technical Details
+
 - **Hybrid approach**: Playwright for JavaScript-heavy listing pages, pure Python for fast product parsing
 - **Anti-bot protection**: Stealth browser settings, realistic headers, rate limiting
 - **Anti-"vihdoin arki" logic**: Filters promotional text that was corrupting title extraction
@@ -90,6 +97,7 @@ podman-compose logs -f web
 - **Container orchestration**: docker-compose with dev/prod variants
 
 ### Environment Configuration
+
 - **Python project management**: Uses `uv` (recommended) or traditional pip/venv
 - **Dependencies**: Playwright (listing), requests+BeautifulSoup (products), Flask, pytest
 - **Configuration**: Environment variables in `.env` file
@@ -97,6 +105,7 @@ podman-compose logs -f web
 - **Test data**: JSON-based test case management in `test_data.json`
 
 ### Data Flow
+
 1. **ListingCrawler** (Playwright) scrapes category pages → collects product URLs
 2. **ProductParser** (HTTP) fetches individual product pages → extracts title/price/format  
 3. **CDONScraper** orchestrates workflow → saves to SQLite database
@@ -104,6 +113,7 @@ podman-compose logs -f web
 5. **Web dashboard** serves data via Flask API and HTML interface
 
 ## File Structure Notes
+
 - **Core scraper**: `listing_crawler.py`, `product_parser.py`, `cdon_scraper_v2.py`
 - **Testing**: `test_*.py`, `conftest.py`, `test_data.json`, `add_test_case.py`
 - **Configuration**: `pyproject.toml` (uv), `requirements.txt` (pip), `.env`
@@ -112,7 +122,9 @@ podman-compose logs -f web
 - **Data**: `data/` (SQLite database storage, volume mounted in containers)
 
 ## Development Notes
+
 - **Title extraction fix**: Resolved "vihdoin arki" promotional text extraction issue
 - **Performance**: Hybrid approach ~10x faster than pure Playwright
 - **Testing**: Comprehensive test suite with real URL validation
 - **Maintenance**: Easy test case management, JSON-based configuration
+- always use `uv run python` to run code

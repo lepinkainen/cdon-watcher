@@ -278,7 +278,7 @@ HTML_TEMPLATE = '''
         <div class="section">
             <h2>🔍 Search Movies</h2>
             <div class="search-box">
-                <input type="text" id="search-input" placeholder="Search for movies...">
+                <input type="text" id="search-input" placeholder="Search for movies..." onkeypress="if(event.key==='Enter') searchMovies()">
                 <button onclick="searchMovies()">Search</button>
             </div>
             <div id="search-results" class="movie-grid"></div>
@@ -761,7 +761,7 @@ def api_cheapest_blurays():
     conn = sqlite3.connect(CONFIG['db_path'])
     cursor = conn.cursor()
     
-    # Get top 20 cheapest regular Blu-rays (not ignored)
+    # Get top 20 cheapest regular Blu-rays (not ignored and not in watchlist)
     cursor.execute('''
         SELECT m.*, 
                (SELECT price FROM price_history WHERE movie_id = m.id ORDER BY checked_at DESC LIMIT 1) as current_price,
@@ -769,6 +769,7 @@ def api_cheapest_blurays():
                (SELECT MAX(price) FROM price_history WHERE movie_id = m.id) as highest_price
         FROM movies m
         WHERE m.id NOT IN (SELECT movie_id FROM ignored_movies)
+        AND m.id NOT IN (SELECT movie_id FROM watchlist)
         AND (m.format LIKE '%Blu-ray%' AND m.format NOT LIKE '%4K%' AND m.format NOT LIKE '%Ultra HD%')
         AND EXISTS (SELECT 1 FROM price_history WHERE movie_id = m.id)
         ORDER BY (SELECT price FROM price_history WHERE movie_id = m.id ORDER BY checked_at DESC LIMIT 1) ASC
@@ -795,7 +796,7 @@ def api_cheapest_4k_blurays():
     conn = sqlite3.connect(CONFIG['db_path'])
     cursor = conn.cursor()
     
-    # Get top 20 cheapest 4K Blu-rays (not ignored)
+    # Get top 20 cheapest 4K Blu-rays (not ignored and not in watchlist)
     cursor.execute('''
         SELECT m.*, 
                (SELECT price FROM price_history WHERE movie_id = m.id ORDER BY checked_at DESC LIMIT 1) as current_price,
@@ -803,6 +804,7 @@ def api_cheapest_4k_blurays():
                (SELECT MAX(price) FROM price_history WHERE movie_id = m.id) as highest_price
         FROM movies m
         WHERE m.id NOT IN (SELECT movie_id FROM ignored_movies)
+        AND m.id NOT IN (SELECT movie_id FROM watchlist)
         AND (m.format LIKE '%4K%' OR m.format LIKE '%Ultra HD%')
         AND EXISTS (SELECT 1 FROM price_history WHERE movie_id = m.id)
         ORDER BY (SELECT price FROM price_history WHERE movie_id = m.id ORDER BY checked_at DESC LIMIT 1) ASC
