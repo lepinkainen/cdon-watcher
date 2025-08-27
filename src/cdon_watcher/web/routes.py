@@ -14,7 +14,7 @@ api_bp = Blueprint("api", __name__)
 
 
 @main_bp.route("/")
-def index() -> str:
+def index() -> Any:
     """Main dashboard page."""
     return render_template("index.html")
 

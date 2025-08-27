@@ -108,7 +108,7 @@ class ProductParser:
                 # Apply the same filtering logic from the original scraper
                 if self._is_valid_title(candidate):
                     logger.debug(f"Found title with selector '{selector}': {candidate}")
-                    return candidate
+                    return str(candidate)
 
         # Fallback: try to extract from page title
         page_title = soup.find("title")
@@ -119,7 +119,7 @@ class ProductParser:
                 candidate = title_text.split(" | ")[0].strip()
                 if self._is_valid_title(candidate):
                     logger.debug(f"Found title from page title: {candidate}")
-                    return candidate
+                    return str(candidate)
 
         return None
 
@@ -237,7 +237,7 @@ class ProductParser:
             if element:
                 availability = element.get_text(strip=True)
                 if availability:
-                    return availability
+                    return str(availability)
 
         return "In Stock"  # Default assumption
 

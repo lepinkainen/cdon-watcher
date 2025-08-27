@@ -4,13 +4,13 @@ Integration tests for the hybrid CDON scraper architecture
 Converted from legacy_test_hybrid.py to follow pytest conventions
 """
 
-import pytest
 import asyncio
-from typing import List
-
-import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+import sys
+
+import pytest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from src.cdon_watcher.cdon_scraper_v2 import CDONScraper
 from src.cdon_watcher.listing_crawler import ListingCrawler
@@ -64,7 +64,7 @@ class TestProductParser:
     async def test_product_parser_basic_functionality(self, product_parser, test_urls):
         """Test that ProductParser can parse individual product pages"""
         success_count = 0
-        
+
         for url in test_urls:
             try:
                 movie = product_parser.parse_product_page(url)
@@ -73,21 +73,21 @@ class TestProductParser:
                     assert movie.title, f"Title missing for URL: {url}"
                     assert movie.price is not None, f"Price missing for URL: {url}"
                     assert movie.format, f"Format missing for URL: {url}"
-                    
+
                     # Check for vihdoin arki issue
                     assert "vihdoin arki" not in movie.title.lower(), (
                         f"Title contains 'vihdoin arki' promotional text: {movie.title}"
                     )
-                    
+
                     success_count += 1
-                    
+
             except Exception as e:
                 pytest.fail(f"ProductParser failed for URL {url}: {e}")
-        
+
         # Expect at least some successful parses
         assert success_count > 0, "ProductParser failed to parse any URLs"
 
-    @pytest.mark.asyncio 
+    @pytest.mark.asyncio
     async def test_vihdoin_arki_filtering(self, product_parser, test_urls):
         """Specifically test that 'vihdoin arki' promotional text is filtered out"""
         for url in test_urls:
@@ -110,10 +110,10 @@ class TestListingCrawler:
     async def test_listing_crawler_basic_functionality(self, listing_crawler, category_url):
         """Test that ListingCrawler can extract product URLs from category pages"""
         urls = await listing_crawler.crawl_category(category_url, max_pages=1)
-        
+
         # Should find at least some URLs
         assert len(urls) > 0, "ListingCrawler found no product URLs"
-        
+
         # All URLs should be strings and contain expected domain
         for url in urls:
             assert isinstance(url, str), f"URL is not string: {url}"
@@ -128,34 +128,33 @@ class TestHybridWorkflow:
         """Test the complete workflow: listing crawling + product parsing + database storage"""
         # Run the hybrid scraper on limited data
         saved_count = await test_scraper.crawl_category(category_url, max_pages=1)
-        
+
         # Should save at least some movies
         assert saved_count > 0, f"Hybrid scraper saved {saved_count} movies, expected > 0"
-        
+
         # Verify movies are in database
         all_movies = test_scraper.search_movies("")
         assert len(all_movies) >= saved_count, "Database doesn't contain expected number of movies"
-        
+
         # Verify data quality
         for movie in all_movies:
-            assert movie['title'], f"Movie missing title: {movie}"
-            assert movie['current_price'] is not None, f"Movie missing price: {movie}"
-            assert movie['format'], f"Movie missing format: {movie}"
+            assert movie["title"], f"Movie missing title: {movie}"
+            assert movie["current_price"] is not None, f"Movie missing price: {movie}"
+            assert movie["format"], f"Movie missing format: {movie}"
 
     @pytest.mark.asyncio
     async def test_hybrid_workflow_vihdoin_arki_filtering(self, test_scraper, category_url):
         """Test that the complete workflow properly filters out 'vihdoin arki' issues"""
         # Run hybrid scraper
         saved_count = await test_scraper.crawl_category(category_url, max_pages=1)
-        
+
         if saved_count > 0:
             # Check all saved movies for vihdoin arki issues
             all_movies = test_scraper.search_movies("")
             problematic_titles = [
-                movie for movie in all_movies 
-                if "vihdoin arki" in movie["title"].lower()
+                movie for movie in all_movies if "vihdoin arki" in movie["title"].lower()
             ]
-            
+
             assert len(problematic_titles) == 0, (
                 f"Found {len(problematic_titles)} movies with 'vihdoin arki' in titles: "
                 f"{[m['title'] for m in problematic_titles]}"
@@ -163,7 +162,7 @@ class TestHybridWorkflow:
 
 
 # Compatibility functions for command-line usage (maintaining original interface)
-async def test_product_parser_cli(urls: List[str]):
+async def test_product_parser_cli(urls: list[str]):
     """Command-line compatible product parser test"""
     print("=== Testing ProductParser (Pure Python) ===")
     parser = ProductParser()
@@ -261,7 +260,7 @@ async def test_hybrid_scraper_cli(category_url: str):
 def main():
     """Main function for command-line compatibility"""
     import sys
-    
+
     # Test URLs (including the problematic ones from earlier)
     test_urls = [
         "https://cdon.fi/tuote/breaking-bad-complete-box-kausi-1-5-blu-ray-e91bc5deded24435/",

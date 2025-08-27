@@ -4,11 +4,13 @@ Integration tests for single URL processing
 Converted from legacy_test_single_url.py to follow pytest conventions
 """
 
-import pytest
 import asyncio
-import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+import sys
+
+import pytest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from src.cdon_watcher.cdon_scraper_v2 import CDONScraper
 from src.cdon_watcher.product_parser import ProductParser
@@ -49,32 +51,32 @@ class TestSingleUrlProcessing:
         for url in sample_urls:
             try:
                 browser, context, page = await test_scraper.create_browser()
-                
+
                 await page.goto(url, wait_until="load", timeout=20000)
-                
+
                 # Find body element to simulate crawler context
                 body_element = await page.query_selector("body")
                 assert body_element is not None, f"Could not find body element for URL: {url}"
-                
+
                 # Use actual crawler extraction method
                 movie = await test_scraper.extract_movie_data(body_element, page)
-                
+
                 await browser.close()
-                
+
                 if movie:
                     # Verify basic movie data
                     assert movie.title, f"Title missing for URL: {url}"
                     assert movie.price is not None, f"Price missing for URL: {url}"
                     assert movie.format, f"Format missing for URL: {url}"
                     assert movie.url == url, f"URL mismatch for: {url}"
-                    
+
                     # Check for vihdoin arki issue
                     assert "vihdoin arki" not in movie.title.lower(), (
                         f"Title contains 'vihdoin arki' promotional text: {movie.title}"
                     )
                 else:
                     pytest.fail(f"Scraper failed to extract movie data from URL: {url}")
-                    
+
             except Exception as e:
                 pytest.fail(f"Error processing URL {url}: {e}")
 
@@ -82,28 +84,28 @@ class TestSingleUrlProcessing:
     async def test_product_parser_single_url_extraction(self, product_parser, sample_urls):
         """Test that ProductParser can extract data from individual URLs using pure Python"""
         success_count = 0
-        
+
         for url in sample_urls:
             try:
                 movie = product_parser.parse_product_page(url)
-                
+
                 if movie:
                     # Verify basic movie data
                     assert movie.title, f"Title missing for URL: {url}"
                     assert movie.price is not None, f"Price missing for URL: {url}"
                     assert movie.format, f"Format missing for URL: {url}"
-                    
+
                     # Check for vihdoin arki issue
                     assert "vihdoin arki" not in movie.title.lower(), (
                         f"Title contains 'vihdoin arki' promotional text: {movie.title}"
                     )
-                    
+
                     success_count += 1
-                    
+
             except Exception as e:
                 # Individual failures are acceptable for this test
                 print(f"ProductParser failed for URL {url}: {e}")
-        
+
         # Expect at least some successful parses
         assert success_count > 0, "ProductParser failed to parse any URLs"
 
@@ -114,12 +116,12 @@ class TestSingleUrlProcessing:
             try:
                 browser, context, page = await test_scraper.create_browser()
                 await page.goto(url, wait_until="load", timeout=20000)
-                
+
                 body_element = await page.query_selector("body")
                 movie = await test_scraper.extract_movie_data(body_element, page)
-                
+
                 await browser.close()
-                
+
                 if movie:
                     # This is the critical test from the original legacy test
                     assert "vihdoin arki" not in movie.title.lower(), (
@@ -129,24 +131,27 @@ class TestSingleUrlProcessing:
                 # Individual URL failures are acceptable for this specific test
                 pass
 
-    @pytest.mark.parametrize("url", [
-        "https://cdon.fi/tuote/breaking-bad-complete-box-kausi-1-5-blu-ray-e91bc5deded24435/",
-        "https://cdon.fi/tuote/house-of-the-dragon-kausi-2-blu-ray-06077e495a0a59db/",
-    ])
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://cdon.fi/tuote/breaking-bad-complete-box-kausi-1-5-blu-ray-e91bc5deded24435/",
+            "https://cdon.fi/tuote/house-of-the-dragon-kausi-2-blu-ray-06077e495a0a59db/",
+        ],
+    )
     @pytest.mark.asyncio
     async def test_parametrized_single_urls(self, test_scraper, url):
         """Parametrized test for individual URLs"""
         browser, context, page = await test_scraper.create_browser()
-        
+
         try:
             await page.goto(url, wait_until="load", timeout=20000)
             body_element = await page.query_selector("body")
             movie = await test_scraper.extract_movie_data(body_element, page)
-            
+
             assert movie is not None, f"Failed to extract data from URL: {url}"
             assert movie.title, f"Title missing for URL: {url}"
             assert "vihdoin arki" not in movie.title.lower()
-            
+
         finally:
             await browser.close()
 
@@ -204,7 +209,9 @@ def main():
     if len(sys.argv) != 2:
         print("Usage: python test_single_url_processing.py <URL>")
         print("\nExample URLs:")
-        print("  https://cdon.fi/tuote/breaking-bad-complete-box-kausi-1-5-blu-ray-e91bc5deded24435/")
+        print(
+            "  https://cdon.fi/tuote/breaking-bad-complete-box-kausi-1-5-blu-ray-e91bc5deded24435/"
+        )
         print("  https://cdon.fi/tuote/house-of-the-dragon-kausi-2-blu-ray-06077e495a0a59db/")
         sys.exit(1)
 

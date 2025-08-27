@@ -56,22 +56,22 @@ tasks:
   test-python:
     desc: Run Python unit tests (fast)
     cmds:
-      - uv run pytest tests/unit/ -v --timeout=30
+      - PYTHONPATH={{.PWD}}/src uv run pytest tests/unit/ -v --timeout=30
 
   test-python-ci:
     desc: Run Python tests with coverage for CI
     cmds:
-      - uv run pytest --cov=src --cov-report=xml --cov-report=term
+      - PYTHONPATH={{.PWD}}/src uv run pytest --cov=src --cov-report=xml --cov-report=term
 
   test-integration:
     desc: Run Python integration tests (slow, requires network)
     cmds:
-      - uv run pytest tests/integration/ -v --timeout=180
+      - PYTHONPATH={{.PWD}}/src uv run pytest tests/integration/ -v --timeout=180
 
   test-all:
     desc: Run all Python tests (unit + integration)
     cmds:
-      - uv run pytest tests/ -v --timeout=180
+      - PYTHONPATH={{.PWD}}/src uv run pytest tests/ -v --timeout=180
 
   lint-python:
     desc: Lint Python code
@@ -137,7 +137,7 @@ tasks:
   test-hybrid:
     desc: Run hybrid scraper tests
     cmds:
-      - uv run pytest tests/integration/test_hybrid_workflow.py -v
+      - PYTHONPATH={{.PWD}}/src uv run pytest tests/integration/test_hybrid_workflow.py -v
 
   test-url:
     desc: Test a single URL (requires URL argument)
