@@ -42,6 +42,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN useradd -m -u 1000 tracker && \
     chown -R tracker:tracker /app
 
+# Switch to non-root user
+USER tracker
+
+# Install Playwright browsers as the tracker user
+RUN playwright install chromium
+
 # Copy application files
 COPY --chown=tracker:tracker cdon_scraper_v2.py .
 COPY --chown=tracker:tracker listing_crawler.py .
@@ -50,12 +56,6 @@ COPY --chown=tracker:tracker monitor.py .
 
 # Create directory for database (will be mounted as volume)
 RUN mkdir -p /app/data && chown tracker:tracker /app/data
-
-# Switch to non-root user
-USER tracker
-
-# Install Playwright browsers as the tracker user
-RUN playwright install chromium
 
 # Environment variables for configuration
 ENV PYTHONUNBUFFERED=1
