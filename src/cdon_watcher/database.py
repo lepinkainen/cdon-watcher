@@ -136,7 +136,7 @@ class DatabaseManager:
             if not result:
                 conn.close()
                 return False
-            
+
             movie_id = result[0]
 
             cursor.execute(
@@ -319,7 +319,7 @@ class DatabaseManager:
             if not result:
                 conn.close()
                 return False
-            
+
             movie_id = result[0]
 
             cursor.execute(

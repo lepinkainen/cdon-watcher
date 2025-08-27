@@ -71,10 +71,10 @@ def api_watchlist() -> Any:
             cursor.execute("SELECT product_id FROM movies WHERE id = ?", (movie_id,))
             result = cursor.fetchone()
             conn.close()
-            
+
             if not result or not result[0]:
                 return jsonify({"error": "Movie not found or missing product_id"}), 404
-            
+
             success = db.add_to_watchlist(result[0], target_price)
         else:
             return jsonify({"error": "Missing product_id or movie_id"}), 400
@@ -89,7 +89,7 @@ def api_watchlist() -> Any:
 def api_remove_from_watchlist(identifier: Any) -> Any:
     """Remove movie from watchlist by product_id or movie_id."""
     db = DatabaseManager()
-    
+
     # Try to determine if it's a product_id or movie_id
     try:
         # If it's an integer, treat as movie_id for backward compatibility
@@ -100,10 +100,10 @@ def api_remove_from_watchlist(identifier: Any) -> Any:
         cursor.execute("SELECT product_id FROM movies WHERE id = ?", (movie_id,))
         result = cursor.fetchone()
         conn.close()
-        
+
         if not result or not result[0]:
             return jsonify({"error": "Movie not found or missing product_id"}), 404
-        
+
         success = db.remove_from_watchlist(result[0])
     except ValueError:
         # It's a string, treat as product_id
@@ -154,7 +154,7 @@ def api_ignore_movie() -> Any:
         return jsonify({"error": "Missing product_id or movie_id"}), 400
 
     db = DatabaseManager()
-    
+
     if product_id:
         success = db.ignore_movie_by_product_id(product_id)
     else:
