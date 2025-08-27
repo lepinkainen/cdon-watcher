@@ -17,12 +17,14 @@ A Docker/Podman-based price tracking system for Blu-ray and 4K Blu-ray movies on
 ### Prerequisites
 
 **For macOS (Development):**
+
 ```bash
 brew install podman
 brew install podman-compose
 ```
 
 **For Linux (Production):**
+
 ```bash
 # Docker is usually pre-installed, or:
 curl -fsSL https://get.docker.com | sh
@@ -31,17 +33,20 @@ curl -fsSL https://get.docker.com | sh
 ### Installation
 
 1. **Clone or navigate to the project:**
+
 ```bash
 cd /Users/shrike/projects/cdon-watcher
 ```
 
 2. **Copy and configure environment variables:**
+
 ```bash
 cp .env.example .env
 # Edit .env with your settings (optional for email/Discord notifications)
 ```
 
 3. **Make scripts executable:**
+
 ```bash
 chmod +x scripts/*.sh
 ```
@@ -70,7 +75,9 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ## Usage
 
 ### Initial Crawl
+
 Populate your database with movies:
+
 ```bash
 # Using compose
 podman-compose run --rm crawler
@@ -80,12 +87,15 @@ podman run --rm -v ./data:/app/data cdon-tracker python monitor.py crawl
 ```
 
 ### Access Web Dashboard
-Open http://localhost:8080 in your browser
+
+Open <http://localhost:8080> in your browser
 
 ### Monitor Prices
+
 The monitor service runs automatically in the background, checking prices every 6 hours (configurable).
 
 ### View Logs
+
 ```bash
 # All services
 podman-compose logs -f
@@ -157,11 +167,13 @@ When the web service is running:
 ## Backup & Restore
 
 ### Create Backup
+
 ```bash
 ./scripts/backup.sh
 ```
 
 ### Restore from Backup
+
 ```bash
 tar -xzf backups/cdon_backup_TIMESTAMP.tar.gz
 ```
@@ -178,6 +190,7 @@ tar -xzf backups/cdon_backup_TIMESTAMP.tar.gz
 ## Troubleshooting
 
 ### Podman Machine Issues (macOS)
+
 ```bash
 podman machine stop
 podman machine rm
@@ -186,11 +199,13 @@ podman machine start
 ```
 
 ### Container Can't Access Website
+
 - Check internet connectivity
 - Verify Playwright installation: `podman exec cdon-web playwright --version`
 - Check logs: `podman-compose logs web`
 
 ### Database Lock Issues
+
 ```bash
 # Stop all services
 podman-compose down
@@ -203,6 +218,7 @@ podman-compose up -d
 ## Development
 
 ### Running Without Container
+
 ```bash
 # Install dependencies
 pip install -r requirements.txt
@@ -215,7 +231,9 @@ python monitor.py monitor   # Run price monitor
 ```
 
 ### Modifying Scraper Logic
+
 Edit the hybrid scraper components and restart containers:
+
 ```bash
 podman-compose restart
 ```
@@ -235,6 +253,7 @@ MIT License - Feel free to modify and use as needed.
 ## Support
 
 For issues or questions, check the logs first:
+
 ```bash
 podman-compose logs -f
 ```

@@ -11,7 +11,7 @@ tasks:
   # Core build task - depends on tests and linting
   build:
     desc: Build the project
-    deps: [test, lint]
+    deps: [setup-env, test, lint]
     cmds:
       - task: build-python
 
@@ -45,11 +45,17 @@ tasks:
       - rm -rf {{.BUILD_DIR}}
       - mkdir -p {{.BUILD_DIR}}
 
+  # Setup environment with dependencies
+  setup-env:
+    desc: Install all dependencies needed for build
+    cmds:
+      - uv sync --extra test --extra dev
+
   # Python-specific tasks
   build-python:
     desc: Build Python project and Docker containers
     cmds:
-      - uv sync
+      - uv sync --extra test --extra dev
       - mkdir -p {{.BUILD_DIR}}
       - ./scripts/build.sh
 
