@@ -51,6 +51,7 @@ class CDONScraper:
             CREATE TABLE IF NOT EXISTS price_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 movie_id INTEGER,
+                product_id TEXT,
                 price REAL,
                 availability TEXT,
                 checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -63,6 +64,7 @@ class CDONScraper:
             CREATE TABLE IF NOT EXISTS watchlist (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 movie_id INTEGER,
+                product_id TEXT,
                 target_price REAL,
                 notify_on_availability BOOLEAN DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -75,6 +77,7 @@ class CDONScraper:
             CREATE TABLE IF NOT EXISTS price_alerts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 movie_id INTEGER,
+                product_id TEXT,
                 old_price REAL,
                 new_price REAL,
                 alert_type TEXT,  -- 'price_drop', 'back_in_stock', 'target_reached'
@@ -89,58 +92,23 @@ class CDONScraper:
             CREATE TABLE IF NOT EXISTS ignored_movies (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 movie_id INTEGER UNIQUE,
+                product_id TEXT UNIQUE,
                 ignored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (movie_id) REFERENCES movies (id)
             )
         """)
 
-        # Migration: Remove original_price column if it exists
-        self._migrate_remove_original_price_column(cursor)
+        # Create indexes for better performance
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_movies_product_id ON movies(product_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_watchlist_product_id ON watchlist(product_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_price_history_product_id ON price_history(product_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_price_alerts_product_id ON price_alerts(product_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ignored_movies_product_id ON ignored_movies(product_id)")
 
         conn.commit()
         conn.close()
         logger.info(f"Database initialized at {self.db_path}")
 
-    def _migrate_remove_original_price_column(self, cursor):
-        """Migration to remove original_price column from price_history table if it exists"""
-        try:
-            # Check if original_price column exists
-            cursor.execute("PRAGMA table_info(price_history)")
-            columns = cursor.fetchall()
-            column_names = [column[1] for column in columns]
-            
-            if "original_price" in column_names:
-                logger.info("Migrating price_history table to remove original_price column...")
-                
-                # Create new table without original_price
-                cursor.execute("""
-                    CREATE TABLE price_history_new (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        movie_id INTEGER,
-                        price REAL,
-                        availability TEXT,
-                        checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (movie_id) REFERENCES movies (id)
-                    )
-                """)
-                
-                # Copy data excluding original_price column
-                cursor.execute("""
-                    INSERT INTO price_history_new (id, movie_id, price, availability, checked_at)
-                    SELECT id, movie_id, price, availability, checked_at
-                    FROM price_history
-                """)
-                
-                # Drop old table and rename new one
-                cursor.execute("DROP TABLE price_history")
-                cursor.execute("ALTER TABLE price_history_new RENAME TO price_history")
-                
-                logger.info("Successfully migrated price_history table")
-            else:
-                logger.debug("price_history table already has correct schema")
-                
-        except Exception as e:
-            logger.warning(f"Migration warning (non-critical): {e}")
 
     async def crawl_category(self, category_url: str, max_pages: int = 5) -> int:
         """Main crawl workflow: get URLs then parse products, returns count of saved movies"""
@@ -236,11 +204,12 @@ class CDONScraper:
                 # Insert price history
                 cursor.execute(
                     """
-                    INSERT INTO price_history (movie_id, price, availability)
-                    VALUES (?, ?, ?)
+                    INSERT INTO price_history (movie_id, product_id, price, availability)
+                    VALUES (?, ?, ?, ?)
                 """,
                     (
                         movie_id,
+                        movie.product_id,
                         movie.price,
                         movie.availability,
                     ),
@@ -309,11 +278,12 @@ class CDONScraper:
                     # Insert price history
                     cursor.execute(
                         """
-                        INSERT INTO price_history (movie_id, price, availability)
-                        VALUES (?, ?, ?)
+                        INSERT INTO price_history (movie_id, product_id, price, availability)
+                        VALUES (?, ?, ?, ?)
                     """,
                         (
                             movie_id,
+                            movie.product_id,
                             movie.price,
                             movie.availability,
                         ),

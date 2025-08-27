@@ -76,6 +76,7 @@ class DatabaseManager:
             deals.append(
                 {
                     "id": row[0],
+                    "product_id": row[1],
                     "title": row[2],
                     "format": row[3],
                     "url": row[4],
@@ -109,6 +110,7 @@ class DatabaseManager:
             watchlist.append(
                 {
                     "id": row[0],
+                    "product_id": row[1],
                     "title": row[2],
                     "format": row[3],
                     "url": row[4],
@@ -122,18 +124,27 @@ class DatabaseManager:
         conn.close()
         return watchlist
 
-    def add_to_watchlist(self, movie_id: int, target_price: float) -> bool:
-        """Add a movie to watchlist."""
+    def add_to_watchlist(self, product_id: str, target_price: float) -> bool:
+        """Add a movie to watchlist by product_id."""
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
 
+            # Get movie_id from product_id for backward compatibility
+            cursor.execute("SELECT id FROM movies WHERE product_id = ?", (product_id,))
+            result = cursor.fetchone()
+            if not result:
+                conn.close()
+                return False
+            
+            movie_id = result[0]
+
             cursor.execute(
                 """
-                INSERT OR REPLACE INTO watchlist (movie_id, target_price, created_at)
-                VALUES (?, ?, datetime('now'))
+                INSERT OR REPLACE INTO watchlist (movie_id, product_id, target_price, created_at)
+                VALUES (?, ?, ?, datetime('now'))
             """,
-                (movie_id, target_price),
+                (movie_id, product_id, target_price),
             )
 
             conn.commit()
@@ -142,13 +153,13 @@ class DatabaseManager:
         except Exception:
             return False
 
-    def remove_from_watchlist(self, movie_id: int) -> bool:
-        """Remove a movie from watchlist."""
+    def remove_from_watchlist(self, product_id: str) -> bool:
+        """Remove a movie from watchlist by product_id."""
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
 
-            cursor.execute("DELETE FROM watchlist WHERE movie_id = ?", (movie_id,))
+            cursor.execute("DELETE FROM watchlist WHERE product_id = ?", (product_id,))
 
             conn.commit()
             conn.close()
@@ -180,6 +191,7 @@ class DatabaseManager:
             movies.append(
                 {
                     "id": row[0],
+                    "product_id": row[1],
                     "title": row[2],
                     "format": row[3],
                     "url": row[4],
@@ -218,6 +230,7 @@ class DatabaseManager:
             movies.append(
                 {
                     "id": row[0],
+                    "product_id": row[1],
                     "title": row[2],
                     "format": row[3],
                     "url": row[4],
@@ -256,6 +269,7 @@ class DatabaseManager:
             movies.append(
                 {
                     "id": row[0],
+                    "product_id": row[1],
                     "title": row[2],
                     "format": row[3],
                     "url": row[4],
@@ -269,17 +283,51 @@ class DatabaseManager:
         return movies
 
     def ignore_movie(self, movie_id: int) -> bool:
-        """Add a movie to the ignored list."""
+        """Add a movie to the ignored list by movie_id (legacy method)."""
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
 
+            # Get product_id for the movie
+            cursor.execute("SELECT product_id FROM movies WHERE id = ?", (movie_id,))
+            result = cursor.fetchone()
+            product_id = result[0] if result else None
+
             cursor.execute(
                 """
-                INSERT OR IGNORE INTO ignored_movies (movie_id, ignored_at)
-                VALUES (?, datetime('now'))
+                INSERT OR IGNORE INTO ignored_movies (movie_id, product_id, ignored_at)
+                VALUES (?, ?, datetime('now'))
             """,
-                (movie_id,),
+                (movie_id, product_id),
+            )
+
+            conn.commit()
+            conn.close()
+            return True
+        except Exception:
+            return False
+
+    def ignore_movie_by_product_id(self, product_id: str) -> bool:
+        """Add a movie to the ignored list by product_id."""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+
+            # Get movie_id from product_id for backward compatibility
+            cursor.execute("SELECT id FROM movies WHERE product_id = ?", (product_id,))
+            result = cursor.fetchone()
+            if not result:
+                conn.close()
+                return False
+            
+            movie_id = result[0]
+
+            cursor.execute(
+                """
+                INSERT OR IGNORE INTO ignored_movies (movie_id, product_id, ignored_at)
+                VALUES (?, ?, datetime('now'))
+            """,
+                (movie_id, product_id),
             )
 
             conn.commit()

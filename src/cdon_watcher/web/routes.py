@@ -54,24 +54,60 @@ def api_watchlist() -> Any:
 
     elif request.method == "POST":
         data = request.get_json()
-        movie_id = data.get("movie_id")
+        product_id = data.get("product_id")
+        movie_id = data.get("movie_id")  # Backward compatibility
         target_price = data.get("target_price")
 
-        if not movie_id or not target_price:
-            return jsonify({"error": "Missing movie_id or target_price"}), 400
+        if not target_price:
+            return jsonify({"error": "Missing target_price"}), 400
 
-        success = db.add_to_watchlist(movie_id, target_price)
+        # Use product_id if provided, otherwise fall back to movie_id for backward compatibility
+        if product_id:
+            success = db.add_to_watchlist(product_id, target_price)
+        elif movie_id:
+            # For backward compatibility, find the product_id from movie_id
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT product_id FROM movies WHERE id = ?", (movie_id,))
+            result = cursor.fetchone()
+            conn.close()
+            
+            if not result or not result[0]:
+                return jsonify({"error": "Movie not found or missing product_id"}), 404
+            
+            success = db.add_to_watchlist(result[0], target_price)
+        else:
+            return jsonify({"error": "Missing product_id or movie_id"}), 400
+
         if success:
             return jsonify({"message": "Added to watchlist"})
         else:
             return jsonify({"error": "Failed to add to watchlist"}), 500
 
 
-@api_bp.route("/watchlist/<int:movie_id>", methods=["DELETE"])
-def api_remove_from_watchlist(movie_id: Any) -> Any:
-    """Remove movie from watchlist."""
+@api_bp.route("/watchlist/<path:identifier>", methods=["DELETE"])
+def api_remove_from_watchlist(identifier: Any) -> Any:
+    """Remove movie from watchlist by product_id or movie_id."""
     db = DatabaseManager()
-    success = db.remove_from_watchlist(movie_id)
+    
+    # Try to determine if it's a product_id or movie_id
+    try:
+        # If it's an integer, treat as movie_id for backward compatibility
+        movie_id = int(identifier)
+        # Get product_id from movie_id
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT product_id FROM movies WHERE id = ?", (movie_id,))
+        result = cursor.fetchone()
+        conn.close()
+        
+        if not result or not result[0]:
+            return jsonify({"error": "Movie not found or missing product_id"}), 404
+        
+        success = db.remove_from_watchlist(result[0])
+    except ValueError:
+        # It's a string, treat as product_id
+        success = db.remove_from_watchlist(identifier)
 
     if success:
         return jsonify({"message": "Removed from watchlist"})
@@ -111,13 +147,18 @@ def api_cheapest_4k_blurays() -> Any:
 def api_ignore_movie() -> Any:
     """Add movie to ignored list."""
     data = request.get_json()
-    movie_id = data.get("movie_id")
+    product_id = data.get("product_id")
+    movie_id = data.get("movie_id")  # Backward compatibility
 
-    if not movie_id:
-        return jsonify({"error": "Missing movie_id"}), 400
+    if not product_id and not movie_id:
+        return jsonify({"error": "Missing product_id or movie_id"}), 400
 
     db = DatabaseManager()
-    success = db.ignore_movie(movie_id)
+    
+    if product_id:
+        success = db.ignore_movie_by_product_id(product_id)
+    else:
+        success = db.ignore_movie(movie_id)
 
     if success:
         return jsonify({"message": "Movie ignored"})
