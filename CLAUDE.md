@@ -11,10 +11,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 uv sync --extra test
 uv run playwright install chromium
 
-# Alternative: Traditional pip/venv
+# Alternative: Traditional pip/venv (uses pyproject.toml)
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -e .[test]
 playwright install chromium
 ```
 
@@ -24,13 +24,16 @@ playwright install chromium
 # Fast unit tests (no network)
 uv run pytest test_basic.py -v
 
-# Test individual components
-uv run python test_hybrid.py product   # ProductParser only
-uv run python test_hybrid.py listing   # ListingCrawler only  
-uv run python test_hybrid.py hybrid    # Full workflow
+# Test individual components (legacy interface maintained)
+uv run python tests/integration/test_legacy_hybrid_workflow.py product   # ProductParser only
+uv run python tests/integration/test_legacy_hybrid_workflow.py listing   # ListingCrawler only  
+uv run python tests/integration/test_legacy_hybrid_workflow.py hybrid    # Full workflow
 
-# Quick URL testing
-uv run python test_single_url.py "https://cdon.fi/tuote/movie-url/"
+# Quick URL testing (legacy interface maintained)
+uv run python tests/integration/test_single_url_processing.py "https://cdon.fi/tuote/movie-url/"
+
+# New pytest-based integration tests
+uv run pytest tests/integration/ -v --timeout=120
 
 # Integration tests with real pages (slow)
 uv run pytest test_parser.py -v --timeout=120
@@ -115,8 +118,8 @@ podman-compose logs -f web
 ## File Structure Notes
 
 - **Core scraper**: `listing_crawler.py`, `product_parser.py`, `cdon_scraper_v2.py`
-- **Testing**: `test_*.py`, `conftest.py`, `test_data.json`, `add_test_case.py`
-- **Configuration**: `pyproject.toml` (uv), `requirements.txt` (pip), `.env`
+- **Testing**: `tests/` (unit + integration), `conftest.py`, `test_data.json`, `add_test_case.py`
+- **Configuration**: `pyproject.toml` (single dependency source), `.env`
 - **Containers**: `docker-compose.yml`, `docker-compose.override.yml`, `docker-compose.prod.yml`
 - **Scripts**: `scripts/` (build/run helpers)
 - **Data**: `data/` (SQLite database storage, volume mounted in containers)
@@ -127,6 +130,6 @@ podman-compose logs -f web
 - **Performance**: Hybrid approach ~10x faster than pure Playwright
 - **Testing**: Comprehensive test suite with real URL validation
 - **Maintenance**: Easy test case management, JSON-based configuration
-- always use `uv run python` to run code
 
+- always use `uv run python` to run code
 - always run the web dashboard in a container. rebuild and restart the container when necessary

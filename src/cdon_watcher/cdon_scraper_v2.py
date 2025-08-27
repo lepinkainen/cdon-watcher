@@ -3,33 +3,31 @@ Hybrid CDON scraper combining listing crawler (Playwright) and product parser (p
 """
 
 import asyncio
-import sqlite3
-from datetime import datetime
-from typing import List, Dict, Optional
 import logging
 import os
-from dataclasses import dataclass
+import sqlite3
+from typing import Any
 
-from listing_crawler import ListingCrawler
-from product_parser import ProductParser, Movie
+from .listing_crawler import ListingCrawler
+from .product_parser import Movie, ProductParser
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 class CDONScraper:
     """Hybrid scraper combining listing crawler and product parser"""
 
-    def __init__(self, db_path: str = None):
-        self.db_path = db_path or os.environ.get("DB_PATH", "cdon_movies.db")
+    def __init__(self, db_path: str | None = None) -> None:
+        self.db_path: str = (
+            db_path if db_path is not None else os.environ.get("DB_PATH", "cdon_movies.db")
+        )
         self.listing_crawler = ListingCrawler()
         self.product_parser = ProductParser()
         self.init_database()
 
-    def init_database(self):
+    def init_database(self) -> None:
         """Initialize SQLite database with required tables (keep existing logic)"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -101,17 +99,13 @@ class CDONScraper:
         conn.close()
         logger.info(f"Database initialized at {self.db_path}")
 
-    async def crawl_category(
-        self, category_url: str, max_pages: int = 5
-    ) -> int:
+    async def crawl_category(self, category_url: str, max_pages: int = 5) -> int:
         """Main crawl workflow: get URLs then parse products, returns count of saved movies"""
         logger.info(f"Starting hybrid crawl of {category_url}")
 
         # Step 1: Use listing crawler to get product URLs
         logger.info("Phase 1: Collecting product URLs with Playwright...")
-        product_urls = await self.listing_crawler.crawl_category(
-            category_url, max_pages
-        )
+        product_urls = await self.listing_crawler.crawl_category(category_url, max_pages)
 
         if not product_urls:
             logger.warning("No product URLs found")
@@ -133,7 +127,7 @@ class CDONScraper:
                     if self.save_single_movie(movie):
                         saved_count += 1
                         logger.info(f"✓ Saved ({saved_count}): {movie.title} - €{movie.price}")
-                        
+
                         # Progress report every 10 movies
                         if saved_count % 10 == 0:
                             logger.info(f"Progress: {saved_count} movies saved so far")
@@ -151,11 +145,7 @@ class CDONScraper:
 
     def is_bluray_format(self, title: str, format: str) -> bool:
         """Check if the item is a Blu-ray or 4K Blu-ray (reuse existing logic)"""
-        return (
-            "Blu-ray" in format
-            or "blu-ray" in title.lower()
-            or "bluray" in title.lower()
-        )
+        return "Blu-ray" in format or "blu-ray" in title.lower() or "bluray" in title.lower()
 
     def save_single_movie(self, movie: Movie) -> bool:
         """Save a single movie to database and return success status"""
@@ -230,7 +220,7 @@ class CDONScraper:
         finally:
             conn.close()
 
-    def save_movies(self, movies: List[Movie]):
+    def save_movies(self, movies: list[Movie]) -> None:
         """Save movies to database (keep existing logic)"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -298,14 +288,14 @@ class CDONScraper:
         conn.close()
         logger.info(f"Saved {len(movies)} movies to database")
 
-    def check_price_alerts(self, cursor, movie_id: int, new_price: float):
+    def check_price_alerts(self, cursor: Any, movie_id: int, new_price: float) -> None:
         """Check if price has dropped and create alerts (keep existing logic)"""
         # Get last price
         cursor.execute(
             """
-            SELECT price FROM price_history 
-            WHERE movie_id = ? 
-            ORDER BY checked_at DESC 
+            SELECT price FROM price_history
+            WHERE movie_id = ?
+            ORDER BY checked_at DESC
             LIMIT 2
         """,
             (movie_id,),
@@ -328,9 +318,7 @@ class CDONScraper:
                 )
 
         # Check watchlist targets
-        cursor.execute(
-            "SELECT target_price FROM watchlist WHERE movie_id = ?", (movie_id,)
-        )
+        cursor.execute("SELECT target_price FROM watchlist WHERE movie_id = ?", (movie_id,))
         watchlist = cursor.fetchone()
         if watchlist and new_price <= watchlist[0]:
             cursor.execute(
@@ -362,22 +350,20 @@ class CDONScraper:
             )
             conn.commit()
             conn.close()
-            logger.info(
-                f"Added movie {movie_id} to watchlist with target price €{target_price}"
-            )
+            logger.info(f"Added movie {movie_id} to watchlist with target price €{target_price}")
             return True
 
         conn.close()
         logger.warning(f"Movie '{title}' not found in database")
         return False
 
-    def get_price_alerts(self) -> List[Dict]:
+    def get_price_alerts(self) -> list[dict]:
         """Get unnotified price alerts (keep existing logic)"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT a.*, m.title, m.url 
+            SELECT a.*, m.title, m.url
             FROM price_alerts a
             JOIN movies m ON a.movie_id = m.id
             WHERE a.notified = 0
@@ -402,27 +388,25 @@ class CDONScraper:
         conn.close()
         return alerts
 
-    def mark_alerts_notified(self, alert_ids: List[int]):
+    def mark_alerts_notified(self, alert_ids: list[int]) -> None:
         """Mark alerts as notified (keep existing logic)"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
         for alert_id in alert_ids:
-            cursor.execute(
-                "UPDATE price_alerts SET notified = 1 WHERE id = ?", (alert_id,)
-            )
+            cursor.execute("UPDATE price_alerts SET notified = 1 WHERE id = ?", (alert_id,))
 
         conn.commit()
         conn.close()
 
-    def search_movies(self, query: str) -> List[Dict]:
+    def search_movies(self, query: str) -> list[dict]:
         """Search for movies in the database (keep existing logic)"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
         cursor.execute(
             """
-            SELECT m.*, 
+            SELECT m.*,
                    (SELECT price FROM price_history WHERE movie_id = m.id ORDER BY checked_at DESC LIMIT 1) as current_price,
                    (SELECT MIN(price) FROM price_history WHERE movie_id = m.id) as lowest_price,
                    (SELECT MAX(price) FROM price_history WHERE movie_id = m.id) as highest_price
@@ -451,24 +435,20 @@ class CDONScraper:
         conn.close()
         return movies
 
-    def close(self):
+    def close(self) -> None:
         """Clean up resources"""
         self.product_parser.close()
 
 
-async def main():
+async def main() -> None:
     """Demonstrate the hybrid scraper"""
     scraper = CDONScraper()
 
     # Test with limited pages for demo
-    bluray_url = (
-        "https://cdon.fi/elokuvat/?facets=property_preset_media_format%3Ablu-ray&q="
-    )
+    bluray_url = "https://cdon.fi/elokuvat/?facets=property_preset_media_format%3Ablu-ray&q="
     logger.info("Starting hybrid crawl demo...")
 
-    saved_count = await scraper.crawl_category(
-        bluray_url, max_pages=2
-    )  # Just 2 pages for demo
+    saved_count = await scraper.crawl_category(bluray_url, max_pages=2)  # Just 2 pages for demo
     logger.info(f"Demo complete: saved {saved_count} Blu-ray movies to database")
 
     # Show some recent results from database

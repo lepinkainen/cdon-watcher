@@ -6,75 +6,84 @@ This project is a Python-based price tracking system for Blu-ray and 4K Blu-ray 
 
 The system is designed to be deployed with Docker, providing a web dashboard to monitor prices, a background service to check for price drops, and a one-time crawler to populate the database.
 
-### Key Technologies
+## Key Technologies
 
-*   **Backend:** Python 3.11, Flask
-*   **Scraping:** Playwright, Requests, BeautifulSoup
-*   **Database:** SQLite
-*   **Deployment:** Docker, Docker Compose
-*   **Frontend:** HTML, CSS, JavaScript (served by Flask)
+* **Backend:** Python 3.11, Flask
+* **Scraping:** Playwright, Requests, BeautifulSoup
+* **Database:** SQLite
+* **Deployment:** Docker, Docker Compose (or Podman, podman-compose)
+* **Dependency Management:** uv
+* **Linting/Formatting:** ruff, mypy
 
-### Architecture
+## Architecture
 
-The application is composed of several key Python scripts:
+The application utilizes a hybrid scraping architecture to efficiently gather data.
 
-*   `monitor.py`: The main entry point for the application. It can be run in three modes:
-    *   `web`: Starts the Flask web server, providing the user-facing dashboard.
-    *   `monitor`: Runs the price monitoring service, which periodically checks for price updates on items in the watchlist.
-    *   `crawl`: Executes a one-time crawl of the CDON.fi website to populate the database with movie listings.
-*   `cdon_scraper_v2.py`: The core scraper orchestrator. It uses `listing_crawler.py` to get product URLs and then `product_parser.py` to extract details from each product page.
-*   `listing_crawler.py`: A Playwright-based crawler responsible for navigating category pages and extracting product URLs. This is necessary for pages that load content dynamically with JavaScript.
-*   `product_parser.py`: A lightweight parser that uses `requests` and `BeautifulSoup` to parse the HTML of individual product pages. This is more efficient than using a full browser for every product.
-*   `requirements.txt`: Lists the Python dependencies for the project.
-*   `Dockerfile`: Defines the Docker image for the application, including the installation of Python, Playwright, and other dependencies.
-*   `docker-compose.yml`: Defines the services for the application, including the web server, monitor, and crawler. It also defines the networks and volumes used by the application.
-*   `scripts/`: Contains helper scripts for building, running, and managing the application.
+* **`listing_crawler.py`**: A Playwright-based crawler responsible for navigating category pages that require JavaScript execution to load and render product listings. It extracts product URLs.
+* **`product_parser.py`**: A lightweight and efficient parser using `requests` and `BeautifulSoup`. It takes a product URL, fetches the static HTML, and parses it to extract details like title, price, and movie format. This avoids the overhead of a full browser for simple pages.
+* **`cdon_scraper_v2.py`**: The orchestrator that combines the two components above. It gets URLs from the `listing_crawler` and passes them to the `product_parser` for processing, then stores the results in the database.
+* **`monitor.py`**: The main entry point for the application, which can be run in three modes:
+  * `web`: Starts the Flask web server for the user-facing dashboard.
+  * `monitor`: Runs the background price monitoring service.
+  * `crawl`: Executes the one-time crawl to populate the database.
 
-## Building and Running
+### Service Architecture (Docker)
 
-The project is designed to be run with Docker and Docker Compose. The following scripts are provided in the `scripts/` directory to simplify the process.
+The `docker-compose.yml` defines three main services:
 
-### Building the Docker Image
+* **`web`**: Runs the Flask web application, serving the dashboard on port 8080.
+* **`monitor`**: Runs the background price checking service, which periodically checks for updates.
+* **`crawler`**: A one-time service profile for running the main scraper (`cdon_scraper_v2.py`) to populate the database.
 
-To build the Docker image, run the following command:
+### Data Flow
 
-```bash
-./scripts/build.sh
-```
+1. **Crawl**: The `crawler` service is run manually. `listing_crawler.py` (Playwright) scrapes category pages for product URLs.
+2. **Parse**: For each URL, `product_parser.py` (Requests + BeautifulSoup) fetches and parses the product page to extract movie details.
+3. **Store**: The extracted data is saved to the SQLite database (`data/cdon_movies.db`).
+4. **Monitor**: The `monitor` service runs in the background, periodically checking prices of items in the database and sending alerts for price drops.
+5. **View**: The `web` service provides a Flask-based dashboard to view the collected data, watchlist, and alerts.
 
-This script will automatically detect whether you have `podman` or `docker` installed and use the appropriate tool.
+## Development Workflows
 
-### Running in Development Mode (macOS with Podman)
+This project uses `uv` for managing dependencies and running scripts.
 
-For development on macOS, the `run-dev.sh` script is provided. It uses `podman-compose` to start the `web` and `monitor` services.
+### Environment Setup
 
-```bash
-./scripts/run-dev.sh
-```
+1. **Install dependencies:**
 
-The web dashboard will be available at [http://localhost:8080](http://localhost:8080).
+    ```bash
+    uv sync --extra test
+    ```
 
-### Running in Production Mode (Linux with Docker)
+2. **Install Playwright browser:**
 
-For production deployments on a Linux VPS, the `run-prod.sh` script is provided. It uses `docker-compose` to start the services in detached mode.
+    ```bash
+    uv run playwright install chromium
+    ```
 
-```bash
-./scripts/run-prod.sh
-```
+### Essential Commands
 
-### Running Commands Manually
+* **Run Tests:**
+  * Run all tests: `uv run pytest tests/`
+  * Run unit tests: `uv run pytest tests/unit/`
+  * Run integration tests: `uv run pytest tests/integration/`
 
-You can also run commands manually using `docker-compose` or `podman-compose`.
+* **Linting and Formatting:**
+  * Check for linting errors: `uv run ruff check .`
+  * Format code: `uv run ruff format .`
+  * Run static type checking: `uv run mypy src`
 
-*   **Start all services:** `docker-compose up -d`
-*   **Stop all services:** `docker-compose down`
-*   **Run the crawler:** `docker-compose run --rm crawler`
-*   **View logs:** `docker-compose logs -f`
+* **Running the Application (Docker/Podman):**
+  * **Build the image:** `./scripts/build.sh`
+  * **Run in development (macOS/Podman):** `./scripts/run-dev.sh`
+  * **Run in production (Linux/Docker):** `./scripts/run-prod.sh`
+  * **Run the crawler to populate the database:** `podman-compose run --rm crawler` (or `docker-compose run --rm crawler`)
+  * **View logs:** `podman-compose logs -f`
 
-## Development Conventions
+## Project Conventions
 
-*   **Configuration:** The application is configured using environment variables, which are defined in the `.env` file. A `.env.example` file is provided as a template.
-*   **Database:** The SQLite database is stored in the `data/` directory. This directory is mounted as a volume in the Docker containers to persist data.
-*   **Security:** The Docker container runs as a non-root user for improved security.
-*   **Code Style:** The Python code is formatted using standard conventions and includes type hints for better readability and maintainability.
-*   **Modularity:** The code is organized into modules with specific responsibilities, making it easier to understand and maintain.
+* **Dependency Management:** All Python dependencies are managed in `pyproject.toml`. Use `uv sync` to install them.
+* **Configuration:** Application configuration is handled via environment variables, documented in `.env.example`. The database path is set with `DB_PATH`.
+* **Database:** The SQLite database is located at `data/cdon_movies.db` and is persisted via a Docker volume.
+* **Source Code:** All main application code resides in the `src/cdon_watcher` directory.
+* **AI Guidelines:** This project includes a `llm-shared` submodule. Refer to the `README.md` and other files in that directory for general AI development conventions.

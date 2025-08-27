@@ -1,0 +1,52 @@
+name: Python CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v2
+      with:
+        version: "latest"
+    
+    - name: Install Task
+      uses: arduino/setup-task@v1
+      with:
+        version: 3.x
+    
+    - name: Install dependencies
+      run: uv sync --extra test --extra dev
+    
+    - name: Install Playwright browsers
+      run: uv run playwright install chromium
+    
+    - name: Run linting
+      run: |
+        uv run ruff check .
+        uv run ruff format --check .
+        uv run mypy src
+    
+    - name: Run tests
+      run: uv run pytest --cov=src --cov-report=xml --cov-report=term
+    
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      if: success()
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella

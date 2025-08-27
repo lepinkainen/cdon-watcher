@@ -15,7 +15,7 @@ services:
       - SERVICE_MODE=web
       - DB_PATH=/app/data/cdon_movies.db
       - TZ=Europe/Helsinki
-    command: python monitor.py web
+    command: python -m src.cdon_watcher.monitor web
     restart: unless-stopped
     networks:
       - cdon-net
@@ -41,7 +41,7 @@ services:
       - SMTP_PORT=${SMTP_PORT:-587}
       # Discord webhook (optional)
       - DISCORD_WEBHOOK=${DISCORD_WEBHOOK:-}
-    command: python monitor.py monitor
+    command: python -m src.cdon_watcher.monitor monitor
     restart: unless-stopped
     depends_on:
       - web
@@ -59,7 +59,7 @@ services:
       - SERVICE_MODE=crawl
       - DB_PATH=/app/data/cdon_movies.db
       - TZ=Europe/Helsinki
-    command: python monitor.py crawl
+    command: python -m src.cdon_watcher.monitor crawl
     profiles:
       - crawler
     networks:

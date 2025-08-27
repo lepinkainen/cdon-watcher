@@ -32,11 +32,15 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+# Copy dependency files for better caching
+COPY pyproject.toml uv.lock ./
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install uv and dependencies
+RUN pip install --no-cache-dir uv
+RUN uv sync --frozen --no-dev
+
+# Install Playwright browsers (needs to run as root)
+RUN /app/.venv/bin/playwright install chromium
 
 # Create non-root user for security
 RUN useradd -m -u 1000 tracker && \
@@ -45,14 +49,8 @@ RUN useradd -m -u 1000 tracker && \
 # Switch to non-root user
 USER tracker
 
-# Install Playwright browsers as the tracker user
-RUN playwright install chromium
-
 # Copy application files
-COPY --chown=tracker:tracker cdon_scraper_v2.py .
-COPY --chown=tracker:tracker listing_crawler.py .
-COPY --chown=tracker:tracker product_parser.py .
-COPY --chown=tracker:tracker monitor.py .
+COPY --chown=tracker:tracker src/ /app/src/
 
 # Create directory for database (will be mounted as volume)
 RUN mkdir -p /app/data && chown tracker:tracker /app/data
@@ -62,9 +60,11 @@ ENV PYTHONUNBUFFERED=1
 ENV DB_PATH=/app/data/cdon_movies.db
 ENV FLASK_HOST=0.0.0.0
 ENV FLASK_PORT=8080
+ENV PYTHONPATH=/app
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Expose Flask port
 EXPOSE 8080
 
 # Default command (can be overridden)
-CMD ["python", "monitor.py", "web"]
+CMD ["python", "-m", "src.cdon_watcher.monitor", "web"]

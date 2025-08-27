@@ -50,7 +50,6 @@ logs/
 cdon-migration-*.tar.gz
 
 # Test files
-test_*
 *.test
 
 # Temporary files

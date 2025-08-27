@@ -9,10 +9,7 @@ services:
       - FLASK_PORT=8080
     volumes:
       # Mount source code for hot reload in development
-      - ./cdon_scraper_v2.py:/app/cdon_scraper_v2.py
-      - ./listing_crawler.py:/app/listing_crawler.py
-      - ./product_parser.py:/app/product_parser.py
-      - ./monitor.py:/app/monitor.py
+      - ./src:/app/src
     
   monitor:
     # Shorter interval for testing
@@ -22,7 +19,4 @@ services:
   crawler:
     # Mount source code for development
     volumes:
-      - ./cdon_scraper_v2.py:/app/cdon_scraper_v2.py
-      - ./listing_crawler.py:/app/listing_crawler.py
-      - ./product_parser.py:/app/product_parser.py
-      - ./monitor.py:/app/monitor.py
+      - ./src:/app/src

@@ -1,0 +1,171 @@
+# Taskfile.yml for CDON Watcher
+# See: https://taskfile.dev/
+version: "3"
+
+vars:
+  BUILD_DIR: build
+  PROJECT_NAME: cdon-watcher
+  VERSION: 0.1.0
+
+tasks:
+  # Core build task - depends on tests and linting
+  build:
+    desc: Build the project
+    deps: [test, lint]
+    cmds:
+      - task: build-python
+
+  # CI build without tests/linting (run separately in CI)
+  build-ci:
+    desc: Build for CI/CD (build only)
+    cmds:
+      - task: build-python
+
+  # Test tasks
+  test:
+    desc: Run tests
+    cmds:
+      - task: test-python
+
+  test-ci:
+    desc: Run tests with coverage for CI
+    cmds:
+      - task: test-python-ci
+
+  # Linting tasks
+  lint:
+    desc: Lint code
+    cmds:
+      - task: lint-python
+
+  # Clean build artifacts
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf {{.BUILD_DIR}}
+      - mkdir -p {{.BUILD_DIR}}
+
+  # Python-specific tasks
+  build-python:
+    desc: Build Python project and Docker containers
+    cmds:
+      - uv sync
+      - mkdir -p {{.BUILD_DIR}}
+      - ./scripts/build.sh
+
+  test-python:
+    desc: Run Python unit tests (fast)
+    cmds:
+      - uv run pytest tests/unit/ -v --timeout=30
+
+  test-python-ci:
+    desc: Run Python tests with coverage for CI
+    cmds:
+      - uv run pytest --cov=src --cov-report=xml --cov-report=term
+
+  test-integration:
+    desc: Run Python integration tests (slow, requires network)
+    cmds:
+      - uv run pytest tests/integration/ -v --timeout=180
+
+  test-all:
+    desc: Run all Python tests (unit + integration)
+    cmds:
+      - uv run pytest tests/ -v --timeout=180
+
+  lint-python:
+    desc: Lint Python code
+    cmds:
+      - uv run ruff check .
+      - uv run ruff format .
+      - uv run mypy src
+
+  # Development tasks
+  dev:
+    desc: Start development environment
+    cmds:
+      - task: dev-python
+
+  dev-python:
+    desc: Start Python development environment
+    cmds:
+      - ./scripts/run-dev.sh
+
+  # Docker tasks
+  docker-build:
+    desc: Build Docker containers
+    cmds:
+      - ./scripts/build.sh
+
+  docker-dev:
+    desc: Run development environment with hot reload
+    cmds:
+      - ./scripts/run-dev.sh
+
+  docker-prod:
+    desc: Run production environment
+    cmds:
+      - ./scripts/run-prod.sh
+
+  docker-stop:
+    desc: Stop all containers
+    cmds:
+      - podman-compose down
+
+  docker-logs:
+    desc: View container logs
+    cmds:
+      - podman-compose logs -f
+
+  # CDON Watcher specific tasks
+  crawl:
+    desc: Run initial CDON crawl
+    cmds:
+      - podman-compose --profile crawler run --rm crawler
+
+  monitor:
+    desc: Start price monitoring service
+    cmds:
+      - uv run python -m cdon_watcher monitor
+
+  web:
+    desc: Start web dashboard (local development)
+    cmds:
+      - uv run python -m cdon_watcher web
+
+  # Testing tasks specific to CDON Watcher
+  test-hybrid:
+    desc: Run hybrid scraper tests
+    cmds:
+      - uv run pytest tests/integration/test_hybrid_workflow.py -v
+
+  test-url:
+    desc: Test a single URL (requires URL argument)
+    cmds:
+      - uv run python test_single_url.py "{{.URL}}"
+
+  # Database and data management
+  backup-db:
+    desc: Backup database
+    cmds:
+      - cp data/cdon_movies.db data/cdon_movies_backup_$(date +%Y%m%d_%H%M%S).db
+
+  # Installation and setup
+  install:
+    desc: Install all dependencies
+    cmds:
+      - uv sync --extra test
+      - uv run playwright install chromium
+
+  setup:
+    desc: Setup development environment
+    deps: [install]
+    cmds:
+      - mkdir -p data
+      - echo "Development environment ready!"
+
+# Help text
+help:
+  desc: Show available tasks
+  cmds:
+    - task --list

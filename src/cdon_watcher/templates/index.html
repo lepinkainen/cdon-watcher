@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CDON Blu-ray Price Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 CDON Blu-ray Price Tracker</h1>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <h3 id="total-movies">-</h3>
+                <p>Total Movies</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="price-drops">-</h3>
+                <p>Price Drops Today</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="watchlist-count">-</h3>
+                <p>Watchlist Items</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="last-update">-</h3>
+                <p>Last Update</p>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>🔔 Recent Price Alerts</h2>
+            <div id="alerts-container">
+                <div class="loading">Loading alerts...</div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>🔍 Search Movies</h2>
+            <div class="search-box">
+                <input type="text" id="search-input" placeholder="Search for movies..." onkeypress="if(event.key==='Enter') searchMovies()">
+                <button onclick="searchMovies()">Search</button>
+            </div>
+            <div id="search-results" class="movie-grid"></div>
+        </div>
+        
+        <div class="section">
+            <h2>💰 Best Deals</h2>
+            <div id="deals-container" class="movie-grid">
+                <div class="loading">Loading deals...</div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>👀 Watchlist</h2>
+            <div id="watchlist-container" class="movie-grid">
+                <div class="loading">Loading watchlist...</div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>💵 Top 20 Cheapest Blu-rays</h2>
+            <div id="cheapest-blurays-container" class="movie-grid">
+                <div class="loading">Loading cheapest Blu-rays...</div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>🎞️ Top 20 Cheapest 4K Blu-rays</h2>
+            <div id="cheapest-4k-blurays-container" class="movie-grid">
+                <div class="loading">Loading cheapest 4K Blu-rays...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    
+    <!-- Notification container will be added dynamically -->
+</body>
+</html>
