@@ -169,9 +169,3 @@ tasks:
     cmds:
       - mkdir -p data
       - echo "Development environment ready!"
-
-# Help text
-help:
-  desc: Show available tasks
-  cmds:
-    - task --list
