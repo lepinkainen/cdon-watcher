@@ -59,10 +59,15 @@ class ListingCrawler:
         try:
             for page_num in range(1, max_pages + 1):
                 # Construct page URL
-                if '?' in category_url:
-                    url = f"{category_url}&page={page_num}"
+                if page_num == 1:
+                    # First page uses base URL without page parameter
+                    url = category_url
                 else:
-                    url = f"{category_url}?page={page_num}"
+                    # Subsequent pages add page parameter
+                    if '?' in category_url:
+                        url = f"{category_url}&page={page_num}"
+                    else:
+                        url = f"{category_url}?page={page_num}"
                 
                 logger.info(f"Crawling page {page_num}: {url}")
                 urls = await self._extract_product_urls_from_page(page, url)
