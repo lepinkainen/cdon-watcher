@@ -146,26 +146,14 @@ class DatabaseManager:
 
             movie_id = result[0]
 
-            # Check if already exists and update, otherwise insert
-            cursor.execute("SELECT id FROM watchlist WHERE product_id = ?", (product_id,))
-            existing = cursor.fetchone()
-
-            if existing:
-                cursor.execute(
-                    """
-                    UPDATE watchlist SET target_price = ?, created_at = datetime('now')
-                    WHERE product_id = ?
-                """,
-                    (target_price, product_id),
-                )
-            else:
-                cursor.execute(
-                    """
-                    INSERT INTO watchlist (movie_id, product_id, target_price, created_at)
-                    VALUES (?, ?, ?, datetime('now'))
-                """,
-                    (movie_id, product_id, target_price),
-                )
+            # Use INSERT OR REPLACE to handle duplicates automatically thanks to unique constraints
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO watchlist (movie_id, product_id, target_price, created_at)
+                VALUES (?, ?, ?, datetime('now'))
+            """,
+                (movie_id, product_id, target_price),
+            )
 
             conn.commit()
             conn.close()

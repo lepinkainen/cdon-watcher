@@ -83,8 +83,8 @@ class CDONScraper:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS watchlist (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                movie_id INTEGER,
-                product_id TEXT,
+                movie_id INTEGER UNIQUE,
+                product_id TEXT UNIQUE,
                 target_price REAL,
                 notify_on_availability BOOLEAN DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
