@@ -146,13 +146,26 @@ class DatabaseManager:
 
             movie_id = result[0]
 
-            cursor.execute(
-                """
-                INSERT OR REPLACE INTO watchlist (movie_id, product_id, target_price, created_at)
-                VALUES (?, ?, ?, datetime('now'))
-            """,
-                (movie_id, product_id, target_price),
-            )
+            # Check if already exists and update, otherwise insert
+            cursor.execute("SELECT id FROM watchlist WHERE product_id = ?", (product_id,))
+            existing = cursor.fetchone()
+
+            if existing:
+                cursor.execute(
+                    """
+                    UPDATE watchlist SET target_price = ?, created_at = datetime('now')
+                    WHERE product_id = ?
+                """,
+                    (target_price, product_id),
+                )
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO watchlist (movie_id, product_id, target_price, created_at)
+                    VALUES (?, ?, ?, datetime('now'))
+                """,
+                    (movie_id, product_id, target_price),
+                )
 
             conn.commit()
             conn.close()
@@ -176,6 +189,10 @@ class DatabaseManager:
 
     def search_movies(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
         """Search for movies by title."""
+        # Return empty list for empty queries
+        if not query or not query.strip():
+            return []
+
         conn = self.get_connection()
         cursor = conn.cursor()
 
