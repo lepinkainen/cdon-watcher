@@ -4,7 +4,6 @@ Listing crawler for CDON category pages using Playwright
 
 import asyncio
 import logging
-import time
 from typing import Any
 
 from playwright.async_api import Browser, Page, async_playwright
@@ -105,14 +104,14 @@ class ListingCrawler:
         """Extract product URLs from a single listing page with retry logic"""
         max_retries = 3
         base_delay = 2  # seconds
-        
+
         for attempt in range(max_retries + 1):
             try:
                 if attempt > 0:
                     delay = base_delay * (2 ** (attempt - 1))  # exponential backoff: 2s, 4s, 8s
                     logger.info(f"Retrying page load (attempt {attempt + 1}/{max_retries + 1}) after {delay}s delay...")
                     await asyncio.sleep(delay)
-                
+
                 logger.debug(f"Navigating to {url}")
                 await page.goto(url, wait_until="networkidle", timeout=20000)
 
@@ -166,14 +165,14 @@ class ListingCrawler:
                 error_str = str(e).lower()
                 is_network_error = any(error_type in error_str for error_type in [
                     'net::err_network_changed',
-                    'net::err_internet_disconnected', 
+                    'net::err_internet_disconnected',
                     'net::err_connection_refused',
                     'net::err_connection_reset',
                     'net::err_connection_timed_out',
                     'timeout',
                     'navigation timeout'
                 ])
-                
+
                 if is_network_error and attempt < max_retries:
                     logger.warning(f"Network error detected (attempt {attempt + 1}/{max_retries + 1}): {e}")
                     continue  # Try again with exponential backoff
@@ -184,7 +183,7 @@ class ListingCrawler:
                     else:
                         logger.error(f"Non-network error for {url}: {e}")
                     return []
-        
+
         # If we get here, all retries failed
         logger.error(f"All retry attempts failed for {url}")
         return []

@@ -171,11 +171,11 @@ def serve_poster(filename: str) -> Any:
     """Serve poster images from the posters directory."""
     import os
     poster_dir = CONFIG.get("poster_dir", "/app/data/posters")
-    
+
     # Remove the /app prefix if running locally
     if not os.path.exists(poster_dir) and poster_dir.startswith("/app/"):
         local_poster_dir = poster_dir.replace("/app/", "./")
         if os.path.exists(local_poster_dir):
             poster_dir = local_poster_dir
-    
+
     return send_from_directory(poster_dir, filename)

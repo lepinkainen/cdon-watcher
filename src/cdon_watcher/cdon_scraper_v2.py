@@ -4,9 +4,8 @@ Hybrid CDON scraper combining listing crawler (Playwright) and product parser (p
 
 import asyncio
 import logging
-import os
 import sqlite3
-from typing import Any, Optional
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -30,9 +29,9 @@ class CDONScraper:
         self.db_path: str = db_path if db_path is not None else CONFIG["db_path"]
         self.listing_crawler = ListingCrawler()
         self.product_parser = ProductParser()
-        
+
         # Initialize TMDB service if API key is available
-        self.tmdb_service: Optional[TMDBService] = None
+        self.tmdb_service: TMDBService | None = None
         if CONFIG["tmdb_api_key"]:
             try:
                 self.tmdb_service = TMDBService(
@@ -44,7 +43,7 @@ class CDONScraper:
                 logger.warning(f"Failed to initialize TMDB service: {e}")
         else:
             logger.info("TMDB API key not found - poster fetching disabled")
-            
+
         self.init_database()
 
     def init_database(self) -> None:
@@ -195,7 +194,7 @@ class CDONScraper:
             # Try to fetch TMDB data if service is available
             tmdb_id = None
             local_poster_path = None
-            
+
             if self.tmdb_service and movie.title:
                 try:
                     year = self.tmdb_service.extract_year_from_title(movie.title)
