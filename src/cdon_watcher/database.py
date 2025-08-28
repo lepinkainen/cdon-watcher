@@ -118,10 +118,13 @@ class DatabaseManager:
                     "url": row[4],
                     "image_url": row[5],
                     "tmdb_id": row[6],
-                    "target_price": row[9],
-                    "current_price": row[10],
-                    "lowest_price": row[11],
-                    "highest_price": row[12],
+                    "content_type": row[7],
+                    "first_seen": row[8],
+                    "last_updated": row[9],
+                    "target_price": row[10],
+                    "current_price": row[11],
+                    "lowest_price": row[12],
+                    "highest_price": row[13],
                 }
             )
 

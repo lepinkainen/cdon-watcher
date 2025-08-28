@@ -7,64 +7,78 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Development Environment Setup
 
 ```bash
-# Install dependencies using uv (recommended)
-uv sync --extra test
+# Quick setup (recommended)
+task install          # Install all dependencies + playwright
+
+# Manual setup using uv (recommended)
+uv sync --extra test --extra dev
 uv run playwright install chromium
 
 # Alternative: Traditional pip/venv (uses pyproject.toml)
 python3 -m venv venv
 source venv/bin/activate
-pip install -e .[test]
+pip install -e .[test,dev]
 playwright install chromium
+```
+
+### Build and Quality Checks
+
+```bash
+# Complete build pipeline (setup, test, lint)
+task build
+
+# Individual quality checks
+task test              # Fast unit tests
+task test-integration  # Slow integration tests (requires network)
+task lint              # ruff + mypy
+
+# CI-friendly commands
+task build-ci          # Build without tests
+task test-ci           # Tests with coverage
 ```
 
 ### Testing Commands
 
 ```bash
-# Fast unit tests (no network)
-uv run pytest test_basic.py -v
+# Fast unit tests (no network, preferred for development)
+task test
+# or manually: PYTHONPATH=./src uv run pytest tests/unit/ -v --timeout=30
 
-# Test individual components (legacy interface maintained)
-uv run python tests/integration/test_legacy_hybrid_workflow.py product   # ProductParser only
-uv run python tests/integration/test_legacy_hybrid_workflow.py listing   # ListingCrawler only  
-uv run python tests/integration/test_legacy_hybrid_workflow.py hybrid    # Full workflow
+# Integration tests (slow, real network requests)
+task test-integration
+task test-hybrid       # Test the hybrid scraper workflow specifically
 
-# Quick URL testing (legacy interface maintained)
+# Legacy testing interfaces (maintained for compatibility)
+uv run python tests/integration/test_legacy_hybrid_workflow.py [product|listing|hybrid]
 uv run python tests/integration/test_single_url_processing.py "https://cdon.fi/tuote/movie-url/"
 
-# New pytest-based integration tests
-uv run pytest tests/integration/ -v --timeout=120
-
-# Integration tests with real pages (slow)
-uv run pytest test_parser.py -v --timeout=120
-
-# Manage test cases
-uv run python add_test_case.py list
-uv run python add_test_case.py add --url "..." --title "Movie Title" --price-min 20 --price-max 40
+# All tests
+task test-all
 ```
 
 ### Container Management
 
-- **Build**: `./scripts/build.sh` (auto-detects Podman/Docker)
-- **Development**: `./scripts/run-dev.sh` (macOS with Podman)
-- **Production**: `./scripts/run-prod.sh` (Linux with Docker)
+- **Build**: `task docker-build` or `./scripts/build.sh` (auto-detects Podman/Docker)
+- **Development**: `task docker-dev` or `./scripts/run-dev.sh` (macOS with Podman)
+- **Production**: `task docker-prod` or `./scripts/run-prod.sh` (Linux with Docker)
+- **Stop containers**: `task docker-stop`
+- **View logs**: `task docker-logs`
 
 ### Core Application Commands
 
 ```bash
-# Run hybrid scraper (recommended)
-uv run python cdon_scraper_v2.py
+# Module-based execution (recommended)
+uv run python -m cdon_watcher crawl    # Initial crawl
+uv run python -m cdon_watcher monitor  # Price monitoring
+uv run python -m cdon_watcher web      # Web dashboard
 
-# Container-based crawling
+# Task-based shortcuts
+task crawl             # Container-based crawling
+task monitor           # Local monitoring service
+task web               # Local web dashboard
+
+# Container-based execution
 podman-compose --profile crawler run --rm crawler
-
-# Monitor prices (runs automatically in background)
-python monitor.py monitor
-
-# Start web dashboard
-python monitor.py web
-
-# View logs
 podman-compose logs -f monitor
 podman-compose logs -f web
 ```
@@ -126,10 +140,31 @@ podman-compose logs -f web
 
 ## Development Notes
 
-- **Title extraction fix**: Resolved "vihdoin arki" promotional text extraction issue
-- **Performance**: Hybrid approach ~10x faster than pure Playwright
-- **Testing**: Comprehensive test suite with real URL validation
-- **Maintenance**: Easy test case management, JSON-based configuration
+### Code Quality and Conventions
 
-- always use `uv run python` to run code
-- always run the web dashboard in a container. rebuild and restart the container when necessary
+- **Package management**: Use `uv` exclusively - all commands should be `uv run python` or `task` shortcuts
+- **Testing strategy**: Fast unit tests for development (`task test`), integration tests for validation
+- **Build pipeline**: Always run `task build` before completing tasks (includes tests + linting)
+- **Web dashboard**: Always run in containers - rebuild and restart when necessary
+
+### Project-Specific Patterns
+
+- **Module structure**: Code organized in `src/cdon_watcher/` with proper `__main__.py` entry point
+- **Database path**: Uses `CONFIG["db_path"]` from `config.py`, typically `data/cdon_movies.db`
+- **Hybrid architecture**: Playwright for dynamic pages, requests+BeautifulSoup for static parsing
+- **CLI interface**: All functionality accessible via `uv run python -m cdon_watcher [command]`
+
+### Key Implementation Details
+
+- **Title extraction fix**: Resolved "vihdoin arki" promotional text extraction issue
+- **Performance**: Hybrid approach ~10x faster than pure Playwright  
+- **Anti-bot protection**: Stealth browser settings, realistic headers, rate limiting
+- **Testing**: JSON-based test case management (`add_test_case.py`), real URL validation
+
+### LLM Assistant Guidelines
+
+Refer to `llm-shared/` submodule for:
+- **General development**: `project_tech_stack.md` (project management, validation)
+- **Python conventions**: `languages/python.md` (libraries, tools, patterns)
+- **Shell tools**: `shell_commands.md` (use `rg` instead of `grep`, `fd` instead of `find`)
+- **GitHub workflow**: `GITHUB.md` (issue management)

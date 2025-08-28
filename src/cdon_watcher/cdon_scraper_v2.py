@@ -9,13 +9,13 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-# Load environment variables first
-load_dotenv()
-
 from .config import CONFIG
 from .listing_crawler import ListingCrawler
 from .product_parser import Movie, ProductParser
 from .tmdb_service import TMDBService
+
+# Load environment variables first
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -35,8 +35,7 @@ class CDONScraper:
         if CONFIG["tmdb_api_key"]:
             try:
                 self.tmdb_service = TMDBService(
-                    api_key=CONFIG["tmdb_api_key"],
-                    poster_dir=CONFIG["poster_dir"]
+                    api_key=CONFIG["tmdb_api_key"], poster_dir=CONFIG["poster_dir"]
                 )
                 logger.info("TMDB service initialized successfully")
             except Exception as e:
@@ -51,7 +50,7 @@ class CDONScraper:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        # Movies table
+        # Movies table (also stores TV series)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS movies (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,6 +60,7 @@ class CDONScraper:
                 url TEXT,
                 image_url TEXT,
                 tmdb_id INTEGER,
+                content_type TEXT DEFAULT 'movie',  -- 'movie' or 'tv'
                 first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -194,9 +194,14 @@ class CDONScraper:
             # Try to fetch TMDB data if service is available
             tmdb_id = None
             local_poster_path = None
+            content_type = "movie"  # Default to movie
 
             if self.tmdb_service and movie.title:
                 try:
+                    # Detect if it's a TV series
+                    if self.tmdb_service._is_tv_series(movie.title):
+                        content_type = "tv"
+
                     year = self.tmdb_service.extract_year_from_title(movie.title)
                     tmdb_id, local_poster_path = self.tmdb_service.get_movie_data_and_poster(
                         movie.title, year
@@ -210,8 +215,8 @@ class CDONScraper:
             # Insert or update movie
             cursor.execute(
                 """
-                INSERT OR IGNORE INTO movies (product_id, title, format, url, image_url, tmdb_id)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT OR IGNORE INTO movies (product_id, title, format, url, image_url, tmdb_id, content_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     movie.product_id,
@@ -220,6 +225,7 @@ class CDONScraper:
                     movie.url,
                     final_image_url,
                     tmdb_id,
+                    content_type,
                 ),
             )
 

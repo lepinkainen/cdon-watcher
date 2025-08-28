@@ -170,6 +170,7 @@ def api_ignore_movie() -> Any:
 def serve_poster(filename: str) -> Any:
     """Serve poster images from the posters directory."""
     import os
+
     poster_dir = CONFIG.get("poster_dir", "/app/data/posters")
 
     # Remove the /app prefix if running locally

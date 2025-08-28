@@ -37,34 +37,105 @@ class TMDBService:
         time_since_last = current_time - self.last_request_time
         if time_since_last < self.min_request_interval:
             time.sleep(self.min_request_interval - time_since_last)
-        self.last_request_time = time.time()
+        self.last_request_time = int(time.time())
 
-    def _clean_title_for_search(self, title: str) -> str:
-        """Clean movie title for better TMDB search results."""
+    def _is_tv_series(self, title: str) -> bool:
+        """Detect if a title refers to a TV series rather than a movie."""
+        tv_indicators = [
+            r"\bSeason\s+\d+",
+            r"\bSeries\s+\d+",
+            r"\bComplete\s+Series",
+            r"\bTV\s+Series",
+            r"\bSeason\s+\d+[-–]\d+",  # Season 1-3
+            r"\bS\d+\b",  # S01, S02, etc.
+            r"\bEpisode\s+\d+",
+        ]
+
+        for pattern in tv_indicators:
+            if re.search(pattern, title, re.IGNORECASE):
+                return True
+        return False
+
+    def _clean_title_for_search(self, title: str, is_tv: bool = False) -> str:
+        """Clean title for better TMDB search results."""
         # Remove common Blu-ray/DVD indicators and extra info
-        cleaned = re.sub(r'\b(Blu-ray|DVD|4K|UHD|Ultimate|Collector\'s|Special|Edition|Extended|Director\'s|Cut)\b', '', title, flags=re.IGNORECASE)
+        cleaned = re.sub(
+            r"\b(Blu-ray|DVD|4K|UHD|Ultimate|Collector\'s|Special|Edition|Extended|Director\'s|Cut)\b",
+            "",
+            title,
+            flags=re.IGNORECASE,
+        )
+
+        # Remove disc count and import information
+        cleaned = re.sub(r"\(\d+\s+disc\)", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\(Import\)", "", cleaned, flags=re.IGNORECASE)
+
+        if is_tv:
+            # For TV series, clean up season information while preserving core title
+            # "Hannibal - Season 1-3" -> "Hannibal"
+            cleaned = re.sub(r"\s*[-–—]\s*Season\s+\d+[-–]?\d*", "", cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r"\s*[-–—]\s*Series\s+\d+", "", cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r"\s*[-–—]\s*Complete\s+Series", "", cleaned, flags=re.IGNORECASE)
 
         # Remove parenthetical year info if present
-        cleaned = re.sub(r'\s*\(\d{4}\)', '', cleaned)
+        cleaned = re.sub(r"\s*\(\d{4}\)", "", cleaned)
 
         # Remove extra whitespace and common punctuation
-        cleaned = re.sub(r'[:\-–—]+', ' ', cleaned)
-        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        cleaned = re.sub(r"[:\-–—]+", " ", cleaned)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
         return cleaned
+
+    def search_tv(self, title: str, year: int | None = None) -> dict[str, Any] | None:
+        """Search for a TV series on TMDB and return the best match."""
+        self._rate_limit()
+
+        cleaned_title = self._clean_title_for_search(title, is_tv=True)
+
+        params: dict[str, str | int] = {
+            "api_key": self.api_key_param,
+            "query": cleaned_title,
+            "include_adult": "false",
+            "language": "en-US",
+            "page": 1,
+        }
+
+        if year:
+            params["first_air_date_year"] = year
+
+        try:
+            response = self.session.get(f"{self.base_url}/search/tv", params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            results = data.get("results", [])
+            if not results:
+                logger.info(f"No TMDB TV results found for: {title}")
+                return None
+
+            # Return the first result (TMDB orders by relevance)
+            best_match: dict[str, Any] = results[0]
+            logger.info(
+                f"Found TMDB TV match for '{title}': {best_match['name']} ({best_match.get('first_air_date', 'N/A')[:4]})"
+            )
+            return best_match
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error searching TMDB TV for '{title}': {e}")
+            return None
 
     def search_movie(self, title: str, year: int | None = None) -> dict[str, Any] | None:
         """Search for a movie on TMDB and return the best match."""
         self._rate_limit()
 
-        cleaned_title = self._clean_title_for_search(title)
+        cleaned_title = self._clean_title_for_search(title, is_tv=False)
 
-        params = {
+        params: dict[str, str | int] = {
             "api_key": self.api_key_param,
             "query": cleaned_title,
             "include_adult": "false",
             "language": "en-US",
-            "page": 1
+            "page": 1,
         }
 
         if year:
@@ -81,8 +152,10 @@ class TMDBService:
                 return None
 
             # Return the first result (TMDB orders by relevance)
-            best_match = results[0]
-            logger.info(f"Found TMDB match for '{title}': {best_match['title']} ({best_match.get('release_date', 'N/A')[:4]})")
+            best_match: dict[str, Any] = results[0]
+            logger.info(
+                f"Found TMDB match for '{title}': {best_match['title']} ({best_match.get('release_date', 'N/A')[:4]})"
+            )
             return best_match
 
         except requests.exceptions.RequestException as e:
@@ -97,7 +170,8 @@ class TMDBService:
             params = {"api_key": self.api_key_param}
             response = self.session.get(f"{self.base_url}/movie/{tmdb_id}", params=params)
             response.raise_for_status()
-            return response.json()
+            movie_details: dict[str, Any] = response.json()
+            return movie_details
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching TMDB movie details for ID {tmdb_id}: {e}")
             return None
@@ -122,7 +196,7 @@ class TMDBService:
             response = self.session.get(poster_url, stream=True)
             response.raise_for_status()
 
-            with open(local_poster_path, 'wb') as f:
+            with open(local_poster_path, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
 
@@ -133,10 +207,42 @@ class TMDBService:
             logger.error(f"Error downloading poster for TMDB ID {tmdb_id}: {e}")
             return None
 
-    def get_movie_data_and_poster(self, title: str, year: int | None = None) -> tuple[int | None, str | None]:
-        """Search for movie and download poster. Returns (tmdb_id, local_poster_path)."""
+    def get_tv_data_and_poster(
+        self, title: str, year: int | None = None
+    ) -> tuple[int | None, str | None]:
+        """Search for TV series and download poster. Returns (tmdb_tv_id, local_poster_path)."""
+        tv_data = self.search_tv(title, year)
+        if not tv_data:
+            return None, None
+
+        tmdb_id = tv_data["id"]
+        poster_path = tv_data.get("poster_path")
+
+        if not poster_path:
+            logger.info(f"No poster available for TMDB TV ID {tmdb_id}")
+            return tmdb_id, None
+
+        local_poster_path = self.download_poster(poster_path, tmdb_id)
+        return tmdb_id, local_poster_path
+
+    def get_movie_data_and_poster(
+        self, title: str, year: int | None = None
+    ) -> tuple[int | None, str | None]:
+        """Search for movie/TV and download poster. Returns (tmdb_id, local_poster_path)."""
+        # First try as TV series if it looks like one
+        if self._is_tv_series(title):
+            logger.info(f"Detected TV series, trying TV search first: {title}")
+            tmdb_id, poster_path = self.get_tv_data_and_poster(title, year)
+            if tmdb_id:
+                return tmdb_id, poster_path
+
+        # Try as movie (either it didn't look like TV, or TV search failed)
         movie_data = self.search_movie(title, year)
         if not movie_data:
+            # If movie search failed and we haven't tried TV yet, try TV as fallback
+            if not self._is_tv_series(title):
+                logger.info(f"Movie search failed, trying TV search as fallback: {title}")
+                return self.get_tv_data_and_poster(title, year)
             return None, None
 
         tmdb_id = movie_data["id"]
@@ -151,7 +257,7 @@ class TMDBService:
 
     def extract_year_from_title(self, title: str) -> int | None:
         """Extract release year from movie title if present."""
-        year_match = re.search(r'\((\d{4})\)', title)
+        year_match = re.search(r"\((\d{4})\)", title)
         if year_match:
             return int(year_match.group(1))
         return None

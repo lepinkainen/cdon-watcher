@@ -53,20 +53,22 @@ async def test_web_interface():
                             # Check if image actually loads
                             is_visible = await poster_img.is_visible()
                             if is_visible:
-                                print(f"✓ Movie {i+1}: Poster image loaded: {src}")
+                                print(f"✓ Movie {i + 1}: Poster image loaded: {src}")
                                 posters_found += 1
                             else:
-                                print(f"⚠ Movie {i+1}: Poster image not visible: {src}")
+                                print(f"⚠ Movie {i + 1}: Poster image not visible: {src}")
                         else:
                             placeholder = await poster.query_selector(".poster-placeholder")
                             if placeholder:
-                                print(f"✓ Movie {i+1}: Poster placeholder shown")
+                                print(f"✓ Movie {i + 1}: Poster placeholder shown")
                             else:
-                                print(f"✗ Movie {i+1}: No poster or placeholder found")
+                                print(f"✗ Movie {i + 1}: No poster or placeholder found")
                     else:
-                        print(f"✗ Movie {i+1}: No poster container found")
+                        print(f"✗ Movie {i + 1}: No poster container found")
 
-                print(f"📊 Summary: {posters_found}/{len(movie_cards)} movie cards have loaded poster images")
+                print(
+                    f"📊 Summary: {posters_found}/{len(movie_cards)} movie cards have loaded poster images"
+                )
             else:
                 print("ℹ️  No movie cards found (database might be empty)")
 
@@ -83,11 +85,12 @@ async def test_web_interface():
             try:
                 await page.screenshot(path="error_screenshot.png", full_page=True)
                 print("🔍 Error screenshot saved: error_screenshot.png")
-            except:
+            except Exception:
                 pass
 
         finally:
             await browser.close()
+
 
 if __name__ == "__main__":
     asyncio.run(test_web_interface())

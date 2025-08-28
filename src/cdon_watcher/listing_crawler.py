@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import Any
 
-from playwright.async_api import Browser, Page, async_playwright
+from playwright.async_api import Browser, ElementHandle, Page, async_playwright
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -109,84 +109,108 @@ class ListingCrawler:
             try:
                 if attempt > 0:
                     delay = base_delay * (2 ** (attempt - 1))  # exponential backoff: 2s, 4s, 8s
-                    logger.info(f"Retrying page load (attempt {attempt + 1}/{max_retries + 1}) after {delay}s delay...")
+                    logger.info(
+                        f"Retrying page load (attempt {attempt + 1}/{max_retries + 1}) after {delay}s delay..."
+                    )
                     await asyncio.sleep(delay)
 
-                logger.debug(f"Navigating to {url}")
-                await page.goto(url, wait_until="networkidle", timeout=20000)
-
-                # Wait for product links to appear with improved stability detection
-                try:
-                    await page.wait_for_selector('a[href*="/tuote/"]', timeout=15000, state="visible")
-                    logger.debug("Found product links")
-                except Exception as e:
-                    logger.warning(f"Product links not found: {e}, trying alternative selectors")
-                    try:
-                        await page.wait_for_selector(
-                            'main, [data-testid="product-grid"], .products', timeout=15000
-                        )
-                        logger.debug("Found main content area")
-                    except Exception as e:
-                        logger.warning(f"No specific selectors found: {e}, proceeding with page scrape")
-
-                # Add small delay to ensure content is settled after dynamic loading
-                await asyncio.sleep(1)
-
-                # Find all product links
-                product_links = await page.query_selector_all('a[href*="/tuote/"]')
-
-                if not product_links:
-                    logger.warning("No product links found on page")
-                    return []
-
-                urls = []
-                for link in product_links:
-                    try:
-                        href = await link.get_attribute("href")
-                        if href:
-                            # Convert relative URLs to absolute
-                            if href.startswith("/"):
-                                href = f"{self.base_url}{href}"
-
-                            # Only include URLs that look like product pages
-                            if "/tuote/" in href:
-                                urls.append(href)
-                    except Exception as e:
-                        logger.debug(f"Error extracting href: {e}")
-                        continue
-
-                # Remove duplicates and sort
-                unique_urls = list(set(urls))
-                logger.info(f"Extracted {len(unique_urls)} unique product URLs")
-                return unique_urls
+                return await self._scrape_page_urls(page, url)
 
             except Exception as e:
-                # Check for network-related errors that should trigger retry
-                error_str = str(e).lower()
-                is_network_error = any(error_type in error_str for error_type in [
-                    'net::err_network_changed',
-                    'net::err_internet_disconnected',
-                    'net::err_connection_refused',
-                    'net::err_connection_reset',
-                    'net::err_connection_timed_out',
-                    'timeout',
-                    'navigation timeout'
-                ])
-
-                if is_network_error and attempt < max_retries:
-                    logger.warning(f"Network error detected (attempt {attempt + 1}/{max_retries + 1}): {e}")
-                    continue  # Try again with exponential backoff
-                else:
-                    # Non-network error or max retries reached
-                    if attempt >= max_retries:
-                        logger.error(f"Max retries ({max_retries}) reached for {url}: {e}")
-                    else:
-                        logger.error(f"Non-network error for {url}: {e}")
+                if not self._should_retry_error(e, attempt, max_retries):
                     return []
 
         # If we get here, all retries failed
         logger.error(f"All retry attempts failed for {url}")
         return []
+
+    async def _scrape_page_urls(self, page: Page, url: str) -> list[str]:
+        """Scrape URLs from a single page"""
+        logger.debug(f"Navigating to {url}")
+        await page.goto(url, wait_until="networkidle", timeout=20000)
+
+        # Wait for content to load
+        await self._wait_for_page_content(page)
+
+        # Add small delay to ensure content is settled after dynamic loading
+        await asyncio.sleep(1)
+
+        # Find all product links
+        product_links = await page.query_selector_all('a[href*="/tuote/"]')
+
+        if not product_links:
+            logger.warning("No product links found on page")
+            return []
+
+        urls = await self._extract_urls_from_links(product_links)
+
+        # Remove duplicates and sort
+        unique_urls = list(set(urls))
+        logger.info(f"Extracted {len(unique_urls)} unique product URLs")
+        return unique_urls
+
+    async def _wait_for_page_content(self, page: Page) -> None:
+        """Wait for page content with fallback selectors"""
+        try:
+            await page.wait_for_selector('a[href*="/tuote/"]', timeout=15000, state="visible")
+            logger.debug("Found product links")
+        except Exception as e:
+            logger.warning(f"Product links not found: {e}, trying alternative selectors")
+            try:
+                await page.wait_for_selector(
+                    'main, [data-testid="product-grid"], .products', timeout=15000
+                )
+                logger.debug("Found main content area")
+            except Exception as e:
+                logger.warning(f"No specific selectors found: {e}, proceeding with page scrape")
+
+    async def _extract_urls_from_links(self, product_links: list[ElementHandle]) -> list[str]:
+        """Extract URLs from product link elements"""
+        urls = []
+        for link in product_links:
+            try:
+                href = await link.get_attribute("href")
+                if href:
+                    # Convert relative URLs to absolute
+                    if href.startswith("/"):
+                        href = f"{self.base_url}{href}"
+
+                    # Only include URLs that look like product pages
+                    if "/tuote/" in href:
+                        urls.append(href)
+            except Exception as e:
+                logger.debug(f"Error extracting href: {e}")
+                continue
+        return urls
+
+    def _should_retry_error(self, error: Exception, attempt: int, max_retries: int) -> bool:
+        """Determine if an error should trigger a retry"""
+        error_str = str(error).lower()
+        is_network_error = any(
+            error_type in error_str
+            for error_type in [
+                "net::err_network_changed",
+                "net::err_internet_disconnected",
+                "net::err_connection_refused",
+                "net::err_connection_reset",
+                "net::err_connection_timed_out",
+                "timeout",
+                "navigation timeout",
+            ]
+        )
+
+        if is_network_error and attempt < max_retries:
+            logger.warning(
+                f"Network error detected (attempt {attempt + 1}/{max_retries + 1}): {error}"
+            )
+            return True
+        else:
+            # Non-network error or max retries reached
+            if attempt >= max_retries:
+                logger.error(f"Max retries ({max_retries}) reached: {error}")
+            else:
+                logger.error(f"Non-network error: {error}")
+            return False
 
 
 # Example usage and testing
