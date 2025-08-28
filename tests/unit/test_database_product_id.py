@@ -6,7 +6,7 @@ import tempfile
 
 import pytest
 
-from cdon_watcher.cdon_scraper_v2 import CDONScraper
+from cdon_watcher.cdon_scraper import CDONScraper
 from cdon_watcher.database import DatabaseManager
 from cdon_watcher.product_parser import Movie
 

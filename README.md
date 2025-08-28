@@ -130,7 +130,7 @@ CHECK_INTERVAL_HOURS=6
 
 ```
 cdon-watcher/
-├── cdon_scraper_v2.py        # Hybrid scraper orchestrator
+├── cdon_scraper.py        # Hybrid scraper orchestrator
 ├── listing_crawler.py        # Playwright-based listing crawler  
 ├── product_parser.py         # Pure Python product parser
 ├── monitor.py                # Price monitor & web app

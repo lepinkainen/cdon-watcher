@@ -93,7 +93,7 @@ podman-compose logs -f web
 
 - **listing_crawler.py**: Playwright-based category page crawler (collects product URLs)
 - **product_parser.py**: Pure Python product page parser (extracts title/price via requests + BeautifulSoup)  
-- **cdon_scraper_v2.py**: Orchestrator combining both parsers + database operations
+- **cdon_scraper.py**: Orchestrator combining both parsers + database operations
 - **monitor.py**: Price monitoring daemon and Flask web dashboard
 - **SQLite database**: Stores movies, price history, and watchlist data
 
@@ -131,7 +131,7 @@ podman-compose logs -f web
 
 ## File Structure Notes
 
-- **Core scraper**: `listing_crawler.py`, `product_parser.py`, `cdon_scraper_v2.py`
+- **Core scraper**: `listing_crawler.py`, `product_parser.py`, `cdon_scraper.py`
 - **Testing**: `tests/` (unit + integration), `conftest.py`, `test_data.json`, `add_test_case.py`
 - **Configuration**: `pyproject.toml` (single dependency source), `.env`
 - **Containers**: `docker-compose.yml`, `docker-compose.override.yml`, `docker-compose.prod.yml`

@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.cdon_watcher.cdon_scraper_v2 import CDONScraper
+from src.cdon_watcher.cdon_scraper import CDONScraper
 
 
 class TestHybridWorkflow:

@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from src.cdon_watcher.cdon_scraper_v2 import CDONScraper
+from src.cdon_watcher.cdon_scraper import CDONScraper
 from src.cdon_watcher.database import DatabaseManager
 from src.cdon_watcher.product_parser import Movie
 from src.cdon_watcher.web.app import create_app

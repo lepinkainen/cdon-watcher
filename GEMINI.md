@@ -21,7 +21,7 @@ The application utilizes a hybrid scraping architecture to efficiently gather da
 
 * **`listing_crawler.py`**: A Playwright-based crawler responsible for navigating category pages that require JavaScript execution to load and render product listings. It extracts product URLs.
 * **`product_parser.py`**: A lightweight and efficient parser using `requests` and `BeautifulSoup`. It takes a product URL, fetches the static HTML, and parses it to extract details like title, price, and movie format. This avoids the overhead of a full browser for simple pages.
-* **`cdon_scraper_v2.py`**: The orchestrator that combines the two components above. It gets URLs from the `listing_crawler` and passes them to the `product_parser` for processing, then stores the results in the database.
+* **`cdon_scraper.py`**: The orchestrator that combines the two components above. It gets URLs from the `listing_crawler` and passes them to the `product_parser` for processing, then stores the results in the database.
 * **`monitor.py`**: The main entry point for the application, which can be run in three modes:
   * `web`: Starts the Flask web server for the user-facing dashboard.
   * `monitor`: Runs the background price monitoring service.
@@ -33,7 +33,7 @@ The `docker-compose.yml` defines three main services:
 
 * **`web`**: Runs the Flask web application, serving the dashboard on port 8080.
 * **`monitor`**: Runs the background price checking service, which periodically checks for updates.
-* **`crawler`**: A one-time service profile for running the main scraper (`cdon_scraper_v2.py`) to populate the database.
+* **`crawler`**: A one-time service profile for running the main scraper (`cdon_scraper.py`) to populate the database.
 
 ### Data Flow
 

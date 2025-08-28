@@ -5,7 +5,7 @@ import asyncio
 import os
 from datetime import datetime
 
-from .cdon_scraper_v2 import CDONScraper
+from .cdon_scraper import CDONScraper
 from .config import CONFIG
 from .monitoring_service import PriceMonitor
 from .web.app import create_app

@@ -4,7 +4,7 @@ from typing import Any
 
 from flask import Blueprint, jsonify, render_template, request, send_from_directory
 
-from ..cdon_scraper_v2 import CDONScraper
+from ..cdon_scraper import CDONScraper
 from ..config import CONFIG
 from ..database import DatabaseManager
 
