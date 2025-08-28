@@ -14,7 +14,7 @@ from cdon_watcher.product_parser import Movie
 @pytest.fixture
 def temp_db():
     """Create a temporary database for testing."""
-    fd, path = tempfile.mkstemp(suffix='.db')
+    fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     yield path
     os.unlink(path)
@@ -34,7 +34,7 @@ def test_watchlist_operations_with_product_id(temp_db):
         image_url="https://cdon.fi/test-image.jpg",
         price=25.99,
         availability="In Stock",
-        product_id="test-product-123"
+        product_id="test-product-123",
     )
 
     # Save the movie
@@ -72,7 +72,7 @@ def test_ignore_movie_with_product_id(temp_db):
         image_url="https://cdon.fi/test-ignore-image.jpg",
         price=30.99,
         availability="In Stock",
-        product_id="test-ignore-123"
+        product_id="test-ignore-123",
     )
 
     # Save the movie
@@ -95,13 +95,13 @@ def test_product_id_columns_exist(temp_db):
     cursor = conn.cursor()
 
     # Check each table has product_id column
-    tables_to_check = ['watchlist', 'price_history', 'price_alerts', 'ignored_movies']
+    tables_to_check = ["watchlist", "price_history", "price_alerts", "ignored_movies"]
 
     for table in tables_to_check:
         cursor.execute(f"PRAGMA table_info({table})")
         columns = cursor.fetchall()
         column_names = [col[1] for col in columns]
-        assert 'product_id' in column_names, f"product_id column missing from {table} table"
+        assert "product_id" in column_names, f"product_id column missing from {table} table"
 
     conn.close()
 
@@ -120,7 +120,7 @@ def test_search_includes_product_id(temp_db):
         image_url="https://cdon.fi/searchable-image.jpg",
         price=15.99,
         availability="In Stock",
-        product_id="searchable-123"
+        product_id="searchable-123",
     )
 
     # Save the movie
@@ -146,7 +146,7 @@ def test_price_history_includes_product_id(temp_db):
         image_url="https://cdon.fi/price-history-image.jpg",
         price=29.99,
         availability="In Stock",
-        product_id="price-history-123"
+        product_id="price-history-123",
     )
 
     # Save the movie (this should create price history)
@@ -156,7 +156,9 @@ def test_price_history_includes_product_id(temp_db):
     conn = sqlite3.connect(temp_db)
     cursor = conn.cursor()
 
-    cursor.execute("SELECT product_id, price FROM price_history WHERE product_id = ?", ("price-history-123",))
+    cursor.execute(
+        "SELECT product_id, price FROM price_history WHERE product_id = ?", ("price-history-123",)
+    )
     result = cursor.fetchone()
 
     assert result is not None

@@ -100,15 +100,22 @@ class CDONScraper:
 
         # Create indexes for better performance
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_movies_product_id ON movies(product_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_watchlist_product_id ON watchlist(product_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_price_history_product_id ON price_history(product_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_price_alerts_product_id ON price_alerts(product_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ignored_movies_product_id ON ignored_movies(product_id)")
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_watchlist_product_id ON watchlist(product_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_price_history_product_id ON price_history(product_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_price_alerts_product_id ON price_alerts(product_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ignored_movies_product_id ON ignored_movies(product_id)"
+        )
 
         conn.commit()
         conn.close()
         logger.info(f"Database initialized at {self.db_path}")
-
 
     async def crawl_category(self, category_url: str, max_pages: int = 5) -> int:
         """Main crawl workflow: get URLs then parse products, returns count of saved movies"""

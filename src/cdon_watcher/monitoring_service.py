@@ -38,7 +38,8 @@ class PriceMonitor:
 
         # Check each item using the product parser
         for item in watchlist_items:
-            movie_id, _, target_price, _, _, url, title = item
+            # Watchlist: id, movie_id, product_id, target_price, notify_on_availability, created_at + url, title from JOIN
+            _, movie_id, _, target_price, _, _, url, title = item
             print(f"Checking: {title}")
 
             try:

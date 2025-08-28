@@ -181,7 +181,6 @@ class ProductParser:
 
         return None
 
-
     def _extract_price_from_text(self, price_text: str) -> float | None:
         """Extract numeric price from text (reuse existing logic)"""
         try:

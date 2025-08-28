@@ -41,14 +41,14 @@ RUN pip install --no-cache-dir uv
 # Create non-root user for security (before using it in COPY)
 RUN useradd -m -u 1000 tracker
 
+# Install Playwright browsers (needs to run as root)
+RUN /app/.venv/bin/playwright install chromium
+
 # Copy application files first (needed for uv sync to work with local package)
 COPY --chown=tracker:tracker src/ /app/src/
 
 # Install dependencies and the package (not in editable mode for containers)
 RUN uv sync --frozen --no-dev --no-editable
-
-# Install Playwright browsers (needs to run as root)
-RUN /app/.venv/bin/playwright install chromium
 
 # Set ownership of app directory
 RUN chown -R tracker:tracker /app

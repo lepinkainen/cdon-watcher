@@ -40,12 +40,14 @@ async function loadDeals() {
     const response = await fetch('/api/deals');
     const deals = await response.json();
     const container = document.getElementById('deals-container');
+    const section = container.closest('.section');
     
     if (deals.length === 0) {
-        container.innerHTML = '<p style="color: #666;">No deals found</p>';
+        section.style.display = 'none';
         return;
     }
     
+    section.style.display = 'block';
     container.innerHTML = deals.map(movie => createMovieCard(movie)).join('');
 }
 
