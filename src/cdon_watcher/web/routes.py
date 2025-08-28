@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, jsonify, render_template, request, send_from_directory
 
 from ..cdon_scraper_v2 import CDONScraper
 from ..config import CONFIG
@@ -164,3 +164,18 @@ def api_ignore_movie() -> Any:
         return jsonify({"message": "Movie ignored"})
     else:
         return jsonify({"error": "Failed to ignore movie"}), 500
+
+
+@main_bp.route("/posters/<filename>")
+def serve_poster(filename: str) -> Any:
+    """Serve poster images from the posters directory."""
+    import os
+    poster_dir = CONFIG.get("poster_dir", "/app/data/posters")
+    
+    # Remove the /app prefix if running locally
+    if not os.path.exists(poster_dir) and poster_dir.startswith("/app/"):
+        local_poster_dir = poster_dir.replace("/app/", "./")
+        if os.path.exists(local_poster_dir):
+            poster_dir = local_poster_dir
+    
+    return send_from_directory(poster_dir, filename)

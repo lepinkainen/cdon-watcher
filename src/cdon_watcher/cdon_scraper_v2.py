@@ -6,10 +6,17 @@ import asyncio
 import logging
 import os
 import sqlite3
-from typing import Any
+from typing import Any, Optional
 
+from dotenv import load_dotenv
+
+# Load environment variables first
+load_dotenv()
+
+from .config import CONFIG
 from .listing_crawler import ListingCrawler
 from .product_parser import Movie, ProductParser
+from .tmdb_service import TMDBService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -20,11 +27,24 @@ class CDONScraper:
     """Hybrid scraper combining listing crawler and product parser"""
 
     def __init__(self, db_path: str | None = None) -> None:
-        self.db_path: str = (
-            db_path if db_path is not None else os.environ.get("DB_PATH", "cdon_movies.db")
-        )
+        self.db_path: str = db_path if db_path is not None else CONFIG["db_path"]
         self.listing_crawler = ListingCrawler()
         self.product_parser = ProductParser()
+        
+        # Initialize TMDB service if API key is available
+        self.tmdb_service: Optional[TMDBService] = None
+        if CONFIG["tmdb_api_key"]:
+            try:
+                self.tmdb_service = TMDBService(
+                    api_key=CONFIG["tmdb_api_key"],
+                    poster_dir=CONFIG["poster_dir"]
+                )
+                logger.info("TMDB service initialized successfully")
+            except Exception as e:
+                logger.warning(f"Failed to initialize TMDB service: {e}")
+        else:
+            logger.info("TMDB API key not found - poster fetching disabled")
+            
         self.init_database()
 
     def init_database(self) -> None:
@@ -41,6 +61,7 @@ class CDONScraper:
                 format TEXT,
                 url TEXT,
                 image_url TEXT,
+                tmdb_id INTEGER,
                 first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -171,18 +192,35 @@ class CDONScraper:
         cursor = conn.cursor()
 
         try:
+            # Try to fetch TMDB data if service is available
+            tmdb_id = None
+            local_poster_path = None
+            
+            if self.tmdb_service and movie.title:
+                try:
+                    year = self.tmdb_service.extract_year_from_title(movie.title)
+                    tmdb_id, local_poster_path = self.tmdb_service.get_movie_data_and_poster(
+                        movie.title, year
+                    )
+                except Exception as e:
+                    logger.debug(f"TMDB lookup failed for '{movie.title}': {e}")
+
+            # Use local poster path if available, otherwise fall back to original image_url
+            final_image_url = local_poster_path if local_poster_path else movie.image_url
+
             # Insert or update movie
             cursor.execute(
                 """
-                INSERT OR IGNORE INTO movies (product_id, title, format, url, image_url)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT OR IGNORE INTO movies (product_id, title, format, url, image_url, tmdb_id)
+                VALUES (?, ?, ?, ?, ?, ?)
             """,
                 (
                     movie.product_id,
                     movie.title,
                     movie.format,
                     movie.url,
-                    movie.image_url,
+                    final_image_url,
+                    tmdb_id,
                 ),
             )
 

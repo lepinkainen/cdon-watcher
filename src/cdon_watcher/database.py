@@ -80,11 +80,13 @@ class DatabaseManager:
                     "title": row[2],
                     "format": row[3],
                     "url": row[4],
-                    "current_price": row[8],
-                    "previous_price": row[9],
-                    "price_change": row[10],
-                    "lowest_price": row[11],
-                    "highest_price": row[12],
+                    "image_url": row[5],
+                    "tmdb_id": row[6],
+                    "current_price": row[9],
+                    "previous_price": row[10],
+                    "price_change": row[11],
+                    "lowest_price": row[12],
+                    "highest_price": row[13],
                 }
             )
 
@@ -114,10 +116,12 @@ class DatabaseManager:
                     "title": row[2],
                     "format": row[3],
                     "url": row[4],
-                    "target_price": row[8],
-                    "current_price": row[9],
-                    "lowest_price": row[10],
-                    "highest_price": row[11],
+                    "image_url": row[5],
+                    "tmdb_id": row[6],
+                    "target_price": row[9],
+                    "current_price": row[10],
+                    "lowest_price": row[11],
+                    "highest_price": row[12],
                 }
             )
 
@@ -195,9 +199,11 @@ class DatabaseManager:
                     "title": row[2],
                     "format": row[3],
                     "url": row[4],
-                    "current_price": row[8],
-                    "lowest_price": row[9],
-                    "highest_price": row[10],
+                    "image_url": row[5],
+                    "tmdb_id": row[6],
+                    "current_price": row[9],
+                    "lowest_price": row[10],
+                    "highest_price": row[11],
                 }
             )
 
@@ -234,9 +240,11 @@ class DatabaseManager:
                     "title": row[2],
                     "format": row[3],
                     "url": row[4],
-                    "current_price": row[8],
-                    "lowest_price": row[9],
-                    "highest_price": row[10],
+                    "image_url": row[5],
+                    "tmdb_id": row[6],
+                    "current_price": row[9],
+                    "lowest_price": row[10],
+                    "highest_price": row[11],
                 }
             )
 
@@ -273,9 +281,11 @@ class DatabaseManager:
                     "title": row[2],
                     "format": row[3],
                     "url": row[4],
-                    "current_price": row[8],
-                    "lowest_price": row[9],
-                    "highest_price": row[10],
+                    "image_url": row[5],
+                    "tmdb_id": row[6],
+                    "current_price": row[9],
+                    "lowest_price": row[10],
+                    "highest_price": row[11],
                 }
             )
 

@@ -1,5 +1,5 @@
 # Dockerfile
-FROM python:3.11-slim
+FROM python:3-slim
 
 # Install system dependencies for Playwright
 RUN apt-get update && apt-get install -y \
@@ -41,14 +41,18 @@ RUN pip install --no-cache-dir uv
 # Create non-root user for security (before using it in COPY)
 RUN useradd -m -u 1000 tracker
 
-# Install Playwright browsers (needs to run as root)
-RUN /app/.venv/bin/playwright install chromium
-
-# Copy application files first (needed for uv sync to work with local package)
-COPY --chown=tracker:tracker src/ /app/src/
+# Create minimal src structure for uv sync to work
+RUN mkdir -p src/cdon_watcher && \
+    touch src/cdon_watcher/__init__.py
 
 # Install dependencies and the package (not in editable mode for containers)
 RUN uv sync --frozen --no-dev --no-editable
+
+# Install Playwright browsers (needs to run as root after uv sync)
+RUN /app/.venv/bin/playwright install chromium
+
+# Copy application files last (after Playwright is installed)
+COPY --chown=tracker:tracker src/ /app/src/
 
 # Set ownership of app directory
 RUN chown -R tracker:tracker /app
@@ -58,12 +62,13 @@ USER tracker
 
 # Application files already copied above for uv sync
 
-# Create directory for database (will be mounted as volume)
-RUN mkdir -p /app/data && chown tracker:tracker /app/data
+# Create directories for database and posters (will be mounted as volume)
+RUN mkdir -p /app/data/posters && chown -R tracker:tracker /app/data
 
 # Environment variables for configuration
 ENV PYTHONUNBUFFERED=1
 ENV DB_PATH=/app/data/cdon_movies.db
+ENV POSTER_DIR=/app/data/posters
 ENV FLASK_HOST=0.0.0.0
 ENV FLASK_PORT=8080
 ENV PYTHONPATH=/app

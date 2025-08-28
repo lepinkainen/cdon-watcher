@@ -18,7 +18,9 @@ def load_config() -> dict[str, Any]:
         "flask_host": os.environ.get("FLASK_HOST", "0.0.0.0"),
         "flask_port": int(os.environ.get("FLASK_PORT", 8080)),
         "flask_debug": os.environ.get("FLASK_DEBUG", "false").lower() == "true",
-        "db_path": os.environ.get("DB_PATH", "/app/data/cdon_movies.db"),
+        "db_path": os.environ.get("DB_PATH", "./data/cdon_movies.db"),
+        "tmdb_api_key": os.environ.get("TMDB_API_KEY", ""),
+        "poster_dir": os.environ.get("POSTER_DIR", "./data/posters"),
     }
 
 

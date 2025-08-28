@@ -111,33 +111,58 @@ function createMovieCard(movie, showTarget = false, showIgnore = false) {
     const priceClass = priceChange < 0 ? 'price-down' : priceChange > 0 ? 'price-up' : '';
     const priceSymbol = priceChange < 0 ? '↓' : priceChange > 0 ? '↑' : '';
     
+    // Create poster image HTML
+    let posterHtml = '';
+    if (movie.image_url && movie.tmdb_id) {
+        // Local poster from TMDB
+        const posterFilename = `${movie.tmdb_id}.jpg`;
+        posterHtml = `<div class="movie-poster">
+            <img src="/posters/${posterFilename}" alt="${movie.title} poster" 
+                 onerror="this.style.display='none'; this.parentElement.classList.add('no-poster');">
+        </div>`;
+    } else if (movie.image_url) {
+        // Original CDON image
+        posterHtml = `<div class="movie-poster">
+            <img src="${movie.image_url}" alt="${movie.title} poster"
+                 onerror="this.style.display='none'; this.parentElement.classList.add('no-poster');">
+        </div>`;
+    } else {
+        // No poster available
+        posterHtml = `<div class="movie-poster no-poster">
+            <div class="poster-placeholder">🎬</div>
+        </div>`;
+    }
+    
     return `
         <div class="movie-card" id="movie-card-${movie.id}">
             ${showTarget ? `<button class="remove-from-watchlist" onclick="removeFromWatchlist(${movie.id})" title="Remove from watchlist">×</button>` : ''}
-            <div class="movie-title">${movie.title}</div>
-            <span class="movie-format">${movie.format}</span>
-            <div class="price-info">
-                <span class="current-price">€${movie.current_price ? movie.current_price.toFixed(2) : '-'}</span>
-                ${priceChange !== 0 ? `<span class="price-change ${priceClass}">${priceSymbol} €${Math.abs(priceChange).toFixed(2)}</span>` : ''}
+            ${posterHtml}
+            <div class="movie-info">
+                <div class="movie-title">${movie.title}</div>
+                <span class="movie-format">${movie.format}</span>
+                <div class="price-info">
+                    <span class="current-price">€${movie.current_price ? movie.current_price.toFixed(2) : '-'}</span>
+                    ${priceChange !== 0 ? `<span class="price-change ${priceClass}">${priceSymbol} €${Math.abs(priceChange).toFixed(2)}</span>` : ''}
+                </div>
+                ${movie.lowest_price ? `
+                    <div class="price-history">
+                        Lowest: €${movie.lowest_price.toFixed(2)} | Highest: €${movie.highest_price.toFixed(2)}
+                    </div>
+                ` : ''}
+                ${showTarget && movie.target_price ? `
+                    <div style="color: #666; font-size: 0.9em; margin-top: 5px;">
+                        Target: €${movie.target_price.toFixed(2)}
+                    </div>
+                ` : ''}
+                ${!showTarget ? `
+                    <div class="watchlist-form">
+                        <input type="number" step="0.01" placeholder="Target €" id="target-${movie.id}">
+                        <button onclick="addToWatchlist(${movie.id})">Add to Watchlist</button>
+                    </div>
+                ` : ''}
+                ${showIgnore ? `<button class="ignore-button" onclick="ignoreMovie(${movie.id})">Ignore</button>` : ''}
+                <a href="${movie.url}" target="_blank" class="movie-link">View on CDON →</a>
             </div>
-            ${movie.lowest_price ? `
-                <div class="price-history">
-                    Lowest: €${movie.lowest_price.toFixed(2)} | Highest: €${movie.highest_price.toFixed(2)}
-                </div>
-            ` : ''}
-            ${showTarget && movie.target_price ? `
-                <div style="color: #666; font-size: 0.9em; margin-top: 5px;">
-                    Target: €${movie.target_price.toFixed(2)}
-                </div>
-            ` : ''}
-            ${!showTarget ? `
-                <div class="watchlist-form">
-                    <input type="number" step="0.01" placeholder="Target €" id="target-${movie.id}">
-                    <button onclick="addToWatchlist(${movie.id})">Add to Watchlist</button>
-                </div>
-            ` : ''}
-            ${showIgnore ? `<button class="ignore-button" onclick="ignoreMovie(${movie.id})">Ignore</button>` : ''}
-            <a href="${movie.url}" target="_blank" class="movie-link">View on CDON →</a>
         </div>
     `;
 }

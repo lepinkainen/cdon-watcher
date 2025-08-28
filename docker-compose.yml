@@ -14,6 +14,8 @@ services:
     environment:
       - SERVICE_MODE=web
       - DB_PATH=/app/data/cdon_movies.db
+      - POSTER_DIR=/app/data/posters
+      - TMDB_API_KEY=${TMDB_API_KEY:-}
       - TZ=Europe/Helsinki
       - PATH=/app/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
       - PYTHONPATH=/app
@@ -32,6 +34,8 @@ services:
     environment:
       - SERVICE_MODE=monitor
       - DB_PATH=/app/data/cdon_movies.db
+      - POSTER_DIR=/app/data/posters
+      - TMDB_API_KEY=${TMDB_API_KEY:-}
       - CHECK_INTERVAL_HOURS=6
       - TZ=Europe/Helsinki
       - PATH=/app/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -62,6 +66,8 @@ services:
     environment:
       - SERVICE_MODE=crawl
       - DB_PATH=/app/data/cdon_movies.db
+      - POSTER_DIR=/app/data/posters
+      - TMDB_API_KEY=${TMDB_API_KEY:-}
       - TZ=Europe/Helsinki
       - PATH=/app/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
       - PYTHONPATH=/app
