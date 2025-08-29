@@ -49,6 +49,10 @@ class TMDBService:
             r"\bSeason\s+\d+[-–]\d+",  # Season 1-3
             r"\bS\d+\b",  # S01, S02, etc.
             r"\bEpisode\s+\d+",
+            r"\bComplete\s+Collection",  # Often indicates TV box sets
+            r"\bComplete\s+Seasons",  # Dexter: Complete Seasons 1-8
+            r"\bSeason\s+\d+[-–]\d+",  # Season ranges
+            r"\bThe\s+Complete\s+Collection",  # Avatar - The Last Airbender - The Complete Collection
         ]
 
         for pattern in tv_indicators:
@@ -58,27 +62,54 @@ class TMDBService:
 
     def _clean_title_for_search(self, title: str, is_tv: bool = False) -> str:
         """Clean title for better TMDB search results."""
-        # Remove common Blu-ray/DVD indicators and extra info
+        # Clean in order from longest to shortest patterns to avoid partial matches
+
+        # Remove disc count and import information first
+        cleaned = re.sub(r"\(\d+\s+disc\)", "", title, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\(Import\)", "", cleaned, flags=re.IGNORECASE)
+
+        # Remove format specifications like "(4K Ultra + Blu-ray)", "(3D Blu-ray + Blu-ray)"
         cleaned = re.sub(
-            r"\b(Blu-ray|DVD|4K|UHD|Ultimate|Collector\'s|Special|Edition|Extended|Director\'s|Cut)\b",
+            r"\([^)]*\b(Blu-ray|DVD|4K|UHD|Ultra|3D)\b[^)]*\)", "", cleaned, flags=re.IGNORECASE
+        )
+
+        if is_tv:
+            # For TV series, clean longer patterns first, then shorter ones
+            # "The Complete Collection" -> "Complete Collection" -> "Collection"
+            cleaned = re.sub(
+                r"\s*[-–—:]*\s*The\s+Complete\s+Collection\b", "", cleaned, flags=re.IGNORECASE
+            )
+            cleaned = re.sub(
+                r"\s*[-–—:]*\s*Complete\s+Collection\b", "", cleaned, flags=re.IGNORECASE
+            )
+            cleaned = re.sub(
+                r"\s*[-–—:]*\s*The\s+Complete\s+Series\b", "", cleaned, flags=re.IGNORECASE
+            )
+            cleaned = re.sub(r"\s*[-–—:]*\s*Complete\s+Series\b", "", cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r"\s*[-–—:]*\s*Season\s+\d+[-–]?\d*", "", cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r"\s*[-–—:]*\s*Series\s+\d+", "", cleaned, flags=re.IGNORECASE)
+
+        # Remove common Blu-ray/DVD indicators and extra info (after TV-specific cleaning)
+        # Longer patterns first: "Ultimate Collector's Edition" before "Ultimate" or "Edition"
+        cleaned = re.sub(
+            r"\b(Ultimate\s+Collector\'s\s+Edition)\b", "", cleaned, flags=re.IGNORECASE
+        )
+        cleaned = re.sub(r"\b(Director\'s\s+Cut)\b", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(
+            r"\b(Blu-ray|DVD|4K|UHD|Ultra|Ultimate|Collector\'s|Special|Edition|Extended|Cut|Collection)\b",
             "",
-            title,
+            cleaned,
             flags=re.IGNORECASE,
         )
 
-        # Remove disc count and import information
-        cleaned = re.sub(r"\(\d+\s+disc\)", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r"\(Import\)", "", cleaned, flags=re.IGNORECASE)
-
-        if is_tv:
-            # For TV series, clean up season information while preserving core title
-            # "Hannibal - Season 1-3" -> "Hannibal"
-            cleaned = re.sub(r"\s*[-–—]\s*Season\s+\d+[-–]?\d*", "", cleaned, flags=re.IGNORECASE)
-            cleaned = re.sub(r"\s*[-–—]\s*Series\s+\d+", "", cleaned, flags=re.IGNORECASE)
-            cleaned = re.sub(r"\s*[-–—]\s*Complete\s+Series", "", cleaned, flags=re.IGNORECASE)
+        # Remove incomplete parentheses with only punctuation/whitespace like "( + )" but preserve content like "(95)"
+        cleaned = re.sub(r"\(\s*[+&\-]+\s*\)", "", cleaned)
 
         # Remove parenthetical year info if present
         cleaned = re.sub(r"\s*\(\d{4}\)", "", cleaned)
+
+        # Remove any remaining empty parentheses
+        cleaned = re.sub(r"\s*\(\s*\)", "", cleaned)
 
         # Remove extra whitespace and common punctuation
         cleaned = re.sub(r"[:\-–—]+", " ", cleaned)
