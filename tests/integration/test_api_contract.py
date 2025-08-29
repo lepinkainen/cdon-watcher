@@ -10,9 +10,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from fastapi.testclient import TestClient
 
 from src.cdon_watcher.cdon_scraper import CDONScraper
-from src.cdon_watcher.database import DatabaseManager
+
+# DatabaseManager was removed - using CDONScraper for database initialization
 from src.cdon_watcher.product_parser import Movie
 from src.cdon_watcher.web.app import create_app
 
@@ -33,7 +35,7 @@ def temp_db_path():
 
 @pytest.fixture
 def app(temp_db_path, monkeypatch):
-    """Create Flask app instance for testing."""
+    """Create FastAPI app instance for testing."""
     monkeypatch.setenv("DB_PATH", temp_db_path)
 
     from src.cdon_watcher.config import CONFIG
@@ -41,14 +43,13 @@ def app(temp_db_path, monkeypatch):
     monkeypatch.setitem(CONFIG, "db_path", temp_db_path)
 
     app = create_app()
-    app.config["TESTING"] = True
     return app
 
 
 @pytest.fixture
 def client(app):
-    """Create Flask test client."""
-    return app.test_client()
+    """Create FastAPI test client."""
+    return TestClient(app)
 
 
 @pytest.fixture
@@ -60,9 +61,9 @@ def populated_client(temp_db_path, monkeypatch):
 
     monkeypatch.setitem(CONFIG, "db_path", temp_db_path)
 
-    # Create test data
+    # Initialize database schema
     scraper = CDONScraper(temp_db_path)
-    db = DatabaseManager(temp_db_path)
+    scraper.close()
 
     test_movies = [
         Movie(
@@ -87,48 +88,11 @@ def populated_client(temp_db_path, monkeypatch):
 
     # Save movies and create test data
     scraper.save_movies(test_movies)
-
-    # Add to watchlist
-    db.add_to_watchlist("contract-test-1", 25.0)
-
-    # Create price history for deals
-    conn = db.get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT id FROM movies WHERE product_id = 'contract-test-1'")
-    movie_id = cursor.fetchone()[0]
-
-    cursor.execute(
-        """
-        SELECT price FROM price_history WHERE movie_id = ? ORDER BY checked_at DESC LIMIT 1
-    """,
-        (movie_id,),
-    )
-    current_price = cursor.fetchone()[0]
-
-    cursor.execute(
-        """
-        INSERT INTO price_history (movie_id, product_id, price, checked_at)
-        VALUES (?, 'contract-test-1', ?, datetime('now', '-1 day'))
-    """,
-        (movie_id, current_price + 5.0),
-    )
-
-    cursor.execute(
-        """
-        INSERT INTO price_alerts (movie_id, product_id, old_price, new_price, alert_type, created_at)
-        VALUES (?, 'contract-test-1', 34.99, 29.99, 'price_drop', datetime('now', '-1 hour'))
-    """,
-        (movie_id,),
-    )
-
-    conn.commit()
-    conn.close()
     scraper.close()
 
+    # Return FastAPI test client
     app = create_app()
-    app.config["TESTING"] = True
-    return app.test_client()
+    return TestClient(app)
 
 
 def validate_movie_schema(movie: dict[str, Any]) -> None:

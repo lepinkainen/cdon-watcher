@@ -54,6 +54,10 @@ uv run python tests/integration/test_single_url_processing.py "https://cdon.fi/t
 
 # All tests
 task test-all
+
+# Test data management
+uv run python -m cdon_watcher.add_test_case list                    # List test cases
+uv run python -m cdon_watcher.add_test_case add --url URL --title TITLE  # Add test case
 ```
 
 ### Container Management
@@ -89,51 +93,57 @@ podman-compose logs -f web
 
 ### Core Components
 
-#### **Hybrid Scraper Architecture (v2)**
+#### **Hybrid Scraper Architecture (v3 - FastAPI+SQLModel)**
 
 - **listing_crawler.py**: Playwright-based category page crawler (collects product URLs)
 - **product_parser.py**: Pure Python product page parser (extracts title/price via requests + BeautifulSoup)  
-- **cdon_scraper.py**: Orchestrator combining both parsers + database operations
-- **monitor.py**: Price monitoring daemon and Flask web dashboard
-- **SQLite database**: Stores movies, price history, and watchlist data
+- **cdon_scraper.py**: Orchestrator combining both parsers + async SQLModel database operations
+- **monitoring_service.py**: Price monitoring service using SQLModel repository pattern
+- **web/app.py & web/routes.py**: FastAPI web dashboard with async API endpoints
+- **SQLModel database**: Type-safe async database operations with proper relationships
 
 ### Service Architecture
 
-- **web service**: Flask dashboard (port 8080) with API endpoints
-- **monitor service**: Background price checker (runs every 6 hours)
-- **crawler service**: Hybrid scraper for database population
+- **web service**: FastAPI dashboard (port 8080) with async API endpoints and Jinja2 templates
+- **monitor service**: Background price checker using SQLModel repository pattern (runs every 6 hours)
+- **crawler service**: Hybrid scraper with async SQLModel database operations
 
 ### Key Technical Details
 
 - **Hybrid approach**: Playwright for JavaScript-heavy listing pages, pure Python for fast product parsing
 - **Anti-bot protection**: Stealth browser settings, realistic headers, rate limiting
 - **Anti-"vihdoin arki" logic**: Filters promotional text that was corrupting title extraction
-- **SQLite database**: movies, price_history, watchlist, alerts tables
-- **Flask web API**: `/api/stats`, `/api/alerts`, `/api/deals`, `/api/watchlist`, `/api/search`
+- **SQLModel database**: Type-safe async operations with SQLAlchemy + aiosqlite backend
+- **FastAPI web API**: `/api/stats`, `/api/alerts`, `/api/deals`, `/api/watchlist`, `/api/search` with Pydantic response models
+- **Database models**: `Movie`, `PriceHistory`, `Watchlist`, `PriceAlert`, `IgnoredMovie` with proper relationships
 - **Email/Discord notifications**: Price drop and target price alerts
 - **Container orchestration**: docker-compose with dev/prod variants
 
 ### Environment Configuration
 
 - **Python project management**: Uses `uv` (recommended) or traditional pip/venv
-- **Dependencies**: Playwright (listing), requests+BeautifulSoup (products), Flask, pytest
-- **Configuration**: Environment variables in `.env` file
-- **Database path**: `/app/data/cdon_movies.db` in containers, configurable locally
-- **Test data**: JSON-based test case management in `test_data.json`
+- **Dependencies**: FastAPI, SQLModel, Playwright (listing), requests+BeautifulSoup (products), Jinja2, pytest
+- **Configuration**: Environment variables in `.env` file (copy from `.env.example`)
+- **Database path**: `/app/data/cdon_movies.db` in containers, configurable locally via `CONFIG["db_path"]`
+- **Test data**: JSON-based test case management via `add_test_case.py` (stored in `src/cdon_watcher/test_data.json`)
 
 ### Data Flow
 
 1. **ListingCrawler** (Playwright) scrapes category pages → collects product URLs
 2. **ProductParser** (HTTP) fetches individual product pages → extracts title/price/format  
-3. **CDONScraper** orchestrates workflow → saves to SQLite database
-4. **Monitor service** checks for price changes → triggers alerts
-5. **Web dashboard** serves data via Flask API and HTML interface
+3. **CDONScraper** orchestrates workflow → saves to SQLModel database using async operations
+4. **PriceMonitor** service checks for price changes → triggers alerts via SQLModel repository
+5. **FastAPI dashboard** serves data via type-safe API endpoints and Jinja2 templates
 
 ## File Structure Notes
 
-- **Core scraper**: `listing_crawler.py`, `product_parser.py`, `cdon_scraper.py`
-- **Testing**: `tests/` (unit + integration), `conftest.py`, `test_data.json`, `add_test_case.py`
-- **Configuration**: `pyproject.toml` (single dependency source), `.env`
+- **Core scraper**: `listing_crawler.py`, `product_parser.py`, `cdon_scraper.py` (async SQLModel operations)
+- **Database layer**: `database/connection.py`, `database/repository.py`, `models.py`, `schemas.py`
+- **Web layer**: `web/app.py` (FastAPI setup), `web/routes.py` (API endpoints), `templates/index.html`
+- **Services**: `monitoring_service.py` (price monitoring with SQLModel)
+- **CLI**: `cli.py` (command-line interface), `__main__.py` (module entry point)
+- **Testing**: `tests/` (unit + integration), `conftest.py`, `add_test_case.py` (test data management)
+- **Configuration**: `pyproject.toml` (single dependency source), `Taskfile.yml` (task runner), `.env`
 - **Containers**: `docker-compose.yml`, `docker-compose.override.yml`, `docker-compose.prod.yml`
 - **Scripts**: `scripts/` (build/run helpers)
 - **Data**: `data/` (SQLite database storage, volume mounted in containers)
@@ -150,16 +160,25 @@ podman-compose logs -f web
 ### Project-Specific Patterns
 
 - **Module structure**: Code organized in `src/cdon_watcher/` with proper `__main__.py` entry point
+- **Database operations**: Async SQLModel with repository pattern in `database/repository.py`
+- **Type safety**: SQLModel models in `models.py`, Pydantic schemas in `schemas.py`
 - **Database path**: Uses `CONFIG["db_path"]` from `config.py`, typically `data/cdon_movies.db`
 - **Hybrid architecture**: Playwright for dynamic pages, requests+BeautifulSoup for static parsing
 - **CLI interface**: All functionality accessible via `uv run python -m cdon_watcher [command]`
 
 ### Key Implementation Details
 
+- **Migration completed**: Successfully migrated from Flask+pure SQL to FastAPI+SQLModel
+- **Type safety**: Full type checking with SQLModel relationships and Pydantic validation
+- **Async operations**: All database operations are async for better performance
 - **Title extraction fix**: Resolved "vihdoin arki" promotional text extraction issue
 - **Performance**: Hybrid approach ~10x faster than pure Playwright  
 - **Anti-bot protection**: Stealth browser settings, realistic headers, rate limiting
-- **Testing**: JSON-based test case management (`add_test_case.py`), real URL validation
+- **Testing patterns**: 
+  - Unit tests in `tests/unit/` (fast, no network)
+  - Integration tests in `tests/integration/` (slow, real network requests)
+  - JSON-based test case management (`add_test_case.py`)
+  - Async test fixtures with temporary databases (`conftest.py`)
 
 ### LLM Assistant Guidelines
 

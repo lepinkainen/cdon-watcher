@@ -17,9 +17,8 @@ services:
       - POSTER_DIR=/app/data/posters
       - TMDB_API_KEY=${TMDB_API_KEY:-}
       - TZ=Europe/Helsinki
-      - PATH=/app/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
       - PYTHONPATH=/app
-    command: python -m cdon_watcher.monitor web
+    command: python -m cdon_watcher web
     restart: unless-stopped
     networks:
       - cdon-net
@@ -38,7 +37,6 @@ services:
       - TMDB_API_KEY=${TMDB_API_KEY:-}
       - CHECK_INTERVAL_HOURS=6
       - TZ=Europe/Helsinki
-      - PATH=/app/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
       - PYTHONPATH=/app
       # Email configuration (optional)
       - EMAIL_ENABLED=false
@@ -49,7 +47,7 @@ services:
       - SMTP_PORT=${SMTP_PORT:-587}
       # Discord webhook (optional)
       - DISCORD_WEBHOOK=${DISCORD_WEBHOOK:-}
-    command: python -m cdon_watcher.monitor monitor
+    command: python -m cdon_watcher monitor
     restart: unless-stopped
     depends_on:
       - web
@@ -69,9 +67,8 @@ services:
       - POSTER_DIR=/app/data/posters
       - TMDB_API_KEY=${TMDB_API_KEY:-}
       - TZ=Europe/Helsinki
-      - PATH=/app/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
       - PYTHONPATH=/app
-    command: python -m cdon_watcher.monitor crawl
+    command: python -m cdon_watcher crawl
     profiles:
       - crawler
     networks:

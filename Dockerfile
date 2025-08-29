@@ -1,5 +1,8 @@
-# Dockerfile
+# Dockerfile  
 FROM python:3-slim
+
+# Install uv
+RUN pip install --no-cache-dir uv
 
 # Install system dependencies for Playwright
 RUN apt-get update && apt-get install -y \
@@ -35,47 +38,44 @@ WORKDIR /app
 # Copy dependency files for better caching
 COPY pyproject.toml uv.lock ./
 
-# Install uv and dependencies
-RUN pip install --no-cache-dir uv
-
-# Create non-root user for security (before using it in COPY)
+# Create non-root user for security
 RUN useradd -m -u 1000 tracker
 
-# Create minimal src structure for uv sync to work
+# Create minimal src structure for dependency installation
 RUN mkdir -p src/cdon_watcher && \
     touch src/cdon_watcher/__init__.py
 
-# Install dependencies and the package (not in editable mode for containers)
-RUN uv sync --frozen --no-dev --no-editable
+# Install dependencies to system Python (no venv needed)
+RUN uv pip install --system --no-cache .
 
-# Install Playwright browsers (needs to run as root after uv sync)
-RUN /app/.venv/bin/playwright install chromium
-
-# Copy application files last (after Playwright is installed)
+# Copy application files after dependencies are installed
 COPY --chown=tracker:tracker src/ /app/src/
 
 # Set ownership of app directory
 RUN chown -R tracker:tracker /app
 
-# Switch to non-root user
+# Install the actual package now that source files are available
+RUN uv pip install --system -e .
+
+# Switch to non-root user before installing Playwright browsers
 USER tracker
 
-# Application files already copied above for uv sync
+# Install Playwright browsers as tracker user so they're in the right location
+RUN playwright install chromium
 
 # Create directories for database and posters (will be mounted as volume)
-RUN mkdir -p /app/data/posters && chown -R tracker:tracker /app/data
+RUN mkdir -p /app/data/posters
 
 # Environment variables for configuration
 ENV PYTHONUNBUFFERED=1
 ENV DB_PATH=/app/data/cdon_movies.db
 ENV POSTER_DIR=/app/data/posters
-ENV FLASK_HOST=0.0.0.0
-ENV FLASK_PORT=8080
+ENV API_HOST=0.0.0.0
+ENV API_PORT=8080
 ENV PYTHONPATH=/app
-ENV PATH="/app/.venv/bin:$PATH"
 
-# Expose Flask port
+# Expose API port
 EXPOSE 8080
 
 # Default command (can be overridden)
-CMD ["python", "-m", "cdon_watcher.monitor", "web"]
+CMD ["python", "-m", "cdon_watcher", "web"]

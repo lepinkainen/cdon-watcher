@@ -8,13 +8,12 @@ from datetime import datetime
 from .cdon_scraper import CDONScraper
 from .config import CONFIG
 from .monitoring_service import PriceMonitor
-from .web.app import create_app
 
 
 async def run_crawl(max_pages: int) -> None:
     """Run initial crawl of CDON categories."""
     print("Starting initial crawl...")
-    scraper = CDONScraper(CONFIG["db_path"])
+    scraper = CDONScraper()
 
     # Crawl Blu-ray category
     await scraper.crawl_category(
@@ -34,7 +33,7 @@ async def run_crawl(max_pages: int) -> None:
 async def run_monitor() -> None:
     """Run the price monitoring service."""
     print("Starting price monitor...")
-    scraper = CDONScraper(CONFIG["db_path"])
+    scraper = CDONScraper()
     monitor = PriceMonitor(scraper)
 
     while True:
@@ -47,9 +46,23 @@ async def run_monitor() -> None:
 
 def run_web() -> None:
     """Run the web dashboard."""
-    print(f"Starting web dashboard on http://{CONFIG['flask_host']}:{CONFIG['flask_port']}")
-    app = create_app()
-    app.run(host=CONFIG["flask_host"], port=CONFIG["flask_port"], debug=CONFIG["flask_debug"])
+    import uvicorn
+
+    host = CONFIG.get("api_host", "127.0.0.1")
+    port = CONFIG.get("api_port", 8080)
+    debug = CONFIG.get("api_debug", False)
+
+    print(f"Starting web dashboard on http://{host}:{port}")
+
+    # Create app factory function for Uvicorn
+    uvicorn.run(
+        "cdon_watcher.web.app:create_app",
+        factory=True,
+        host=host,
+        port=port,
+        reload=debug,
+        access_log=True,
+    )
 
 
 def main() -> None:

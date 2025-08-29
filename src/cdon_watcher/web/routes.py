@@ -1,176 +1,162 @@
-"""Flask routes for the web dashboard."""
+"""FastAPI routes for the web dashboard."""
 
-from typing import Any
+import os
 
-from flask import Blueprint, jsonify, render_template, request, send_from_directory
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import FileResponse
+from fastapi.templating import Jinja2Templates
+from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import Response
 
-from ..cdon_scraper import CDONScraper
 from ..config import CONFIG
-from ..database import DatabaseManager
+from ..database.connection import get_db_session
+from ..database.repository import DatabaseRepository
+from ..models import (
+    DealMovie,
+    MovieWithPricing,
+    PriceAlertWithTitle,
+    StatsData,
+    WatchlistMovie,
+)
+from ..schemas import (
+    ErrorResponse,
+    IgnoreMovieRequest,
+    SuccessResponse,
+    WatchlistRequest,
+)
 
-# Create blueprints
-main_bp = Blueprint("main", __name__)
-api_bp = Blueprint("api", __name__)
+# Create router
+router = APIRouter()
 
 
-@main_bp.route("/")
-def index() -> Any:
+# Dependency function for DatabaseRepository
+async def get_repository(session: AsyncSession = Depends(get_db_session)) -> DatabaseRepository:
+    """Get DatabaseRepository instance."""
+    return DatabaseRepository(session)
+
+
+@router.get("/")
+async def index(request: Request) -> Response:
     """Main dashboard page."""
-    return render_template("index.html")
+    # Get templates from app state
+    templates: Jinja2Templates = request.app.state.templates
+    return templates.TemplateResponse(request, "index.html")
 
 
-@api_bp.route("/stats")
-def api_stats() -> Any:
+@router.get("/api/stats", response_model=StatsData)
+async def api_stats(repo: DatabaseRepository = Depends(get_repository)) -> StatsData:
     """Get dashboard statistics."""
-    db = DatabaseManager()
-    stats = db.get_stats()
-    return jsonify(stats)
+    stats = await repo.get_stats()
+    return stats
 
 
-@api_bp.route("/alerts")
-def api_alerts() -> Any:
+@router.get("/api/alerts", response_model=list[PriceAlertWithTitle])
+async def api_alerts(
+    repo: DatabaseRepository = Depends(get_repository),
+) -> list[PriceAlertWithTitle]:
     """Get recent price alerts."""
-    scraper = CDONScraper(CONFIG["db_path"])
-    alerts = scraper.get_price_alerts()
-    return jsonify(alerts[:10])  # Return last 10 alerts
+    alerts = await repo.get_price_alerts(10)
+    return alerts
 
 
-@api_bp.route("/deals")
-def api_deals() -> Any:
+@router.get("/api/deals", response_model=list[DealMovie])
+async def api_deals(repo: DatabaseRepository = Depends(get_repository)) -> list[DealMovie]:
     """Get movies with biggest price drops."""
-    db = DatabaseManager()
-    deals = db.get_deals(12)
-    return jsonify(deals)
+    deals = await repo.get_deals(12)
+    return deals
 
 
-@api_bp.route("/watchlist", methods=["GET", "POST", "DELETE"])
-def api_watchlist() -> Any:
-    """Handle watchlist operations."""
-    db = DatabaseManager()
-
-    if request.method == "GET":
-        watchlist = db.get_watchlist()
-        return jsonify(watchlist)
-
-    elif request.method == "POST":
-        data = request.get_json()
-        product_id = data.get("product_id")
-        movie_id = data.get("movie_id")  # Backward compatibility
-        target_price = data.get("target_price")
-
-        if not target_price:
-            return jsonify({"error": "Missing target_price"}), 400
-
-        # Use product_id if provided, otherwise fall back to movie_id for backward compatibility
-        if product_id:
-            success = db.add_to_watchlist(product_id, target_price)
-        elif movie_id:
-            # For backward compatibility, find the product_id from movie_id
-            conn = db.get_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT product_id FROM movies WHERE id = ?", (movie_id,))
-            result = cursor.fetchone()
-            conn.close()
-
-            if not result or not result[0]:
-                return jsonify({"error": "Movie not found or missing product_id"}), 404
-
-            success = db.add_to_watchlist(result[0], target_price)
-        else:
-            return jsonify({"error": "Missing product_id or movie_id"}), 400
-
-        if success:
-            return jsonify({"message": "Added to watchlist"})
-        else:
-            return jsonify({"error": "Failed to add to watchlist"}), 500
+@router.get("/api/watchlist", response_model=list[WatchlistMovie])
+async def api_get_watchlist(
+    repo: DatabaseRepository = Depends(get_repository),
+) -> list[WatchlistMovie]:
+    """Get watchlist items."""
+    watchlist = await repo.get_watchlist()
+    return watchlist
 
 
-@api_bp.route("/watchlist/<path:identifier>", methods=["DELETE"])
-def api_remove_from_watchlist(identifier: Any) -> Any:
-    """Remove movie from watchlist by product_id or movie_id."""
-    db = DatabaseManager()
+@router.post("/api/watchlist")
+async def api_add_to_watchlist(
+    request: WatchlistRequest, repo: DatabaseRepository = Depends(get_repository)
+) -> SuccessResponse | ErrorResponse:
+    """Add item to watchlist."""
+    if not request.target_price:
+        raise HTTPException(status_code=400, detail="Missing target_price")
 
-    # Try to determine if it's a product_id or movie_id
-    try:
-        # If it's an integer, treat as movie_id for backward compatibility
-        movie_id = int(identifier)
-        # Get product_id from movie_id
-        conn = db.get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT product_id FROM movies WHERE id = ?", (movie_id,))
-        result = cursor.fetchone()
-        conn.close()
+    if not request.product_id:
+        raise HTTPException(status_code=400, detail="Missing product_id")
 
-        if not result or not result[0]:
-            return jsonify({"error": "Movie not found or missing product_id"}), 404
-
-        success = db.remove_from_watchlist(result[0])
-    except ValueError:
-        # It's a string, treat as product_id
-        success = db.remove_from_watchlist(identifier)
+    success = await repo.add_to_watchlist(request.product_id, request.target_price)
 
     if success:
-        return jsonify({"message": "Removed from watchlist"})
+        return SuccessResponse(message="Added to watchlist")
     else:
-        return jsonify({"error": "Failed to remove from watchlist"}), 500
+        raise HTTPException(status_code=500, detail="Failed to add to watchlist")
 
 
-@api_bp.route("/search")
-def api_search() -> Any:
+@router.delete("/api/watchlist/{product_id}")
+async def api_remove_from_watchlist(
+    product_id: str, repo: DatabaseRepository = Depends(get_repository)
+) -> SuccessResponse:
+    """Remove movie from watchlist by product_id."""
+    success = await repo.remove_from_watchlist(product_id)
+
+    if success:
+        return SuccessResponse(message="Removed from watchlist")
+    else:
+        raise HTTPException(status_code=500, detail="Failed to remove from watchlist")
+
+
+@router.get("/api/search", response_model=list[MovieWithPricing])
+async def api_search(
+    q: str = Query(..., description="Search query"),
+    repo: DatabaseRepository = Depends(get_repository),
+) -> list[MovieWithPricing]:
     """Search for movies."""
-    query = request.args.get("q", "")
-    if not query:
-        return jsonify([])
+    if not q:
+        return []
 
-    db = DatabaseManager()
-    movies = db.search_movies(query, 20)
-    return jsonify(movies)
+    movies = await repo.search_movies(q, 20)
+    return movies
 
 
-@api_bp.route("/cheapest-blurays")
-def api_cheapest_blurays() -> Any:
+@router.get("/api/cheapest-blurays", response_model=list[MovieWithPricing])
+async def api_cheapest_blurays(
+    repo: DatabaseRepository = Depends(get_repository),
+) -> list[MovieWithPricing]:
     """Get cheapest Blu-ray movies."""
-    db = DatabaseManager()
-    movies = db.get_cheapest_blurays(20)
-    return jsonify(movies)
+    movies = await repo.get_cheapest_blurays(20)
+    return movies
 
 
-@api_bp.route("/cheapest-4k-blurays")
-def api_cheapest_4k_blurays() -> Any:
+@router.get("/api/cheapest-4k-blurays", response_model=list[MovieWithPricing])
+async def api_cheapest_4k_blurays(
+    repo: DatabaseRepository = Depends(get_repository),
+) -> list[MovieWithPricing]:
     """Get cheapest 4K Blu-ray movies."""
-    db = DatabaseManager()
-    movies = db.get_cheapest_4k_blurays(20)
-    return jsonify(movies)
+    movies = await repo.get_cheapest_4k_blurays(20)
+    return movies
 
 
-@api_bp.route("/ignore-movie", methods=["POST"])
-def api_ignore_movie() -> Any:
+@router.post("/api/ignore-movie")
+async def api_ignore_movie(
+    request: IgnoreMovieRequest, repo: DatabaseRepository = Depends(get_repository)
+) -> SuccessResponse:
     """Add movie to ignored list."""
-    data = request.get_json()
-    product_id = data.get("product_id")
-    movie_id = data.get("movie_id")  # Backward compatibility
+    if not request.product_id:
+        raise HTTPException(status_code=400, detail="Missing product_id")
 
-    if not product_id and not movie_id:
-        return jsonify({"error": "Missing product_id or movie_id"}), 400
-
-    db = DatabaseManager()
-
-    if product_id:
-        success = db.ignore_movie_by_product_id(product_id)
-    else:
-        success = db.ignore_movie(movie_id)
+    success = await repo.ignore_movie_by_product_id(request.product_id)
 
     if success:
-        return jsonify({"message": "Movie ignored"})
+        return SuccessResponse(message="Movie ignored")
     else:
-        return jsonify({"error": "Failed to ignore movie"}), 500
+        raise HTTPException(status_code=500, detail="Failed to ignore movie")
 
 
-@main_bp.route("/posters/<filename>")
-def serve_poster(filename: str) -> Any:
+@router.get("/posters/{filename}")
+async def serve_poster(filename: str) -> FileResponse:
     """Serve poster images from the posters directory."""
-    import os
-
     poster_dir = CONFIG.get("poster_dir", "/app/data/posters")
 
     # Remove the /app prefix if running locally
@@ -179,4 +165,8 @@ def serve_poster(filename: str) -> Any:
         if os.path.exists(local_poster_dir):
             poster_dir = local_poster_dir
 
-    return send_from_directory(poster_dir, filename)
+    poster_path = os.path.join(poster_dir, filename)
+    if not os.path.exists(poster_path):
+        raise HTTPException(status_code=404, detail="Poster not found")
+
+    return FileResponse(poster_path)

@@ -20,7 +20,7 @@ class ListingCrawler:
         self.base_url = "https://cdon.fi"
 
     async def create_browser(self) -> tuple[Browser, Any, Page]:
-        """Create and configure Playwright browser instance (reuse existing logic)"""
+        """Create and configure Playwright browser instance"""
         playwright = await async_playwright().start()
         browser = await playwright.chromium.launch(
             headless=True,

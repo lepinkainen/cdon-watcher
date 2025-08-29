@@ -1,14 +1,14 @@
-"""Integration tests for Flask web API endpoints."""
+"""Integration tests for FastAPI web API endpoints."""
 
-import json
 import tempfile
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 from src.cdon_watcher.cdon_scraper import CDONScraper
-from src.cdon_watcher.database import DatabaseManager
-from src.cdon_watcher.product_parser import Movie
+
+# DatabaseManager was removed - using CDONScraper for database initialization
 from src.cdon_watcher.web.app import create_app
 
 
@@ -28,7 +28,7 @@ def temp_db_path():
 
 @pytest.fixture
 def app(temp_db_path, monkeypatch):
-    """Create Flask app instance for testing."""
+    """Create FastAPI app instance for testing."""
     # Mock the CONFIG to use our test database
     monkeypatch.setenv("DB_PATH", temp_db_path)
 
@@ -38,114 +38,39 @@ def app(temp_db_path, monkeypatch):
     monkeypatch.setitem(CONFIG, "db_path", temp_db_path)
 
     app = create_app()
-    app.config["TESTING"] = True
     return app
 
 
 @pytest.fixture
 def client(app):
-    """Create Flask test client."""
-    return app.test_client()
+    """Create FastAPI test client."""
+    return TestClient(app)
 
 
 @pytest.fixture
 def populated_db(temp_db_path):
-    """Create a database with test data."""
+    """Create an initialized database."""
+    # Initialize database schema only
     scraper = CDONScraper(temp_db_path)
-    db = DatabaseManager(temp_db_path)
-
-    # Create test movies
-    test_movies = [
-        Movie(
-            title="Breaking Bad Complete Series",
-            format="Blu-ray",
-            url="https://cdon.fi/tuote/breaking-bad-complete-series",
-            image_url="https://cdon.fi/images/breaking-bad.jpg",
-            price=45.99,
-            availability="In Stock",
-            product_id="breaking-bad-123",
-        ),
-        Movie(
-            title="The Dark Knight 4K",
-            format="4K UHD Blu-ray",
-            url="https://cdon.fi/tuote/dark-knight-4k",
-            image_url="https://cdon.fi/images/dark-knight.jpg",
-            price=29.99,
-            availability="In Stock",
-            product_id="dark-knight-456",
-        ),
-        Movie(
-            title="Inception Blu-ray",
-            format="Blu-ray",
-            url="https://cdon.fi/tuote/inception-bluray",
-            image_url="https://cdon.fi/images/inception.jpg",
-            price=19.99,
-            availability="In Stock",
-            product_id="inception-789",
-        ),
-    ]
-
-    # Save movies and create price history
-    scraper.save_movies(test_movies)
-
-    # Add some to watchlist
-    db.add_to_watchlist("breaking-bad-123", 40.0)
-    db.add_to_watchlist("dark-knight-456", 25.0)
-
-    # Create some price changes for deals
-    conn = db.get_connection()
-    cursor = conn.cursor()
-
-    # Add older price history to simulate price drops
-    cursor.execute("SELECT id FROM movies WHERE product_id = 'breaking-bad-123'")
-    movie_id = cursor.fetchone()[0]
-
-    cursor.execute(
-        """
-        SELECT price FROM price_history WHERE movie_id = ? ORDER BY checked_at DESC LIMIT 1
-    """,
-        (movie_id,),
-    )
-    current_price = cursor.fetchone()[0]
-
-    cursor.execute(
-        """
-        INSERT INTO price_history (movie_id, product_id, price, checked_at)
-        VALUES (?, 'breaking-bad-123', ?, datetime('now', '-1 day'))
-    """,
-        (movie_id, current_price + 10.0),
-    )
-
-    cursor.execute(
-        """
-        INSERT INTO price_alerts (movie_id, product_id, old_price, new_price, alert_type, created_at)
-        VALUES (?, 'breaking-bad-123', 55.99, 45.99, 'price_drop', datetime('now', '-1 hour'))
-    """,
-        (movie_id,),
-    )
-
-    conn.commit()
-    conn.close()
     scraper.close()
-
     return temp_db_path
 
 
 class TestAPIEndpoints:
-    """Test all Flask API endpoints."""
+    """Test all FastAPI API endpoints."""
 
     def test_index_route(self, client):
         """Test main dashboard page."""
         response = client.get("/")
         assert response.status_code == 200
-        assert b"html" in response.data.lower()
+        assert b"html" in response.content.lower()
 
     def test_api_stats(self, client, populated_db):
         """Test /api/stats endpoint."""
         response = client.get("/api/stats")
         assert response.status_code == 200
 
-        data = json.loads(response.data)
+        data = response.json()
 
         # Check required fields
         assert "total_movies" in data
@@ -164,7 +89,7 @@ class TestAPIEndpoints:
         response = client.get("/api/alerts")
         assert response.status_code == 200
 
-        data = json.loads(response.data)
+        data = response.json()
         assert isinstance(data, list)
 
         if data:  # If there are alerts
@@ -179,7 +104,7 @@ class TestAPIEndpoints:
         response = client.get("/api/deals")
         assert response.status_code == 200
 
-        data = json.loads(response.data)
+        data = response.json()
         assert isinstance(data, list)
 
         if data:  # If there are deals
@@ -205,7 +130,7 @@ class TestAPIEndpoints:
         response = client.get("/api/watchlist")
         assert response.status_code == 200
 
-        data = json.loads(response.data)
+        data = response.json()
         assert isinstance(data, list)
         assert len(data) == 2  # We added 2 items to watchlist
 
@@ -229,17 +154,15 @@ class TestAPIEndpoints:
         """Test POST /api/watchlist with product_id."""
         payload = {"product_id": "inception-789", "target_price": 15.0}
 
-        response = client.post(
-            "/api/watchlist", data=json.dumps(payload), content_type="application/json"
-        )
+        response = client.post("/api/watchlist", json=payload)
 
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["message"] == "Added to watchlist"
 
         # Verify it was added
         response = client.get("/api/watchlist")
-        data = json.loads(response.data)
+        data = response.json()
         assert len(data) == 3  # Should now have 3 items
 
         # Find the new item
@@ -253,12 +176,10 @@ class TestAPIEndpoints:
         """Test POST /api/watchlist with missing data."""
         payload = {"product_id": "inception-789"}  # Missing target_price
 
-        response = client.post(
-            "/api/watchlist", data=json.dumps(payload), content_type="application/json"
-        )
+        response = client.post("/api/watchlist", json=payload)
 
         assert response.status_code == 400
-        data = json.loads(response.data)
+        data = response.json()
         assert "error" in data
         assert "target_price" in data["error"]
 
@@ -266,19 +187,17 @@ class TestAPIEndpoints:
         """Test POST /api/watchlist with invalid product_id."""
         payload = {"product_id": "non-existent-product", "target_price": 15.0}
 
-        response = client.post(
-            "/api/watchlist", data=json.dumps(payload), content_type="application/json"
-        )
+        response = client.post("/api/watchlist", json=payload)
 
         assert response.status_code == 500
-        data = json.loads(response.data)
+        data = response.json()
         assert "error" in data
 
     def test_api_remove_from_watchlist(self, client, populated_db):
         """Test DELETE /api/watchlist/<identifier>."""
         # First verify item exists
         response = client.get("/api/watchlist")
-        data = json.loads(response.data)
+        data = response.json()
         initial_count = len(data)
         assert initial_count == 2
 
@@ -286,12 +205,12 @@ class TestAPIEndpoints:
         response = client.delete("/api/watchlist/breaking-bad-123")
         assert response.status_code == 200
 
-        data = json.loads(response.data)
+        data = response.json()
         assert data["message"] == "Removed from watchlist"
 
         # Verify it was removed
         response = client.get("/api/watchlist")
-        data = json.loads(response.data)
+        data = response.json()
         assert len(data) == initial_count - 1
 
         # Verify the specific item is gone
@@ -304,7 +223,7 @@ class TestAPIEndpoints:
         response = client.get("/api/search?q=breaking")
         assert response.status_code == 200
 
-        data = json.loads(response.data)
+        data = response.json()
         assert isinstance(data, list)
         assert len(data) == 1
         assert "Breaking Bad" in data[0]["title"]
@@ -312,13 +231,13 @@ class TestAPIEndpoints:
         # Empty search
         response = client.get("/api/search?q=")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data == []
 
         # No query parameter
         response = client.get("/api/search")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data == []
 
     def test_api_cheapest_blurays(self, client, populated_db):
@@ -326,7 +245,7 @@ class TestAPIEndpoints:
         response = client.get("/api/cheapest-blurays")
         assert response.status_code == 200
 
-        data = json.loads(response.data)
+        data = response.json()
         assert isinstance(data, list)
 
         # Should have Blu-ray movies (not 4K)
@@ -342,7 +261,7 @@ class TestAPIEndpoints:
         response = client.get("/api/cheapest-4k-blurays")
         assert response.status_code == 200
 
-        data = json.loads(response.data)
+        data = response.json()
         assert isinstance(data, list)
 
         # Should have 4K movies
@@ -358,17 +277,15 @@ class TestAPIEndpoints:
         """Test POST /api/ignore-movie endpoint."""
         payload = {"product_id": "inception-789"}
 
-        response = client.post(
-            "/api/ignore-movie", data=json.dumps(payload), content_type="application/json"
-        )
+        response = client.post("/api/ignore-movie", json=payload)
 
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["message"] == "Movie ignored"
 
         # Verify movie is ignored by checking it doesn't appear in cheapest movies
         response = client.get("/api/cheapest-blurays")
-        data = json.loads(response.data)
+        data = response.json()
 
         product_ids = [movie["product_id"] for movie in data]
         assert "inception-789" not in product_ids
@@ -377,12 +294,10 @@ class TestAPIEndpoints:
         """Test POST /api/ignore-movie with missing data."""
         payload = {}  # Missing product_id
 
-        response = client.post(
-            "/api/ignore-movie", data=json.dumps(payload), content_type="application/json"
-        )
+        response = client.post("/api/ignore-movie", json=payload)
 
         assert response.status_code == 400
-        data = json.loads(response.data)
+        data = response.json()
         assert "error" in data
 
 
@@ -400,7 +315,7 @@ class TestErrorHandling:
     def test_invalid_json(self, client, populated_db):
         """Test invalid JSON in POST requests."""
         response = client.post(
-            "/api/watchlist", data="invalid json", content_type="application/json"
+            "/api/watchlist", content="invalid json", headers={"content-type": "application/json"}
         )
 
         # Should handle invalid JSON gracefully
@@ -409,11 +324,11 @@ class TestErrorHandling:
     def test_missing_content_type(self, client, populated_db):
         """Test POST requests without content type."""
         response = client.post(
-            "/api/watchlist", data=json.dumps({"product_id": "test", "target_price": 15.0})
+            "/api/watchlist", data='{"product_id": "test", "target_price": 15.0}'
         )
 
         # Should handle missing content type
-        assert response.status_code in [400, 500]
+        assert response.status_code in [400, 422]  # FastAPI returns 422 for validation errors
 
 
 class TestCORSHeaders:

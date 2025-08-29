@@ -1,9 +1,12 @@
 """Price monitoring service for CDON Watcher."""
 
 import asyncio
-import sqlite3
+
+from sqlmodel import select
 
 from .cdon_scraper import CDONScraper
+from .database.connection import AsyncSessionLocal
+from .models import Movie, Watchlist
 from .notifications import NotificationService
 
 
@@ -12,23 +15,18 @@ class PriceMonitor:
 
     def __init__(self, scraper: CDONScraper):
         self.scraper = scraper
-        self.db_path = scraper.db_path
         self.notification_service = NotificationService()
 
     async def check_watchlist_prices(self) -> None:
-        """Check prices for all watchlist items."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
-        # Get all watchlist items with their URLs
-        cursor.execute("""
-            SELECT w.*, m.url, m.title
-            FROM watchlist w
-            JOIN movies m ON w.movie_id = m.id
-        """)
-
-        watchlist_items = cursor.fetchall()
-        conn.close()
+        """Check prices for all watchlist items using SQLModel."""
+        async with AsyncSessionLocal() as session:
+            # Get all watchlist items with their URLs
+            query = select(Watchlist, Movie.url, Movie.title).join(
+                Movie,
+                Watchlist.movie_id == Movie.id,  # type: ignore
+            )
+            result = await session.execute(query)
+            watchlist_items = result.all()
 
         if not watchlist_items:
             print("No items in watchlist")
@@ -37,16 +35,14 @@ class PriceMonitor:
         print(f"Checking {len(watchlist_items)} watchlist items...")
 
         # Check each item using the product parser
-        for item in watchlist_items:
-            # Watchlist: id, movie_id, product_id, target_price, notify_on_availability, created_at + url, title from JOIN
-            _, movie_id, _, target_price, _, _, url, title = item
+        for _watchlist_item, url, title in watchlist_items:
             print(f"Checking: {title}")
 
             try:
                 # Parse the specific product page
                 movie = self.scraper.product_parser.parse_product_page(url)
                 if movie:
-                    self.scraper.save_movies([movie])
+                    await self.scraper.save_single_movie(movie)
 
                 # Small delay between requests
                 await asyncio.sleep(2)
@@ -54,10 +50,8 @@ class PriceMonitor:
             except Exception as e:
                 print(f"Error checking {title}: {e}")
 
-        # No browser to close in new hybrid approach
-
         # Get and process alerts
-        alerts = self.scraper.get_price_alerts()
+        alerts = await self.scraper.get_price_alerts()
         if alerts:
             await self.notification_service.send_notifications(alerts)
-            self.scraper.mark_alerts_notified([a["id"] for a in alerts])
+            await self.scraper.mark_alerts_notified([a["id"] for a in alerts])
