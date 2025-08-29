@@ -4,7 +4,9 @@ version: '3.8'
 services:
   # Web dashboard service
   web:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.base
     container_name: cdon-web
     ports:
       - "8080:8080"
@@ -25,7 +27,9 @@ services:
 
   # Price monitor service (runs periodically)
   monitor:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.base
     container_name: cdon-monitor
     volumes:
       - ./data:/app/data
@@ -56,7 +60,9 @@ services:
 
   # One-time crawler (use for initial setup or manual runs)
   crawler:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.crawler
     container_name: cdon-crawler
     volumes:
       - ./data:/app/data
@@ -68,6 +74,7 @@ services:
       - TMDB_API_KEY=${TMDB_API_KEY:-}
       - TZ=Europe/Helsinki
       - PYTHONPATH=/app
+      - PLAYWRIGHT_BROWSERS_PATH=/app/playwright_browsers
     command: python -m cdon_watcher crawl
     profiles:
       - crawler

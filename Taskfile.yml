@@ -57,7 +57,7 @@ tasks:
     cmds:
       - uv sync --extra test --extra dev
       - mkdir -p {{.BUILD_DIR}}
-      - ./scripts/build.sh
+      - podman-compose build
 
   test-python:
     desc: Run Python unit tests (fast)
@@ -101,7 +101,7 @@ tasks:
   docker-build:
     desc: Build Docker containers
     cmds:
-      - ./scripts/build.sh
+      - podman-compose build
 
   docker-dev:
     desc: Run development environment with hot reload
