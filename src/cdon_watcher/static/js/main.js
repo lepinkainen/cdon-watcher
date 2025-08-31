@@ -226,11 +226,14 @@ async function addToWatchlist(movieId) {
     return
   }
 
+  const movieCard = document.getElementById(`movie-card-${movieId}`)
+  const productId = movieCard.getAttribute('data-product-id')
+
   const response = await fetch('/api/watchlist', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      movie_id: movieId,
+      product_id: productId,
       target_price: parseFloat(targetPrice),
     }),
   })
@@ -239,6 +242,9 @@ async function addToWatchlist(movieId) {
     showNotification('Added to watchlist!')
     loadWatchlist()
     loadStats()
+  } else {
+    const errorData = await response.json()
+    showNotification(`Failed to add to watchlist: ${errorData.detail || 'Unknown error'}`, 'error')
   }
 }
 
