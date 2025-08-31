@@ -25,6 +25,7 @@ class Movie:
     availability: str
     image_url: str | None
     product_id: str | None
+    production_year: int | None = None
 
 
 class ProductParser:
@@ -68,6 +69,7 @@ class ProductParser:
             availability = self._extract_availability(soup)
             image_url = self._extract_image_url(soup)
             product_id = self._extract_product_id(url)
+            production_year = self._extract_production_year(soup)
 
             return Movie(
                 title=title,
@@ -77,6 +79,7 @@ class ProductParser:
                 availability=availability,
                 image_url=image_url,
                 product_id=product_id,
+                production_year=production_year,
             )
 
         except requests.RequestException as e:
@@ -253,6 +256,66 @@ class ProductParser:
 
         return None
 
+    def _extract_production_year(self, soup: BeautifulSoup) -> int | None:
+        """Extract production year from the product details section"""
+        try:
+            # Method 1: Find next sibling of "Nauhoitusvuosi" label
+            year = self._extract_year_from_sibling(soup)
+            if year:
+                return year
+
+            # Method 2: Look for year in container with "Nauhoitusvuosi"
+            year = self._extract_year_from_container(soup)
+            if year:
+                return year
+
+            logger.debug("No production year found")
+            return None
+
+        except (ValueError, AttributeError, TypeError) as e:
+            logger.debug(f"Error extracting production year: {e}")
+            return None
+
+    def _extract_year_from_sibling(self, soup: BeautifulSoup) -> int | None:
+        """Extract year from sibling element of Nauhoitusvuosi label"""
+        nauhoitusvuosi_element = soup.find(string=re.compile(r"Nauhoitusvuosi", re.IGNORECASE))
+        if not nauhoitusvuosi_element:
+            return None
+
+        label_p = nauhoitusvuosi_element.parent
+        if not (label_p and label_p.name == 'p'):
+            return None
+
+        next_sibling = label_p.find_next_sibling()
+        if not (next_sibling and next_sibling.name == 'p'):
+            return None
+
+        return self._extract_valid_year(next_sibling.get_text(strip=True))
+
+    def _extract_year_from_container(self, soup: BeautifulSoup) -> int | None:
+        """Extract year from any div containing Nauhoitusvuosi"""
+        divs = soup.find_all('div')
+        for div in divs:
+            text = div.get_text()
+            if "nauhoitusvuosi" in text.lower():
+                year = self._extract_valid_year(text)
+                if year:
+                    return year
+        return None
+
+    def _extract_valid_year(self, text: str) -> int | None:
+        """Extract and validate a 4-digit year from text"""
+        year_match = re.search(r"(\d{4})", text)
+        if not year_match:
+            return None
+
+        year = int(year_match.group(1))
+        if 1900 <= year <= 2030:  # Reasonable range for movies
+            logger.debug(f"Found production year: {year}")
+            return year
+
+        return None
+
     def _determine_format(self, title: str) -> str:
         """Determine if movie is Blu-ray or 4K Blu-ray (reuse existing logic)"""
         title_lower = title.lower()
@@ -289,6 +352,7 @@ if __name__ == "__main__":
             print(f"Title: {movie.title}")
             print(f"Price: €{movie.price}")
             print(f"Format: {movie.format}")
+            print(f"Production Year: {movie.production_year}")
         else:
             print("Failed to parse")
 

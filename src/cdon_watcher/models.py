@@ -16,6 +16,7 @@ class Movie(SQLModel, table=True):
     format: str | None = None
     url: str | None = None
     image_url: str | None = None
+    production_year: int | None = None
     tmdb_id: int | None = None
     content_type: str = Field(default="movie")
     first_seen: datetime = Field(default_factory=datetime.utcnow)
@@ -102,6 +103,7 @@ class MovieWithPricing(SQLModel):
     format: str | None = None
     url: str | None = None
     image_url: str | None = None
+    production_year: int | None = None
     tmdb_id: int | None = None
     content_type: str = "movie"
     first_seen: datetime
@@ -120,6 +122,7 @@ class DealMovie(SQLModel):
     format: str | None = None
     url: str | None = None
     image_url: str | None = None
+    production_year: int | None = None
     tmdb_id: int | None = None
     current_price: float
     previous_price: float
@@ -137,6 +140,7 @@ class WatchlistMovie(SQLModel):
     format: str | None = None
     url: str | None = None
     image_url: str | None = None
+    production_year: int | None = None
     tmdb_id: int | None = None
     content_type: str = "movie"
     first_seen: datetime

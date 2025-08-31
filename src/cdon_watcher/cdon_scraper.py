@@ -118,7 +118,8 @@ class CDONScraper:
                         if self.tmdb_service._is_tv_series(movie.title):
                             content_type = "tv"
 
-                        year = self.tmdb_service.extract_year_from_title(movie.title)
+                        # Prioritize production_year from parsed page data over title extraction
+                        year = movie.production_year or self.tmdb_service.extract_year_from_title(movie.title)
                         tmdb_id, local_poster_path = self.tmdb_service.get_movie_data_and_poster(
                             movie.title, year
                         )
@@ -146,6 +147,9 @@ class CDONScraper:
                 if existing_movie:
                     # Update existing movie
                     existing_movie.last_updated = datetime.utcnow()
+                    # Update production year if we have it and it's not set
+                    if movie.production_year and not existing_movie.production_year:
+                        existing_movie.production_year = movie.production_year
                     db_movie = existing_movie
                 else:
                     # Create new movie
@@ -155,6 +159,7 @@ class CDONScraper:
                         format=movie.format,
                         url=movie.url,
                         image_url=final_image_url,
+                        production_year=movie.production_year,
                         tmdb_id=tmdb_id,
                         content_type=content_type,
                         first_seen=datetime.utcnow(),

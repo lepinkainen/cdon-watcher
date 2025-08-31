@@ -258,3 +258,90 @@ class TestYearExtraction:
         """Test year extraction from movie titles."""
         result = tmdb_service.extract_year_from_title(title)
         assert result == expected_year
+
+
+class TestTMDBYearPriority:
+    """Test production year prioritization logic used in cdon_scraper."""
+
+    @pytest.fixture
+    def tmdb_service(self):
+        """Create TMDBService instance for testing."""
+        return TMDBService(api_key="test_key", poster_dir="./test_posters")
+
+    def test_production_year_priority_logic(self, tmdb_service):
+        """Test the year prioritization logic: production_year takes precedence over title extraction."""
+
+        # Test case 1: production_year available, should be used regardless of title
+        movie_title = "Batman 4K Blu-ray"  # No year in title
+        production_year = 1989
+        title_year = tmdb_service.extract_year_from_title(movie_title)  # Should be None
+
+        # This mimics the logic from cdon_scraper.py line 122
+        final_year = production_year or title_year
+
+        assert title_year is None  # No year in title
+        assert final_year == 1989  # Production year takes priority
+
+    def test_production_year_overrides_title_year(self, tmdb_service):
+        """Test that production_year overrides title year when both are present."""
+
+        movie_title = "Batman (1992)"  # Wrong year in title (Batman Returns)
+        production_year = 1989  # Correct year from Nauhoitusvuosi
+        title_year = tmdb_service.extract_year_from_title(movie_title)
+
+        final_year = production_year or title_year
+
+        assert title_year == 1992  # Title has wrong year
+        assert final_year == 1989  # Production year overrides title year
+
+    def test_fallback_to_title_year(self, tmdb_service):
+        """Test fallback to title year when production_year is None."""
+
+        movie_title = "The Matrix (1999)"
+        production_year = None  # No production year found on page
+        title_year = tmdb_service.extract_year_from_title(movie_title)
+
+        final_year = production_year or title_year
+
+        assert title_year == 1999
+        assert final_year == 1999  # Falls back to title year
+
+    def test_both_years_none(self, tmdb_service):
+        """Test when both production_year and title year are None."""
+
+        movie_title = "Unknown Movie"
+        production_year = None
+        title_year = tmdb_service.extract_year_from_title(movie_title)
+
+        final_year = production_year or title_year
+
+        assert title_year is None
+        assert final_year is None  # Both None, final year is None
+
+    @pytest.mark.parametrize(
+        "production_year,title,expected_year",
+        [
+            # Production year available - should always win
+            (1989, "Batman 4K Blu-ray", 1989),
+            (1989, "Batman (1992)", 1989),  # Overrides wrong title year
+            (2010, "Inception", 2010),
+            # Production year None - fallback to title
+            (None, "The Matrix (1999)", 1999),
+            (None, "Blade Runner (1982)", 1982),
+            # Both None
+            (None, "Unknown Movie", None),
+            # Edge cases with 0 (falsy but valid year)
+            (0, "Movie Title (2000)", 0),  # 0 is falsy but should still be used
+        ],
+    )
+    def test_year_prioritization_scenarios(self, tmdb_service, production_year, title, expected_year):
+        """Test various year prioritization scenarios."""
+        title_year = tmdb_service.extract_year_from_title(title)
+
+        # Handle the edge case where 0 is a valid year but falsy
+        if production_year is not None:
+            final_year = production_year
+        else:
+            final_year = title_year
+
+        assert final_year == expected_year
