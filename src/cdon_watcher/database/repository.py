@@ -2,6 +2,8 @@
 
 # Individual type: ignore comments added where needed with specific error codes
 
+import logging
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
@@ -26,8 +28,35 @@ from ..models import (
 class DatabaseRepository:
     """Repository for database operations using SQLModel."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, enable_query_logging: bool = False):
         self.session = session
+        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        self.enable_query_logging = enable_query_logging
+
+        if enable_query_logging:
+            self.logger.setLevel(logging.DEBUG)
+
+    @asynccontextmanager
+    async def _handle_transaction(self, operation_name: str) -> Any:
+        """Standard error handling with transaction management."""
+        try:
+            if self.enable_query_logging:
+                self.logger.debug(f"Starting {operation_name}")
+            yield
+            await self.session.commit()
+            if self.enable_query_logging:
+                self.logger.debug(f"Successfully completed {operation_name}")
+        except Exception as e:
+            await self.session.rollback()
+            self.logger.error(f"Failed {operation_name}: {e}")
+            raise
+
+    def _log_query(self, query_name: str, query: Any = None) -> None:
+        """Log query execution for debugging."""
+        if self.enable_query_logging:
+            self.logger.debug(f"Executing {query_name}")
+            if query:
+                self.logger.debug(f"Query: {query}")
 
     def _current_price_subquery(self) -> Any:
         """Subquery for current price (latest price history entry)."""
@@ -133,28 +162,10 @@ class DatabaseRepository:
             .limit(limit)
         )
 
+        self._log_query("get_deals", query)
         result = await self.session.execute(query)
-        deals = []
 
-        for row in result.all():
-            deals.append(
-                DealMovie(
-                    id=row.id,
-                    product_id=row.product_id,
-                    title=row.title,
-                    format=row.format,
-                    url=row.url,
-                    image_url=row.image_url,
-                    tmdb_id=row.tmdb_id,
-                    current_price=row.current_price,
-                    previous_price=row.previous_price,
-                    price_change=row.price_change,
-                    lowest_price=row.lowest_price,
-                    highest_price=row.highest_price,
-                )
-            )
-
-        return deals
+        return [DealMovie.model_validate(dict(row._mapping)) for row in result.all()]
 
     async def get_watchlist(self) -> list[WatchlistMovie]:
         """Get all watchlist items."""
@@ -179,34 +190,14 @@ class DatabaseRepository:
             highest_price_sq.label("highest_price"),
         ).join(Movie, Watchlist.movie_id == Movie.id)
 
+        self._log_query("get_watchlist", query)
         result = await self.session.execute(query)
-        watchlist = []
 
-        for row in result.all():
-            watchlist.append(
-                WatchlistMovie(
-                    id=row.id,
-                    product_id=row.product_id,
-                    title=row.title,
-                    format=row.format,
-                    url=row.url,
-                    image_url=row.image_url,
-                    tmdb_id=row.tmdb_id,
-                    content_type=row.content_type,
-                    first_seen=row.first_seen,
-                    last_updated=row.last_updated,
-                    target_price=row.target_price,
-                    current_price=row.current_price,
-                    lowest_price=row.lowest_price,
-                    highest_price=row.highest_price,
-                )
-            )
-
-        return watchlist
+        return [WatchlistMovie.model_validate(dict(row._mapping)) for row in result.all()]
 
     async def add_to_watchlist(self, product_id: str, target_price: float) -> bool:
         """Add a movie to watchlist by product_id."""
-        try:
+        async with self._handle_transaction(f"add_to_watchlist({product_id})"):
             # Get movie by product_id
             result = await self.session.execute(select(Movie).where(Movie.product_id == product_id))
             movie = result.scalar_one_or_none()
@@ -232,26 +223,18 @@ class DatabaseRepository:
                 )
                 self.session.add(watchlist_item)
 
-            await self.session.commit()
             return True
-        except Exception:
-            await self.session.rollback()
-            return False
 
     async def remove_from_watchlist(self, product_id: str) -> bool:
         """Remove a movie from watchlist by product_id."""
-        try:
+        async with self._handle_transaction(f"remove_from_watchlist({product_id})"):
             result = await self.session.execute(
                 select(Watchlist).where(Watchlist.product_id == product_id)
             )
             watchlist_item = result.scalar_one_or_none()
             if watchlist_item:
                 await self.session.delete(watchlist_item)
-                await self.session.commit()
             return True
-        except Exception:
-            await self.session.rollback()
-            return False
 
     async def search_movies(self, query: str, limit: int = 20) -> list[MovieWithPricing]:
         """Search for movies by title."""
@@ -283,29 +266,10 @@ class DatabaseRepository:
             .limit(limit)
         )
 
+        self._log_query(f"search_movies(query='{query}')")
         result = await self.session.execute(sql_query)
-        movies = []
 
-        for row in result.all():
-            movies.append(
-                MovieWithPricing(
-                    id=row.id,
-                    product_id=row.product_id,
-                    title=row.title,
-                    format=row.format,
-                    url=row.url,
-                    image_url=row.image_url,
-                    tmdb_id=row.tmdb_id,
-                    content_type=row.content_type,
-                    first_seen=row.first_seen,
-                    last_updated=row.last_updated,
-                    current_price=row.current_price,
-                    lowest_price=row.lowest_price,
-                    highest_price=row.highest_price,
-                )
-            )
-
-        return movies
+        return [MovieWithPricing.model_validate(dict(row._mapping)) for row in result.all()]
 
     async def get_cheapest_blurays(self, limit: int = 20) -> list[MovieWithPricing]:
         """Get cheapest Blu-ray movies."""
@@ -344,29 +308,10 @@ class DatabaseRepository:
             .limit(limit)
         )
 
+        self._log_query("get_cheapest_blurays", query)
         result = await self.session.execute(query)
-        movies = []
 
-        for row in result.all():
-            movies.append(
-                MovieWithPricing(
-                    id=row.id,
-                    product_id=row.product_id,
-                    title=row.title,
-                    format=row.format,
-                    url=row.url,
-                    image_url=row.image_url,
-                    tmdb_id=row.tmdb_id,
-                    content_type=row.content_type,
-                    first_seen=row.first_seen,
-                    last_updated=row.last_updated,
-                    current_price=row.current_price,
-                    lowest_price=row.lowest_price,
-                    highest_price=row.highest_price,
-                )
-            )
-
-        return movies
+        return [MovieWithPricing.model_validate(dict(row._mapping)) for row in result.all()]
 
     async def get_cheapest_4k_blurays(self, limit: int = 20) -> list[MovieWithPricing]:
         """Get cheapest 4K Blu-ray movies."""
@@ -404,33 +349,14 @@ class DatabaseRepository:
             .limit(limit)
         )
 
+        self._log_query("get_cheapest_4k_blurays", query)
         result = await self.session.execute(query)
-        movies = []
 
-        for row in result.all():
-            movies.append(
-                MovieWithPricing(
-                    id=row.id,
-                    product_id=row.product_id,
-                    title=row.title,
-                    format=row.format,
-                    url=row.url,
-                    image_url=row.image_url,
-                    tmdb_id=row.tmdb_id,
-                    content_type=row.content_type,
-                    first_seen=row.first_seen,
-                    last_updated=row.last_updated,
-                    current_price=row.current_price,
-                    lowest_price=row.lowest_price,
-                    highest_price=row.highest_price,
-                )
-            )
-
-        return movies
+        return [MovieWithPricing.model_validate(dict(row._mapping)) for row in result.all()]
 
     async def ignore_movie_by_product_id(self, product_id: str) -> bool:
         """Add a movie to the ignored list by product_id."""
-        try:
+        async with self._handle_transaction(f"ignore_movie_by_product_id({product_id})"):
             # Get movie by product_id
             result = await self.session.execute(select(Movie).where(Movie.product_id == product_id))
             movie = result.scalar_one_or_none()
@@ -448,12 +374,8 @@ class DatabaseRepository:
                     ignored_at=datetime.utcnow(),
                 )
                 self.session.add(ignored_movie)
-                await self.session.commit()
 
             return True
-        except Exception:
-            await self.session.rollback()
-            return False
 
     async def ignore_movie(self, movie_id: int) -> bool:
         """Add a movie to the ignored list by movie_id (legacy method)."""
@@ -487,22 +409,7 @@ class DatabaseRepository:
             .limit(limit)
         )
 
+        self._log_query("get_price_alerts", query)
         result = await self.session.execute(query)
-        alerts = []
 
-        for row in result.all():
-            alerts.append(
-                PriceAlertWithTitle(
-                    id=row.id,
-                    movie_id=row.movie_id,
-                    product_id=row.product_id,
-                    old_price=row.old_price,
-                    new_price=row.new_price,
-                    alert_type=row.alert_type,
-                    created_at=row.created_at,
-                    notified=row.notified,
-                    movie_title=row.movie_title,
-                )
-            )
-
-        return alerts
+        return [PriceAlertWithTitle.model_validate(dict(row._mapping)) for row in result.all()]

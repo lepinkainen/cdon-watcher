@@ -32,7 +32,9 @@ router = APIRouter()
 # Dependency function for DatabaseRepository
 async def get_repository(session: AsyncSession = Depends(get_db_session)) -> DatabaseRepository:
     """Get DatabaseRepository instance."""
-    return DatabaseRepository(session)
+    # Enable query logging in development mode (can be controlled via environment variable)
+    enable_logging = CONFIG.get("debug", False) or CONFIG.get("enable_query_logging", False)
+    return DatabaseRepository(session, enable_query_logging=enable_logging)
 
 
 @router.get("/")
