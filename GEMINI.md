@@ -8,32 +8,32 @@ The system is designed to be deployed with Docker, providing a web dashboard to 
 
 ## Key Technologies
 
-* **Backend:** Python 3.11, Flask
-* **Scraping:** Playwright, Requests, BeautifulSoup
-* **Database:** SQLite
-* **Deployment:** Docker, Docker Compose (or Podman, podman-compose)
-* **Dependency Management:** uv
-* **Linting/Formatting:** ruff, mypy
+- **Backend:** Python 3.11, Flask
+- **Scraping:** Playwright, Requests, BeautifulSoup
+- **Database:** SQLite
+- **Deployment:** Docker, Docker Compose (or Podman, podman-compose)
+- **Dependency Management:** uv
+- **Linting/Formatting:** ruff, mypy
 
 ## Architecture
 
 The application utilizes a hybrid scraping architecture to efficiently gather data.
 
-* **`listing_crawler.py`**: A Playwright-based crawler responsible for navigating category pages that require JavaScript execution to load and render product listings. It extracts product URLs.
-* **`product_parser.py`**: A lightweight and efficient parser using `requests` and `BeautifulSoup`. It takes a product URL, fetches the static HTML, and parses it to extract details like title, price, and movie format. This avoids the overhead of a full browser for simple pages.
-* **`cdon_scraper.py`**: The orchestrator that combines the two components above. It gets URLs from the `listing_crawler` and passes them to the `product_parser` for processing, then stores the results in the database.
-* **`monitor.py`**: The main entry point for the application, which can be run in three modes:
-  * `web`: Starts the Flask web server for the user-facing dashboard.
-  * `monitor`: Runs the background price monitoring service.
-  * `crawl`: Executes the one-time crawl to populate the database.
+- **`listing_crawler.py`**: A Playwright-based crawler responsible for navigating category pages that require JavaScript execution to load and render product listings. It extracts product URLs.
+- **`product_parser.py`**: A lightweight and efficient parser using `requests` and `BeautifulSoup`. It takes a product URL, fetches the static HTML, and parses it to extract details like title, price, and movie format. This avoids the overhead of a full browser for simple pages.
+- **`cdon_scraper.py`**: The orchestrator that combines the two components above. It gets URLs from the `listing_crawler` and passes them to the `product_parser` for processing, then stores the results in the database.
+- **`monitor.py`**: The main entry point for the application, which can be run in three modes:
+  - `web`: Starts the Flask web server for the user-facing dashboard.
+  - `monitor`: Runs the background price monitoring service.
+  - `crawl`: Executes the one-time crawl to populate the database.
 
 ### Service Architecture (Docker)
 
 The `docker-compose.yml` defines three main services:
 
-* **`web`**: Runs the Flask web application, serving the dashboard on port 8080.
-* **`monitor`**: Runs the background price checking service, which periodically checks for updates.
-* **`crawler`**: A one-time service profile for running the main scraper (`cdon_scraper.py`) to populate the database.
+- **`web`**: Runs the Flask web application, serving the dashboard on port 8080.
+- **`monitor`**: Runs the background price checking service, which periodically checks for updates.
+- **`crawler`**: A one-time service profile for running the main scraper (`cdon_scraper.py`) to populate the database.
 
 ### Data Flow
 
@@ -51,39 +51,39 @@ This project uses `uv` for managing dependencies and running scripts.
 
 1. **Install dependencies:**
 
-    ```bash
-    uv sync --extra test
-    ```
+   ```bash
+   uv sync --extra test
+   ```
 
 2. **Install Playwright browser:**
 
-    ```bash
-    uv run playwright install chromium
-    ```
+   ```bash
+   uv run playwright install chromium
+   ```
 
 ### Essential Commands
 
-* **Run Tests:**
-  * Run all tests: `uv run pytest tests/`
-  * Run unit tests: `uv run pytest tests/unit/`
-  * Run integration tests: `uv run pytest tests/integration/`
+- **Run Tests:**
+  - Run all tests: `uv run pytest tests/`
+  - Run unit tests: `uv run pytest tests/unit/`
+  - Run integration tests: `uv run pytest tests/integration/`
 
-* **Linting and Formatting:**
-  * Check for linting errors: `uv run ruff check .`
-  * Format code: `uv run ruff format .`
-  * Run static type checking: `uv run mypy src`
+- **Linting and Formatting:**
+  - Check for linting errors: `uv run ruff check .`
+  - Format code: `uv run ruff format .`
+  - Run static type checking: `uv run mypy src`
 
-* **Running the Application (Docker/Podman):**
-  * **Build the image:** `./scripts/build.sh`
-  * **Run in development (macOS/Podman):** `./scripts/run-dev.sh`
-  * **Run in production (Linux/Docker):** `./scripts/run-prod.sh`
-  * **Run the crawler to populate the database:** `podman-compose run --rm crawler` (or `docker-compose run --rm crawler`)
-  * **View logs:** `podman-compose logs -f`
+- **Running the Application (Docker/Podman):**
+  - **Build the image:** `./scripts/build.sh`
+  - **Run in development (macOS/Podman):** `./scripts/run-dev.sh`
+  - **Run in production (Linux/Docker):** `./scripts/run-prod.sh`
+  - **Run the crawler to populate the database:** `podman-compose run --rm crawler` (or `docker-compose run --rm crawler`)
+  - **View logs:** `podman-compose logs -f`
 
 ## Project Conventions
 
-* **Dependency Management:** All Python dependencies are managed in `pyproject.toml`. Use `uv sync` to install them.
-* **Configuration:** Application configuration is handled via environment variables, documented in `.env.example`. The database path is set with `DB_PATH`.
-* **Database:** The SQLite database is located at `data/cdon_movies.db` and is persisted via a Docker volume.
-* **Source Code:** All main application code resides in the `src/cdon_watcher` directory.
-* **AI Guidelines:** This project includes a `llm-shared` submodule. Refer to the `README.md` and other files in that directory for general AI development conventions.
+- **Dependency Management:** All Python dependencies are managed in `pyproject.toml`. Use `uv sync` to install them.
+- **Configuration:** Application configuration is handled via environment variables, documented in `.env.example`. The database path is set with `DB_PATH`.
+- **Database:** The SQLite database is located at `data/cdon_movies.db` and is persisted via a Docker volume.
+- **Source Code:** All main application code resides in the `src/cdon_watcher` directory.
+- **AI Guidelines:** This project includes a `llm-shared` submodule. Refer to the `README.md` and other files in that directory for general AI development conventions.

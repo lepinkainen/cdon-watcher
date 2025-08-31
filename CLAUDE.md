@@ -14,6 +14,9 @@ task install          # Install all dependencies + playwright
 uv sync --extra test --extra dev
 uv run playwright install chromium
 
+# Environment configuration
+cp .env.example .env   # Copy and edit with your settings (optional for notifications)
+
 # Alternative: Traditional pip/venv (uses pyproject.toml)
 python3 -m venv venv
 source venv/bin/activate
@@ -96,7 +99,7 @@ podman-compose logs -f web
 #### **Hybrid Scraper Architecture (v3 - FastAPI+SQLModel)**
 
 - **listing_crawler.py**: Playwright-based category page crawler (collects product URLs)
-- **product_parser.py**: Pure Python product page parser (extracts title/price via requests + BeautifulSoup)  
+- **product_parser.py**: Pure Python product page parser (extracts title/price via requests + BeautifulSoup)
 - **cdon_scraper.py**: Orchestrator combining both parsers + async SQLModel database operations
 - **monitoring_service.py**: Price monitoring service using SQLModel repository pattern
 - **web/app.py & web/routes.py**: FastAPI web dashboard with async API endpoints
@@ -130,7 +133,7 @@ podman-compose logs -f web
 ### Data Flow
 
 1. **ListingCrawler** (Playwright) scrapes category pages → collects product URLs
-2. **ProductParser** (HTTP) fetches individual product pages → extracts title/price/format  
+2. **ProductParser** (HTTP) fetches individual product pages → extracts title/price/format
 3. **CDONScraper** orchestrates workflow → saves to SQLModel database using async operations
 4. **PriceMonitor** service checks for price changes → triggers alerts via SQLModel repository
 5. **FastAPI dashboard** serves data via type-safe API endpoints and Jinja2 templates
@@ -172,9 +175,9 @@ podman-compose logs -f web
 - **Type safety**: Full type checking with SQLModel relationships and Pydantic validation
 - **Async operations**: All database operations are async for better performance
 - **Title extraction fix**: Resolved "vihdoin arki" promotional text extraction issue
-- **Performance**: Hybrid approach ~10x faster than pure Playwright  
+- **Performance**: Hybrid approach ~10x faster than pure Playwright
 - **Anti-bot protection**: Stealth browser settings, realistic headers, rate limiting
-- **Testing patterns**: 
+- **Testing patterns**:
   - Unit tests in `tests/unit/` (fast, no network)
   - Integration tests in `tests/integration/` (slow, real network requests)
   - JSON-based test case management (`add_test_case.py`)
@@ -183,6 +186,7 @@ podman-compose logs -f web
 ### LLM Assistant Guidelines
 
 Refer to `llm-shared/` submodule for:
+
 - **General development**: `project_tech_stack.md` (project management, validation)
 - **Python conventions**: `languages/python.md` (libraries, tools, patterns)
 - **Shell tools**: `shell_commands.md` (use `rg` instead of `grep`, `fd` instead of `find`)

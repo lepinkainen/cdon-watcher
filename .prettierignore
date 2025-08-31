@@ -1,0 +1,24 @@
+# Ignore artifacts and dependencies
+build/
+dist/
+.venv/
+node_modules/
+
+# Python cache
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Data and media
+data/
+test_posters/
+
+# Git and local config
+.git/
+.claude/
+
+# Project-specific files
+*.db
+*.db-journal
+*.sqlite3

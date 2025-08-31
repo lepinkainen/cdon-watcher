@@ -9,7 +9,7 @@ services:
       dockerfile: Dockerfile.base
     container_name: cdon-web
     ports:
-      - "8080:8080"
+      - '8080:8080'
     volumes:
       - ./data:/app/data
       - ./config:/app/config

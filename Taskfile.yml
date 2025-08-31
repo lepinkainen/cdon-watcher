@@ -1,6 +1,6 @@
 # Taskfile.yml for CDON Watcher
 # See: https://taskfile.dev/
-version: "3"
+version: '3'
 
 vars:
   BUILD_DIR: build
@@ -37,6 +37,13 @@ tasks:
     desc: Lint code
     cmds:
       - task: lint-python
+      - task: lint-js-check
+
+  lint-fix:
+    desc: Fix all linting issues
+    cmds:
+      - task: lint-python-fix
+      - task: lint-js-fix
 
   # Clean build artifacts
   clean:
@@ -82,9 +89,24 @@ tasks:
   lint-python:
     desc: Lint Python code
     cmds:
+      - uv run ruff check .
+      - uv run mypy src
+
+  lint-python-fix:
+    desc: Fix Python linting issues
+    cmds:
       - uv run ruff check --fix .
       - uv run ruff format .
-      - uv run mypy src
+
+  lint-js-check:
+    desc: Check JavaScript/JSON/CSS formatting
+    cmds:
+      - npx prettier --check .
+
+  lint-js-fix:
+    desc: Fix JavaScript/JSON/CSS formatting
+    cmds:
+      - npx prettier --write .
 
   # Development tasks
   dev:
