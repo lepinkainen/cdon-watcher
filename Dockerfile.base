@@ -1,8 +1,9 @@
-# Dockerfile.base - Base image for web and monitor services (no Playwright)
+# Dockerfile.base - Optimized base image for web and monitor services (no Playwright)
 FROM python:3-slim
 
-# Install uv
-RUN pip install --no-cache-dir uv
+# Install uv and clean up in single layer
+RUN pip install --no-cache-dir uv && \
+    pip cache purge
 
 # Set working directory
 WORKDIR /app
@@ -13,21 +14,27 @@ COPY pyproject.toml uv.lock ./
 # Create non-root user for security
 RUN useradd -m -u 1000 tracker
 
-# Create minimal src structure for dependency installation
-RUN mkdir -p src/cdon_watcher && \
-    touch src/cdon_watcher/__init__.py
-
-# Install dependencies to system Python (no venv needed)
-RUN uv pip install --system --no-cache .
-
-# Copy application files after dependencies are installed
+# Copy application files
 COPY --chown=tracker:tracker src/ /app/src/
+
+# Install package with only runtime dependencies (excluding Playwright) and clean up
+RUN uv pip install --system --no-cache -e . --no-deps && \
+    uv pip install --system --no-cache \
+        "fastapi>=0.104.0" \
+        "sqlmodel>=0.0.14" \
+        "uvicorn[standard]>=0.24.0" \
+        "aiosqlite>=0.19.0" \
+        "aiohttp>=3.9.1" \
+        "python-dotenv>=1.0.0" \
+        "requests>=2.31.0" \
+        "beautifulsoup4>=4.12.0" \
+        "jinja2>=3.1.0" && \
+    uv cache clean && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Set ownership of app directory
 RUN chown -R tracker:tracker /app
-
-# Install the actual package now that source files are available
-RUN uv pip install --system -e .
 
 # Switch to non-root user
 USER tracker
