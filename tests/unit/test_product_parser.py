@@ -57,7 +57,7 @@ class TestProductParser:
         movie = product_parser.parse_product_page(url)
         assert movie is None, f"Should return None for malformed URL: {url}"
 
-    @patch('src.cdon_watcher.product_parser.requests.Session.get')
+    @patch("src.cdon_watcher.product_parser.requests.Session.get")
     def test_parse_product_page_includes_production_year(self, mock_get: Mock) -> None:
         """Test that production year is included in parsed movie data."""
         # Mock HTML response similar to Batman CDON page
@@ -84,7 +84,7 @@ class TestProductParser:
 
         # Mock response
         mock_response = Mock()
-        mock_response.content = mock_html.encode('utf-8')
+        mock_response.content = mock_html.encode("utf-8")
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
 
@@ -106,7 +106,7 @@ class TestProductParser:
         # Verify HTTP call was made
         mock_get.assert_called_once_with(url, timeout=10)
 
-    @patch('src.cdon_watcher.product_parser.requests.Session.get')
+    @patch("src.cdon_watcher.product_parser.requests.Session.get")
     def test_parse_product_page_no_production_year(self, mock_get: Mock) -> None:
         """Test parsing when no production year is available."""
         # Mock HTML response without Nauhoitusvuosi
@@ -128,7 +128,7 @@ class TestProductParser:
 
         # Mock response
         mock_response = Mock()
-        mock_response.content = mock_html.encode('utf-8')
+        mock_response.content = mock_html.encode("utf-8")
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
 
@@ -531,7 +531,9 @@ class TestProductParserPureFunctions:
         result = parser._extract_production_year(soup)
         assert result == 1989
 
-    def test_extract_production_year_container_fallback_success(self, parser: ProductParser) -> None:
+    def test_extract_production_year_container_fallback_success(
+        self, parser: ProductParser
+    ) -> None:
         """Test production year extraction via container fallback method."""
         html = """
         <div>
@@ -560,7 +562,9 @@ class TestProductParserPureFunctions:
         result = parser._extract_production_year(soup)
         assert result is None
 
-    def test_extract_production_year_sibling_fails_container_succeeds(self, parser: ProductParser) -> None:
+    def test_extract_production_year_sibling_fails_container_succeeds(
+        self, parser: ProductParser
+    ) -> None:
         """Test fallback to container method when sibling method fails."""
         html = """
         <div>

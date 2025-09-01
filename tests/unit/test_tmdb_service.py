@@ -334,7 +334,9 @@ class TestTMDBYearPriority:
             (0, "Movie Title (2000)", 0),  # 0 is falsy but should still be used
         ],
     )
-    def test_year_prioritization_scenarios(self, tmdb_service, production_year, title, expected_year):
+    def test_year_prioritization_scenarios(
+        self, tmdb_service, production_year, title, expected_year
+    ):
         """Test various year prioritization scenarios."""
         title_year = tmdb_service.extract_year_from_title(title)
 

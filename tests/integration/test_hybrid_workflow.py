@@ -82,9 +82,7 @@ class TestHybridWorkflow:
 
     @pytest.mark.asyncio
     @pytest.mark.timeout(60)  # 1 minute for single product test
-    async def test_production_year_tmdb_integration(
-        self, cdon_scraper: CDONScraper
-    ) -> None:
+    async def test_production_year_tmdb_integration(self, cdon_scraper: CDONScraper) -> None:
         """Test that production year from parsed page is passed to TMDB search."""
         # Use Batman 1989 URL from original user request
         batman_url = "https://cdon.fi/tuote/indiana-jones-4-movie-collection-blu-ray-5-disc-e5a58c8cee5e590e/"
@@ -116,14 +114,18 @@ class TestHybridWorkflow:
                 )
             else:
                 # If no production year, should fall back to title year
-                assert final_year == title_year, "Should fallback to title year when no production year"
+                assert final_year == title_year, (
+                    "Should fallback to title year when no production year"
+                )
 
         # Save the movie and verify it works end-to-end
         success = await cdon_scraper.save_single_movie(movie)
         assert success, "Should successfully save movie with production year"
 
         # Search for the saved movie and verify production year is preserved
-        search_results = await cdon_scraper.search_movies(movie.title.split()[0])  # Search by first word
+        search_results = await cdon_scraper.search_movies(
+            movie.title.split()[0]
+        )  # Search by first word
         if search_results:
             saved_movie = search_results[0]
             if movie.production_year:

@@ -157,7 +157,7 @@ function createMovieCard(movie, showTarget = false, showIgnore = false) {
         }">
             ${
               showTarget
-                ? `<button class="remove-from-watchlist" onclick="removeFromWatchlist(${movie.id})" title="Remove from watchlist">×</button>`
+                ? `<button class="remove-from-watchlist" onclick="removeFromWatchlist('${movie.product_id}')" title="Remove from watchlist">×</button>`
                 : ''
             }
             ${posterHtml}
@@ -244,29 +244,37 @@ async function addToWatchlist(movieId) {
     loadStats()
   } else {
     const errorData = await response.json()
-    showNotification(`Failed to add to watchlist: ${errorData.detail || 'Unknown error'}`, 'error')
+    showNotification(
+      `Failed to add to watchlist: ${errorData.detail || 'Unknown error'}`,
+      'error'
+    )
   }
 }
 
-async function removeFromWatchlist(movieId) {
+async function removeFromWatchlist(productId) {
   if (!confirm('Remove this movie from your watchlist?')) {
     return
   }
 
-  const response = await fetch(`/api/watchlist/${movieId}`, {
+  const response = await fetch(`/api/watchlist/${productId}`, {
     method: 'DELETE',
   })
 
   if (response.ok) {
-    // Remove the movie card from the watchlist view
-    const movieCard = document.getElementById(`movie-card-${movieId}`)
+    // Remove the movie card from the watchlist view by finding it using product_id
+    const movieCard = document.querySelector(`[data-product-id="${productId}"]`)
     if (movieCard) {
       movieCard.remove()
     }
     showNotification('Removed from watchlist')
     loadStats() // Update the watchlist count
+    loadWatchlist() // Refresh the watchlist view
   } else {
-    showNotification('Failed to remove from watchlist', 'error')
+    const errorData = await response.json()
+    showNotification(
+      `Failed to remove from watchlist: ${errorData.detail || 'Unknown error'}`,
+      'error'
+    )
   }
 }
 

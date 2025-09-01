@@ -283,18 +283,18 @@ class ProductParser:
             return None
 
         label_p = nauhoitusvuosi_element.parent
-        if not (label_p and label_p.name == 'p'):
+        if not (label_p and label_p.name == "p"):
             return None
 
         next_sibling = label_p.find_next_sibling()
-        if not (next_sibling and next_sibling.name == 'p'):
+        if not (next_sibling and next_sibling.name == "p"):
             return None
 
         return self._extract_valid_year(next_sibling.get_text(strip=True))
 
     def _extract_year_from_container(self, soup: BeautifulSoup) -> int | None:
         """Extract year from any div containing Nauhoitusvuosi"""
-        divs = soup.find_all('div')
+        divs = soup.find_all("div")
         for div in divs:
             text = div.get_text()
             if "nauhoitusvuosi" in text.lower():

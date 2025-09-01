@@ -119,7 +119,9 @@ class CDONScraper:
                             content_type = "tv"
 
                         # Prioritize production_year from parsed page data over title extraction
-                        year = movie.production_year or self.tmdb_service.extract_year_from_title(movie.title)
+                        year = movie.production_year or self.tmdb_service.extract_year_from_title(
+                            movie.title
+                        )
                         tmdb_id, local_poster_path = self.tmdb_service.get_movie_data_and_poster(
                             movie.title, year
                         )

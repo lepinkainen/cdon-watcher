@@ -1,6 +1,6 @@
 """SQLModel database models for CDON Watcher."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -19,8 +19,8 @@ class Movie(SQLModel, table=True):
     production_year: int | None = None
     tmdb_id: int | None = None
     content_type: str = Field(default="movie")
-    first_seen: datetime = Field(default_factory=datetime.utcnow)
-    last_updated: datetime = Field(default_factory=datetime.utcnow)
+    first_seen: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_updated: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Relationships
     price_history: list["PriceHistory"] = Relationship(back_populates="movie")
@@ -39,7 +39,7 @@ class PriceHistory(SQLModel, table=True):
     product_id: str = Field(index=True)
     price: float
     availability: str | None = None
-    checked_at: datetime = Field(default_factory=datetime.utcnow)
+    checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Relationships
     movie: Movie | None = Relationship(back_populates="price_history")
@@ -55,7 +55,7 @@ class Watchlist(SQLModel, table=True):
     product_id: str = Field(unique=True, index=True)
     target_price: float
     notify_on_availability: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Relationships
     movie: Movie | None = Relationship(back_populates="watchlist_entries")
@@ -72,7 +72,7 @@ class PriceAlert(SQLModel, table=True):
     old_price: float
     new_price: float
     alert_type: str  # 'price_drop', 'back_in_stock', 'target_reached'
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     notified: bool = Field(default=False)
 
     # Relationships
@@ -87,7 +87,7 @@ class IgnoredMovie(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     movie_id: int = Field(foreign_key="movies.id", unique=True)
     product_id: str = Field(unique=True, index=True)
-    ignored_at: datetime = Field(default_factory=datetime.utcnow)
+    ignored_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Relationships
     movie: Movie | None = Relationship(back_populates="ignored_entries")
