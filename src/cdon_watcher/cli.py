@@ -10,21 +10,23 @@ from .config import CONFIG
 from .monitoring_service import PriceMonitor
 
 
-async def run_crawl(max_pages: int) -> None:
+async def run_crawl(max_pages: int, scan_mode: str = "fast") -> None:
     """Run initial crawl of CDON categories."""
-    print("Starting initial crawl...")
+    print(f"Starting {scan_mode} initial crawl...")
     scraper = CDONScraper()
 
     # Crawl Blu-ray category
     await scraper.crawl_category(
         "https://cdon.fi/elokuvat/?facets=property_preset_media_format%3Ablu-ray&q=",
         max_pages=max_pages,
+        scan_mode=scan_mode,
     )
 
     # Crawl 4K Ultra HD category
     await scraper.crawl_category(
         "https://cdon.fi/elokuvat/?facets=property_preset_media_format%3A4k%20ultra%20hd&q=",
         max_pages=max_pages,
+        scan_mode=scan_mode,
     )
 
     print("Crawl complete!")
@@ -82,6 +84,23 @@ def main() -> None:
         default=int(os.environ.get("MAX_PAGES_PER_CATEGORY", 10)),
         help="Maximum pages to crawl per category (default: 10)",
     )
+    crawl_parser.add_argument(
+        "--scan-mode",
+        choices=["fast", "moderate", "slow"],
+        default="fast",
+        help="Scan mode: fast (quick), moderate (development), slow (production)",
+    )
+
+    # Update scan command
+    update_parser = subparsers.add_parser(
+        "update-scan", help="Development scan for quick database updates"
+    )
+    update_parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=int(os.environ.get("MAX_PAGES_PER_CATEGORY", 10)),
+        help="Maximum pages to crawl per category (default: 10)",
+    )
 
     # Monitor command
     subparsers.add_parser("monitor", help="Run price monitor (checks periodically)")
@@ -92,7 +111,10 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "crawl":
-        asyncio.run(run_crawl(args.max_pages))
+        asyncio.run(run_crawl(args.max_pages, args.scan_mode))
+    elif args.command == "update-scan":
+        # Update scan uses moderate mode by default for development
+        asyncio.run(run_crawl(args.max_pages, "moderate"))
     elif args.command == "monitor":
         asyncio.run(run_monitor())
     elif args.command == "web":

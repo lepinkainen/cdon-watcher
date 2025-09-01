@@ -17,6 +17,7 @@ CDON Watcher is a comprehensive price tracking system specifically designed for 
 - **Hybrid scraping architecture** combining Playwright and BeautifulSoup
 - JavaScript-aware scraping for dynamic content
 - Anti-bot protection measures
+- **Multi-speed scanning modes**: Fast, moderate, and slow scanning
 - Rate limiting and stealth techniques
 
 ### 💾 **Robust Data Management**

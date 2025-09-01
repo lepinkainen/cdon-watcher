@@ -1,6 +1,6 @@
 """Unit tests for SQLModel database models."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from src.cdon_watcher.models import (
     DealMovie,
@@ -90,8 +90,8 @@ class TestViewModels:
             production_year=1992,
             tmdb_id=364,
             content_type="movie",
-            first_seen=datetime.utcnow(),
-            last_updated=datetime.utcnow(),
+            first_seen=datetime.now(UTC),
+            last_updated=datetime.now(UTC),
             current_price=19.99,
             lowest_price=15.99,
             highest_price=29.99,
@@ -133,8 +133,8 @@ class TestViewModels:
             production_year=2005,
             tmdb_id=272,
             content_type="movie",
-            first_seen=datetime.utcnow(),
-            last_updated=datetime.utcnow(),
+            first_seen=datetime.now(UTC),
+            last_updated=datetime.now(UTC),
             target_price=15.00,
             current_price=18.99,
             lowest_price=14.99,
@@ -156,8 +156,8 @@ class TestViewModels:
             production_year=None,  # Explicitly None
             tmdb_id=None,
             content_type="movie",
-            first_seen=datetime.utcnow(),
-            last_updated=datetime.utcnow(),
+            first_seen=datetime.now(UTC),
+            last_updated=datetime.now(UTC),
         )
 
         assert movie_with_pricing.production_year is None

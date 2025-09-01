@@ -4,7 +4,7 @@ Hybrid CDON scraper combining listing crawler (Playwright) and product parser (p
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,13 +55,21 @@ class CDONScraper:
         await init_db()
         logger.info(f"Database initialized using SQLModel at {CONFIG['db_path']}")
 
-    async def crawl_category(self, category_url: str, max_pages: int = 5) -> int:
-        """Main crawl workflow: get URLs then parse products, returns count of saved movies"""
-        logger.info(f"Starting hybrid crawl of {category_url}")
+    async def crawl_category(
+        self, category_url: str, max_pages: int = 5, scan_mode: str = "fast"
+    ) -> int:
+        """Main crawl workflow: get URLs then parse products, returns count of saved movies
+
+        Args:
+            category_url: The category URL to crawl
+            max_pages: Maximum number of pages to crawl
+            scan_mode: Scan mode - 'fast', 'moderate', or 'slow'
+        """
+        logger.info(f"Starting {scan_mode} hybrid crawl of {category_url}")
 
         # Step 1: Use listing crawler to get product URLs
         logger.info("Phase 1: Collecting product URLs with Playwright...")
-        product_urls = await self.listing_crawler.crawl_category(category_url, max_pages)
+        product_urls = await self.listing_crawler.crawl_category(category_url, max_pages, scan_mode)
 
         if not product_urls:
             logger.warning("No product URLs found")
@@ -72,6 +80,14 @@ class CDONScraper:
         # Step 2: Use product parser to extract details and save incrementally
         logger.info("Phase 2: Parsing product details and saving incrementally...")
         saved_count = 0
+
+        # Calculate estimated completion time for moderate/slow scans
+        if scan_mode in ["moderate", "slow"]:
+            delay = self._get_product_scan_delay(scan_mode)
+            estimated_hours = (len(product_urls) * delay) / 3600
+            logger.info(
+                f"Estimated completion time: {estimated_hours:.1f} hours for {len(product_urls)} products"
+            )
 
         for i, url in enumerate(product_urls, 1):
             try:
@@ -96,8 +112,23 @@ class CDONScraper:
                 logger.error(f"Error parsing {url}: {e}")
                 continue
 
+            # Add delay between products for moderate/slow scans
+            if scan_mode in ["moderate", "slow"] and i < len(product_urls):
+                delay = self._get_product_scan_delay(scan_mode)
+                logger.debug(f"Waiting {delay}s before next product...")
+                await asyncio.sleep(delay)
+
         logger.info(f"Crawl complete: saved {saved_count} Blu-ray movies to database")
         return saved_count
+
+    def _get_product_scan_delay(self, scan_mode: str) -> int:
+        """Get delay in seconds between processing individual products"""
+        if scan_mode == "moderate":
+            return int(CONFIG["moderate_scan_delay"])
+        elif scan_mode == "slow":
+            return int(CONFIG["slow_scan_delay"])
+        else:
+            return 0  # No delay for fast mode
 
     def is_bluray_format(self, title: str, format: str) -> bool:
         """Check if the item is a Blu-ray or 4K Blu-ray (reuse existing logic)"""
@@ -131,6 +162,17 @@ class CDONScraper:
                 # Use local poster path if available, otherwise fall back to original image_url
                 final_image_url = local_poster_path if local_poster_path else movie.image_url
 
+                # Generate a unique product_id if None (fallback for movies without proper ID)
+                product_id = movie.product_id
+                if not product_id:
+                    # Create a unique identifier based on title and format
+                    import hashlib
+
+                    unique_string = f"{movie.title}_{movie.format}_{movie.url}".lower().replace(
+                        " ", "_"
+                    )
+                    product_id = hashlib.md5(unique_string.encode()).hexdigest()[:16]
+
                 # Check if movie already exists
                 existing_movie = None
                 if movie.product_id:
@@ -148,7 +190,7 @@ class CDONScraper:
 
                 if existing_movie:
                     # Update existing movie
-                    existing_movie.last_updated = datetime.utcnow()
+                    existing_movie.last_updated = datetime.now(UTC)
                     # Update production year if we have it and it's not set
                     if movie.production_year and not existing_movie.production_year:
                         existing_movie.production_year = movie.production_year
@@ -156,7 +198,7 @@ class CDONScraper:
                 else:
                     # Create new movie
                     db_movie = SQLMovie(
-                        product_id=movie.product_id,
+                        product_id=product_id,
                         title=movie.title,
                         format=movie.format,
                         url=movie.url,
@@ -164,8 +206,8 @@ class CDONScraper:
                         production_year=movie.production_year,
                         tmdb_id=tmdb_id,
                         content_type=content_type,
-                        first_seen=datetime.utcnow(),
-                        last_updated=datetime.utcnow(),
+                        first_seen=datetime.now(UTC),
+                        last_updated=datetime.now(UTC),
                     )
                     session.add(db_movie)
 
@@ -174,17 +216,22 @@ class CDONScraper:
                 await session.refresh(db_movie)
 
                 # Add price history
-                price_entry = PriceHistory(
-                    movie_id=db_movie.id,
-                    product_id=movie.product_id,
-                    price=movie.price,
-                    availability=movie.availability,
-                    checked_at=datetime.utcnow(),
-                )
-                session.add(price_entry)
-
-                # Check for price drops
                 if db_movie.id is not None:
+                    # Use the generated product_id if original was None
+                    price_product_id = (
+                        movie.product_id if movie.product_id is not None else product_id
+                    )
+
+                    price_entry = PriceHistory(
+                        movie_id=db_movie.id,
+                        product_id=price_product_id,
+                        price=movie.price,
+                        availability=movie.availability,
+                        checked_at=datetime.now(UTC),
+                    )
+                    session.add(price_entry)
+
+                    # Check for price drops
                     await self.check_price_alerts(session, db_movie.id, movie.price)
 
                 await session.commit()
@@ -235,7 +282,7 @@ class CDONScraper:
                     old_price=old_price,
                     new_price=new_price,
                     alert_type="price_drop",
-                    created_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
                     notified=False,
                 )
                 session.add(price_alert)
@@ -256,7 +303,7 @@ class CDONScraper:
                 old_price=new_price,
                 new_price=new_price,
                 alert_type="target_reached",
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(UTC),
                 notified=False,
             )
             session.add(target_alert)
@@ -272,7 +319,7 @@ class CDONScraper:
                 )
                 movie = result.scalar_one_or_none()
 
-                if movie:
+                if movie and movie.id is not None:
                     # Check if already in watchlist
                     existing_result = await session.execute(
                         select(Watchlist).where(Watchlist.movie_id == movie.id)
@@ -282,14 +329,14 @@ class CDONScraper:
                     if existing_watchlist:
                         # Update existing entry
                         existing_watchlist.target_price = target_price
-                        existing_watchlist.created_at = datetime.utcnow()
+                        existing_watchlist.created_at = datetime.now(UTC)
                     else:
                         # Create new entry
                         watchlist_item = Watchlist(
                             movie_id=movie.id,
                             product_id=movie.product_id,
                             target_price=target_price,
-                            created_at=datetime.utcnow(),
+                            created_at=datetime.now(UTC),
                         )
                         session.add(watchlist_item)
 

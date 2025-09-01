@@ -21,6 +21,14 @@ def load_config() -> dict[str, Any]:
         "db_path": os.environ.get("DB_PATH", "./data/cdon_movies.db"),
         "tmdb_api_key": os.environ.get("TMDB_API_KEY", ""),
         "poster_dir": os.environ.get("POSTER_DIR", "./data/posters"),
+        # Scan mode configurations
+        "scan_mode": os.environ.get("SCAN_MODE", "fast"),  # fast, moderate, slow
+        "fast_scan_delay": int(os.environ.get("FAST_SCAN_DELAY", 2)),  # seconds
+        "moderate_scan_delay": int(
+            os.environ.get("MODERATE_SCAN_DELAY", 180)
+        ),  # seconds (3 minutes)
+        "slow_scan_delay": int(os.environ.get("SLOW_SCAN_DELAY", 1800)),  # seconds (30 minutes)
+        "production_mode": os.environ.get("PRODUCTION_MODE", "false").lower() == "true",
     }
 
 

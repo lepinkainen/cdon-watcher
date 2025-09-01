@@ -20,14 +20,66 @@ uv run python -m cdon_watcher web
 #### Run Initial Crawl
 
 ```bash
-# Using containers
+# Using containers (fast mode)
 podman-compose run --rm crawler
 
-# Or locally with default settings
+# Or locally with default settings (fast mode)
 uv run python -m cdon_watcher crawl
 
 # With custom page limit
 uv run python -m cdon_watcher crawl --max-pages 20
+
+# Different scan modes
+uv run python -m cdon_watcher crawl --scan-mode fast      # Quick scan (default)
+uv run python -m cdon_watcher crawl --scan-mode moderate  # Development scan
+uv run python -m cdon_watcher crawl --scan-mode slow      # Production scan
+
+# Dedicated development scan command
+uv run python -m cdon_watcher update-scan
+```
+
+### Scanning Modes
+
+CDON Watcher supports three scanning modes optimized for different use cases:
+
+#### Fast Scan (Default)
+
+- **Use Case**: Initial database population, one-time crawls
+- **Speed**: 2 seconds between category pages
+- **Best For**: Getting data quickly, development testing
+- **Command**: `uv run python -m cdon_watcher crawl` or `uv run python -m cdon_watcher crawl --scan-mode fast`
+
+#### Moderate Scan
+
+- **Use Case**: Development database updates, quick refreshes
+- **Speed**: 3 minutes between category pages, 3 minutes between products
+- **Best For**: Updating test data without overwhelming the site
+- **Command**: `uv run python -m cdon_watcher crawl --scan-mode moderate` or `uv run python -m cdon_watcher update-scan`
+
+#### Slow Scan (Production)
+
+- **Use Case**: Production monitoring, gentle crawling
+- **Speed**: 30 minutes between category pages, 30 minutes between products
+- **Best For**: Continuous production use without taxing CDON servers
+- **Command**: `uv run python -m cdon_watcher crawl --scan-mode slow`
+
+#### Performance Estimates
+
+- **100 products**: Fast (~3 min), Moderate (~5 hours), Slow (~50 hours)
+- **500 products**: Fast (~15 min), Moderate (~25 hours), Slow (~250 hours)
+
+### Taskfile Shortcuts
+
+```bash
+# Fast scan (default)
+task crawl
+
+# Moderate scan variants
+task crawl-moderate
+task update-scan
+
+# Slow scan
+task crawl-slow
 ```
 
 #### Start Price Monitor

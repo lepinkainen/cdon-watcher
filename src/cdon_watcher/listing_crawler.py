@@ -8,6 +8,8 @@ from typing import Any
 
 from playwright.async_api import Browser, ElementHandle, Page, async_playwright
 
+from .config import CONFIG
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -51,12 +53,24 @@ class ListingCrawler:
         page = await context.new_page()
         return browser, context, page
 
-    async def crawl_category(self, category_url: str, max_pages: int = 10) -> list[str]:
-        """Crawl multiple pages of a category and return list of product URLs"""
+    async def crawl_category(
+        self, category_url: str, max_pages: int = 10, scan_mode: str = "fast"
+    ) -> list[str]:
+        """Crawl multiple pages of a category and return list of product URLs
+
+        Args:
+            category_url: The category URL to crawl
+            max_pages: Maximum number of pages to crawl
+            scan_mode: Scan mode - 'fast', 'moderate', or 'slow'
+        """
         browser, context, page = await self.create_browser()
 
         all_urls = set()  # Use set to avoid duplicates
         empty_page_count = 0
+
+        # Get delay based on scan mode
+        delay = self._get_scan_delay(scan_mode)
+        logger.info(f"Starting {scan_mode} scan with {delay}s delay between pages")
 
         try:
             for page_num in range(1, max_pages + 1):
@@ -90,15 +104,29 @@ class ListingCrawler:
                         f"Found {len(urls)} URLs on page {page_num}, total: {len(all_urls)}"
                     )
 
-                # Respectful delay between pages
-                await asyncio.sleep(2)
+                # Respectful delay between pages based on scan mode
+                if page_num < max_pages:  # Don't delay after last page
+                    await asyncio.sleep(delay)
 
         except Exception as e:
             logger.error(f"Error during crawling: {e}")
         finally:
             await browser.close()
 
+        logger.info(f"Scan complete: collected {len(all_urls)} unique product URLs")
         return list(all_urls)
+
+    def _get_scan_delay(self, scan_mode: str) -> int:
+        """Get delay in seconds based on scan mode"""
+        if scan_mode == "fast":
+            return int(CONFIG["fast_scan_delay"])
+        elif scan_mode == "moderate":
+            return int(CONFIG["moderate_scan_delay"])
+        elif scan_mode == "slow":
+            return int(CONFIG["slow_scan_delay"])
+        else:
+            logger.warning(f"Unknown scan mode '{scan_mode}', using fast mode")
+            return int(CONFIG["fast_scan_delay"])
 
     async def _extract_product_urls_from_page(self, page: Page, url: str) -> list[str]:
         """Extract product URLs from a single listing page with retry logic"""

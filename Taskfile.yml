@@ -147,9 +147,24 @@ tasks:
 
   # CDON Watcher specific tasks
   crawl:
-    desc: Run initial CDON crawl
+    desc: Run initial CDON crawl (fast mode)
     cmds:
       - podman-compose --profile crawler run --rm crawler
+
+  crawl-moderate:
+    desc: Run moderate speed CDON crawl
+    cmds:
+      - uv run python -m cdon_watcher crawl --scan-mode moderate
+
+  crawl-slow:
+    desc: Run slow speed CDON crawl
+    cmds:
+      - uv run python -m cdon_watcher crawl --scan-mode slow
+
+  update-scan:
+    desc: Run development update scan (moderate speed)
+    cmds:
+      - uv run python -m cdon_watcher update-scan
 
   monitor:
     desc: Start price monitoring service
