@@ -41,7 +41,7 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "-v --timeout=60"
+addopts = "--timeout=60"
 timeout = 60
 
 [tool.ruff]

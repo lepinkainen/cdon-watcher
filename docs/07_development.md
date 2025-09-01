@@ -410,7 +410,7 @@ uv run pytest -k "scraper and success"
 [tool:pytest]
 asyncio_mode = auto
 testpaths = tests
-addopts = -v --timeout=60
+addopts = --timeout=60
 timeout = 60
 markers =
     integration: marks tests as integration tests (deselect with '-m "not integration"')

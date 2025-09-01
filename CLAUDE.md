@@ -45,7 +45,7 @@ task test-ci           # Tests with coverage
 ```bash
 # Fast unit tests (no network, preferred for development)
 task test
-# or manually: PYTHONPATH=./src uv run pytest tests/unit/ -v --timeout=30
+# or manually: PYTHONPATH=./src uv run pytest tests/unit/ --timeout=30
 
 # Integration tests (slow, real network requests)
 task test-integration
