@@ -127,7 +127,7 @@ async def api_cheapest_blurays(
     repo: DatabaseRepository = Depends(get_repository),
 ) -> list[MovieWithPricing]:
     """Get cheapest Blu-ray movies."""
-    movies = await repo.get_cheapest_blurays(20)
+    movies = await repo.get_cheapest_blurays(21)
     return movies
 
 
@@ -136,7 +136,7 @@ async def api_cheapest_4k_blurays(
     repo: DatabaseRepository = Depends(get_repository),
 ) -> list[MovieWithPricing]:
     """Get cheapest 4K Blu-ray movies."""
-    movies = await repo.get_cheapest_4k_blurays(20)
+    movies = await repo.get_cheapest_4k_blurays(21)
     return movies
 
 

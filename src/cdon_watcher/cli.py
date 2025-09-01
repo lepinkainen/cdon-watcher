@@ -5,7 +5,6 @@ import asyncio
 import os
 from datetime import datetime
 
-from .cdon_scraper import CDONScraper
 from .config import CONFIG
 from .monitoring_service import PriceMonitor
 
@@ -13,6 +12,9 @@ from .monitoring_service import PriceMonitor
 async def run_crawl(max_pages: int, scan_mode: str = "fast") -> None:
     """Run initial crawl of CDON categories."""
     print(f"Starting {scan_mode} initial crawl...")
+    # Import CDONScraper only when needed for crawling
+    from .cdon_scraper import CDONScraper
+
     scraper = CDONScraper()
 
     # Crawl Blu-ray category
@@ -35,8 +37,7 @@ async def run_crawl(max_pages: int, scan_mode: str = "fast") -> None:
 async def run_monitor() -> None:
     """Run the price monitoring service."""
     print("Starting price monitor...")
-    scraper = CDONScraper()
-    monitor = PriceMonitor(scraper)
+    monitor = PriceMonitor()
 
     while True:
         print(f"\n🔄 Starting price check at {datetime.now()}")

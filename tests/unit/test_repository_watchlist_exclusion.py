@@ -29,6 +29,7 @@ async def test_db_session(temp_db_path, monkeypatch):
     """Create test database session with schema and test data."""
     # Mock config to use our test database
     from src.cdon_watcher.config import CONFIG
+
     monkeypatch.setitem(CONFIG, "db_path", temp_db_path)
 
     # Create a new engine and session factory for our isolated test database
@@ -181,6 +182,7 @@ class TestWatchlistExclusion:
 
         # Remove all watchlist items
         from sqlmodel import delete
+
         await test_db_session.execute(delete(Watchlist))
         await test_db_session.commit()
 
@@ -206,6 +208,7 @@ class TestWatchlistExclusion:
 
         # Get all movies to find the IDs we need
         from sqlmodel import select
+
         result = await test_db_session.execute(select(Movie))
         all_movies = result.scalars().all()
 

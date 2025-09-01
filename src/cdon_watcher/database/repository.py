@@ -271,7 +271,7 @@ class DatabaseRepository:
 
         return [MovieWithPricing.model_validate(dict(row._mapping)) for row in result.all()]
 
-    async def get_cheapest_blurays(self, limit: int = 20) -> list[MovieWithPricing]:
+    async def get_cheapest_blurays(self, limit: int = 21) -> list[MovieWithPricing]:
         """Get cheapest Blu-ray movies."""
         current_price_sq = self._current_price_subquery()
         lowest_price_sq = self._lowest_price_subquery()
@@ -317,7 +317,7 @@ class DatabaseRepository:
 
         return [MovieWithPricing.model_validate(dict(row._mapping)) for row in result.all()]
 
-    async def get_cheapest_4k_blurays(self, limit: int = 20) -> list[MovieWithPricing]:
+    async def get_cheapest_4k_blurays(self, limit: int = 21) -> list[MovieWithPricing]:
         """Get cheapest 4K Blu-ray movies."""
         current_price_sq = self._current_price_subquery()
         lowest_price_sq = self._lowest_price_subquery()
