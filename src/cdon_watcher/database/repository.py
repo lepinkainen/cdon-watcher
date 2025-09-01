@@ -280,6 +280,9 @@ class DatabaseRepository:
         # Subquery for ignored movies
         ignored_movies_sq = select(IgnoredMovie.movie_id)
 
+        # Subquery for watchlisted movies
+        watchlist_movies_sq = select(Watchlist.movie_id)
+
         query = (
             select(
                 Movie.id,
@@ -301,6 +304,7 @@ class DatabaseRepository:
                     Movie.format.ilike("%Blu-ray%"),  # type: ignore[union-attr]
                     ~Movie.format.ilike("%4K%"),  # type: ignore[union-attr]
                     Movie.id.not_in(ignored_movies_sq),  # type: ignore[union-attr]
+                    Movie.id.not_in(watchlist_movies_sq),  # type: ignore[union-attr]
                     current_price_sq.is_not(None),
                 )
             )
@@ -322,6 +326,9 @@ class DatabaseRepository:
         # Subquery for ignored movies
         ignored_movies_sq = select(IgnoredMovie.movie_id)
 
+        # Subquery for watchlisted movies
+        watchlist_movies_sq = select(Watchlist.movie_id)
+
         query = (
             select(
                 Movie.id,
@@ -342,6 +349,7 @@ class DatabaseRepository:
                 and_(
                     Movie.format.ilike("%4K%"),  # type: ignore[union-attr]
                     Movie.id.not_in(ignored_movies_sq),  # type: ignore[union-attr]
+                    Movie.id.not_in(watchlist_movies_sq),  # type: ignore[union-attr]
                     current_price_sq.is_not(None),
                 )
             )
