@@ -206,3 +206,25 @@ tasks:
     cmds:
       - mkdir -p data
       - echo "Development environment ready!"
+
+  # Release and deployment tasks
+  release:
+    desc: Create production release package in release/ directory
+    cmds:
+      - mkdir -p release
+      - cp docker-compose.yml docker-compose.prod.yml .env Dockerfile.base Dockerfile.crawler nginx.conf pyproject.toml uv.lock release/
+      - cp -r scripts release/
+      - cp -r src release/
+      - cp -r data release/
+      - echo "✅ Release package created in release/ directory"
+      - echo "📁 Contents:"
+      - ls -la release/
+      - echo ""
+      - echo "🚀 Transfer to production server:"
+      - echo "   rsync -avz release/ user@vps:/path/to/app/"
+
+  release-clean:
+    desc: Remove the release directory
+    cmds:
+      - rm -rf release
+      - echo "🧹 Release directory cleaned up"

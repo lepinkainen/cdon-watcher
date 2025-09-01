@@ -51,10 +51,10 @@ cp .env.example .env
 chmod +x scripts/*.sh
 ```
 
-### Running on macOS with Podman
+### Running on macOS with Podman (Development)
 
 ```bash
-# Start development environment
+# Start development environment (crawler won't run automatically)
 ./scripts/run-dev.sh
 
 # Or manually:
@@ -62,10 +62,10 @@ podman machine start  # If not already running
 podman-compose up -d
 ```
 
-### Running on Linux with Docker
+### Running on Linux with Docker (Production)
 
 ```bash
-# Start production environment
+# Start production environment (crawler runs automatically)
 ./scripts/run-prod.sh
 
 # Or manually:
@@ -74,16 +74,34 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 ## Usage
 
+### Environment-Specific Behavior
+
+**Development (macOS/Podman):**
+
+- Crawler runs **on-demand only** (won't start automatically)
+- Monitor checks prices every 1 hour (faster for testing)
+- Source code is mounted for hot reload
+
+**Production (Linux/Docker):**
+
+- Crawler runs **automatically** on startup (slow mode for respectful crawling)
+- Monitor checks prices every 6 hours
+- Optimized for performance and stability
+
 ### Initial Crawl
 
 Populate your database with movies:
 
 ```bash
-# Using compose
-podman-compose run --rm crawler
+# Development: Manual crawler run
+podman-compose --profile crawler run --rm crawler
 
-# Or directly
-podman run --rm -v ./data:/app/data cdon-tracker python monitor.py crawl
+# Production: Crawler runs automatically with the system
+# Manual run if needed:
+docker-compose --profile crawler run --rm crawler
+
+# Or directly (any environment)
+python -m cdon_watcher crawl
 ```
 
 ### Access Web Dashboard
@@ -92,7 +110,10 @@ Open <http://localhost:8080> in your browser
 
 ### Monitor Prices
 
-The monitor service runs automatically in the background, checking prices every 6 hours (configurable).
+The monitor service runs automatically in the background:
+
+- **Development**: Checks prices every 1 hour
+- **Production**: Checks prices every 6 hours (configurable)
 
 ### View Logs
 

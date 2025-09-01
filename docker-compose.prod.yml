@@ -1,5 +1,4 @@
 # docker-compose.prod.yml (for production on VPS)
-version: '3.8'
 
 services:
   web:
@@ -20,6 +19,17 @@ services:
           memory: 1G
         reservations:
           memory: 512M
+
+  # Production crawler settings (runs automatically)
+  crawler:
+    environment:
+      - SCAN_MODE=slow # Use slow mode for production (respectful crawling)
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
 
   # Optional: Nginx reverse proxy for production
   nginx:

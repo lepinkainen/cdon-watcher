@@ -56,3 +56,4 @@ cdon-migration-*.tar.gz
 tmp/
 temp/
 .playwright-mcp/
+release/

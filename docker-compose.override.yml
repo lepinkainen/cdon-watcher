@@ -1,5 +1,4 @@
 # docker-compose.override.yml (for development with Podman)
-version: '3.8'
 
 services:
   web:
@@ -29,3 +28,6 @@ services:
       - ./src:/app/src
     # Override command to use src path when volume mounted
     command: python -m cdon_watcher crawl
+    # Prevent crawler from running automatically in development
+    profiles:
+      - crawler

@@ -94,9 +94,10 @@ The system is built as a **multi-service architecture**:
 
 #### **Crawler Service**
 
-- On-demand data collection
-- Initial database population
-- Incremental updates and maintenance
+- **Environment-aware execution**: Runs automatically in production, on-demand in development
+- Initial database population and incremental updates
+- Multi-speed scanning modes (fast/moderate/slow) for different use cases
+- Respectful crawling with configurable delays
 
 ### Database Design
 

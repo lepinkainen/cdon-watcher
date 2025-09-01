@@ -4,24 +4,44 @@ This guide covers how to use CDON Watcher for price monitoring and management of
 
 ## Command Line Interface
 
+### Environment-Specific Behavior
+
+**Development (macOS/Podman):**
+
+- Crawler runs **on-demand only** (won't start automatically with `podman-compose up`)
+- Monitor checks prices every 1 hour (faster for testing)
+- Source code is mounted for hot reload
+
+**Production (Linux/Docker):**
+
+- Crawler runs **automatically** on startup (slow mode for respectful crawling)
+- Monitor checks prices every 6 hours
+- Optimized for performance and stability
+
 ### Basic Commands
 
 #### Start Web Dashboard
 
 ```bash
-# Using containers (recommended)
+# Development (macOS/Podman)
 podman-compose up -d web
 # Access at http://localhost:8080
 
-# Or locally
+# Production (Linux/Docker)
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d web
+
+# Or locally (any environment)
 uv run python -m cdon_watcher web
 ```
 
 #### Run Initial Crawl
 
 ```bash
-# Using containers (fast mode)
-podman-compose run --rm crawler
+# Development: Manual crawler run (required)
+podman-compose --profile crawler run --rm crawler
+
+# Production: Crawler runs automatically, manual run if needed
+docker-compose --profile crawler run --rm crawler
 
 # Or locally with default settings (fast mode)
 uv run python -m cdon_watcher crawl

@@ -1,5 +1,4 @@
 # docker-compose.yml
-version: '3.8'
 
 services:
   # Web dashboard service
@@ -76,8 +75,6 @@ services:
       - PYTHONPATH=/app
       - PLAYWRIGHT_BROWSERS_PATH=/app/playwright_browsers
     command: python -m cdon_watcher crawl
-    profiles:
-      - crawler
     networks:
       - cdon-net
 
