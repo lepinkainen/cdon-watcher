@@ -87,9 +87,9 @@ tasks:
       - PYTHONPATH={{.PWD}}/src uv run pytest tests/ --timeout=180
 
   lint-python:
-    desc: Lint Python code
+    desc: Lint Python code with auto-fix
     cmds:
-      - uv run ruff check .
+      - uv run ruff check --fix .
       - uv run mypy src
 
   lint-python-fix:
