@@ -126,8 +126,8 @@ async function loadCheapest4KBlurays() {
 function createMovieCard(movie, showTarget = false, showIgnore = false) {
   const priceChange = movie.price_change || 0
   const priceClass =
-    priceChange < 0 ? 'price-down' : priceChange > 0 ? 'price-up' : ''
-  const priceSymbol = priceChange < 0 ? '↓' : priceChange > 0 ? '↑' : ''
+    priceChange < 0 ? 'price-up' : priceChange > 0 ? 'price-down' : ''
+  const priceSymbol = priceChange < 0 ? '↑' : priceChange > 0 ? '↓' : ''
 
   // Create poster image HTML
   let posterHtml = ''
