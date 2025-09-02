@@ -71,6 +71,7 @@ services:
       - DB_PATH=/app/data/cdon_movies.db
       - POSTER_DIR=/app/data/posters
       - TMDB_API_KEY=${TMDB_API_KEY:-}
+      - MAX_PAGES_PER_CATEGORY=${MAX_PAGES_PER_CATEGORY:-10}
       - TZ=Europe/Helsinki
       - PYTHONPATH=/app
       - PLAYWRIGHT_BROWSERS_PATH=/app/playwright_browsers

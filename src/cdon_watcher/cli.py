@@ -12,6 +12,7 @@ from .monitoring_service import PriceMonitor
 async def run_crawl(max_pages: int, scan_mode: str = "fast") -> None:
     """Run initial crawl of CDON categories."""
     print(f"Starting {scan_mode} initial crawl...")
+    print(f"📄 Pages per category: {max_pages} (Total: {max_pages * 2} pages across 2 categories)")
     # Import CDONScraper only when needed for crawling
     from .cdon_scraper import CDONScraper
 
