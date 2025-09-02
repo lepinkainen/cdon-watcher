@@ -128,7 +128,6 @@ CHECK_INTERVAL_HOURS=6
 MAX_PAGES_PER_CATEGORY=10
 
 # Notifications (optional)
-EMAIL_ENABLED=false
 DISCORD_WEBHOOK=
 
 # TMDB Integration (optional)
@@ -152,14 +151,6 @@ CHECK_INTERVAL_HOURS=6
 MAX_PAGES_PER_CATEGORY=10
 REQUEST_TIMEOUT=30
 MAX_RETRIES=3
-
-# Email Notifications
-EMAIL_ENABLED=true
-EMAIL_FROM=your-email@gmail.com
-EMAIL_TO=your-email@gmail.com
-EMAIL_PASSWORD=your-app-password
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
 
 # Discord Notifications
 DISCORD_WEBHOOK=https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN

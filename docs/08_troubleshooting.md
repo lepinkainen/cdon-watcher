@@ -445,46 +445,6 @@ sudo chown $USER:$USER data/cdon_movies.db
 
 ### Notification Issues
 
-#### Issue: Email notifications not working
-
-**Symptoms:**
-
-- No emails received
-- SMTP errors in logs
-
-**Solutions:**
-
-1. **Check email configuration:**
-
-   ```bash
-   # Verify environment variables
-   env | grep EMAIL
-   ```
-
-2. **Test SMTP connection:**
-
-   ```bash
-   telnet smtp.gmail.com 587
-   # Should connect successfully
-   ```
-
-3. **Check Gmail app password:**
-   - Generate new app password
-   - Update `.env` file
-   - Restart services
-
-4. **Test email manually:**
-
-   ```bash
-   python -c "
-   import smtplib
-   server = smtplib.SMTP('smtp.gmail.com', 587)
-   server.starttls()
-   server.login('your-email@gmail.com', 'your-app-password')
-   print('SMTP OK')
-   "
-   ```
-
 #### Issue: Discord webhooks failing
 
 **Symptoms:**
@@ -749,8 +709,8 @@ ssl.SSLCertVerificationError
 2. **Check required fields:**
 
    ```bash
-   # For email notifications
-   if [ -z "$EMAIL_FROM" ]; then echo "EMAIL_FROM not set"; fi
+   # For Discord notifications
+   if [ -z "$DISCORD_WEBHOOK" ]; then echo "DISCORD_WEBHOOK not set"; fi
    ```
 
 3. **Use configuration validation:**
@@ -896,7 +856,7 @@ When reporting issues, include:
 2. **Configuration (sanitized):**
 
    ```bash
-   env | grep -E "(API_|DB_|EMAIL_|DISCORD_)" | head -10
+   env | grep -E "(API_|DB_|DISCORD_)" | head -10
    ```
 
 3. **Error logs:**

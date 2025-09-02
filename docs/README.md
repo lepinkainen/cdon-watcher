@@ -44,7 +44,7 @@ If you're new to CDON Watcher, follow this recommended reading order:
 - **Price Monitoring**: Track Blu-ray and 4K Blu-ray prices
 - **Watchlist Management**: Set target prices and get alerts
 - **Web Dashboard**: User-friendly interface for monitoring
-- **Notifications**: Email and Discord alert configuration
+- **Notifications**: Discord alert configuration
 
 ### For Developers
 

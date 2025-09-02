@@ -521,7 +521,7 @@ src/cdon_watcher/
 ├── listing_crawler.py  # Playwright category crawler
 ├── product_parser.py   # BeautifulSoup product parser
 ├── monitoring_service.py # Price monitoring logic
-├── notifications.py    # Email/Discord notifications
+├── notifications.py    # Discord notifications
 ├── tmdb_service.py     # TMDB integration
 ├── database/           # Database layer
 │   ├── __init__.py
@@ -575,8 +575,6 @@ class NotificationFactory:
         """Create appropriate notification service."""
         if config.get('discord_webhook'):
             return DiscordNotificationService(config['discord_webhook'])
-        elif config.get('email_enabled'):
-            return EmailNotificationService(config)
         else:
             return NullNotificationService()
 ```

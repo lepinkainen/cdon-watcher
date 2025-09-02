@@ -310,19 +310,6 @@ Each alert includes:
 
 ### Notification Settings
 
-#### Email Notifications
-
-Configure in `.env` file:
-
-```env
-EMAIL_ENABLED=true
-EMAIL_FROM=your-email@gmail.com
-EMAIL_TO=your-email@gmail.com
-EMAIL_PASSWORD=your-app-password
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-```
-
 #### Discord Notifications
 
 ```env

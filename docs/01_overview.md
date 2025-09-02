@@ -36,8 +36,8 @@ CDON Watcher is a comprehensive price tracking system specifically designed for 
 
 ### 📧 **Notification System**
 
-- Email notifications for price drops
 - Discord webhook integration
+- Console output for price alerts
 - Configurable alert thresholds
 - Target price monitoring
 

@@ -83,50 +83,6 @@ CDON Watcher uses **environment variables** as the primary configuration mechani
 
 ### Notification Configuration
 
-#### Email Notifications
-
-##### `EMAIL_ENABLED`
-
-- **Description**: Enable email notifications
-- **Default**: `false`
-- **Example**: `true`
-- **Notes**: Must be `true` to send email notifications
-
-##### `EMAIL_FROM`
-
-- **Description**: Sender email address
-- **Default**: (empty)
-- **Example**: `your-email@gmail.com`
-- **Notes**: Must be a valid email address
-
-##### `EMAIL_TO`
-
-- **Description**: Recipient email address
-- **Default**: (empty)
-- **Example**: `alerts@yourdomain.com`
-- **Notes**: Where price alerts are sent
-
-##### `EMAIL_PASSWORD`
-
-- **Description**: Email account password or app password
-- **Default**: (empty)
-- **Example**: `your-app-password`
-- **Notes**: Use app passwords for Gmail, not account password
-
-##### `SMTP_SERVER`
-
-- **Description**: SMTP server hostname
-- **Default**: `smtp.gmail.com`
-- **Example**: `smtp.outlook.com`
-- **Notes**: Common providers: Gmail, Outlook, Yahoo
-
-##### `SMTP_PORT`
-
-- **Description**: SMTP server port
-- **Default**: `587` (TLS)
-- **Example**: `465` (SSL)
-- **Notes**: 587 for TLS, 465 for SSL, 25 for unencrypted
-
 #### Discord Notifications
 
 ##### `DISCORD_WEBHOOK`
@@ -185,14 +141,6 @@ MAX_PAGES_PER_CATEGORY=10
 REQUEST_TIMEOUT=30
 MAX_RETRIES=3
 
-# Email Notifications
-EMAIL_ENABLED=true
-EMAIL_FROM=your-email@gmail.com
-EMAIL_TO=your-email@gmail.com
-EMAIL_PASSWORD=your-app-password
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-
 # Discord Notifications
 DISCORD_WEBHOOK=https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN
 
@@ -226,7 +174,6 @@ API_HOST=0.0.0.0
 ENABLE_QUERY_LOGGING=false
 LOG_LEVEL=WARNING
 CHECK_INTERVAL_HOURS=6
-EMAIL_ENABLED=true
 ```
 
 #### Container Configuration
@@ -259,7 +206,7 @@ from cdon_watcher.config import CONFIG
 # Access configuration values
 db_path = CONFIG['db_path']
 api_port = CONFIG['api_port']
-email_enabled = CONFIG['email_enabled']
+discord_webhook = CONFIG['discord_webhook']
 ```
 
 ### Dynamic Configuration
@@ -274,47 +221,6 @@ os.environ['CHECK_INTERVAL_HOURS'] = '2'
 # Reload configuration
 from cdon_watcher.config import load_config
 CONFIG = load_config()
-```
-
-## Email Configuration Examples
-
-### Gmail Setup
-
-```env
-EMAIL_ENABLED=true
-EMAIL_FROM=your-email@gmail.com
-EMAIL_TO=your-email@gmail.com
-EMAIL_PASSWORD=your-app-specific-password
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-```
-
-**Setup Steps:**
-
-1. Enable 2-factor authentication on Gmail
-2. Generate app password: [Google Account Settings](https://myaccount.google.com/apppasswords)
-3. Use app password, not account password
-
-### Outlook Setup
-
-```env
-EMAIL_ENABLED=true
-EMAIL_FROM=your-email@outlook.com
-EMAIL_TO=your-email@outlook.com
-EMAIL_PASSWORD=your-account-password
-SMTP_SERVER=smtp-mail.outlook.com
-SMTP_PORT=587
-```
-
-### Custom SMTP Setup
-
-```env
-EMAIL_ENABLED=true
-EMAIL_FROM=noreply@yourdomain.com
-EMAIL_TO=alerts@yourdomain.com
-EMAIL_PASSWORD=your-smtp-password
-SMTP_SERVER=mail.yourdomain.com
-SMTP_PORT=587
 ```
 
 ## Discord Webhook Setup
@@ -421,7 +327,6 @@ MAX_PAGES_PER_CATEGORY=15
 
 Some settings are required for specific features:
 
-- **Email**: `EMAIL_FROM`, `EMAIL_TO`, `EMAIL_PASSWORD` (when `EMAIL_ENABLED=true`)
 - **Discord**: `DISCORD_WEBHOOK` (when using Discord notifications)
 - **TMDB**: `TMDB_API_KEY` (when using TMDB integration)
 
@@ -431,14 +336,6 @@ Some settings are required for specific features:
 def validate_config(config: dict) -> list[str]:
     """Validate configuration and return list of errors."""
     errors = []
-
-    if config['email_enabled']:
-        if not config['email_from']:
-            errors.append("EMAIL_FROM is required when EMAIL_ENABLED=true")
-        if not config['email_to']:
-            errors.append("EMAIL_TO is required when EMAIL_ENABLED=true")
-        if not config['email_password']:
-            errors.append("EMAIL_PASSWORD is required when EMAIL_ENABLED=true")
 
     if config['discord_webhook'] and not config['discord_webhook'].startswith('https://discord.com/api/webhooks/'):
         errors.append("DISCORD_WEBHOOK must be a valid Discord webhook URL")
@@ -524,16 +421,6 @@ ls -ld $(dirname $DB_PATH)
 python -c "import sqlite3; sqlite3.connect('$DB_PATH').close(); print('OK')"
 ```
 
-#### Email Not Working
-
-```bash
-# Test SMTP connection
-telnet $SMTP_SERVER $SMTP_PORT
-
-# Check credentials
-# Try sending test email manually
-```
-
 #### Webhook Not Working
 
 ```bash
@@ -559,8 +446,8 @@ python -c "from cdon_watcher.config import load_config; print(load_config())"
 python -c "
 from cdon_watcher.config import CONFIG
 errors = []
-if CONFIG['email_enabled'] and not CONFIG['email_from']:
-    errors.append('Missing EMAIL_FROM')
+if CONFIG['discord_webhook'] and not CONFIG['discord_webhook'].startswith('https://discord.com/'):
+    errors.append('Invalid DISCORD_WEBHOOK')
 print('Configuration errors:', errors)
 "
 ```

@@ -18,12 +18,6 @@ class TestConfigLoading:
 
             # Check default values
             assert config["check_interval_hours"] == 6
-            assert config["email_enabled"] is False
-            assert config["email_from"] == ""
-            assert config["email_to"] == ""
-            assert config["email_password"] == ""
-            assert config["smtp_server"] == "smtp.gmail.com"
-            assert config["smtp_port"] == 587
             assert config["discord_webhook"] is None
             assert config["api_host"] == "0.0.0.0"
             assert config["api_port"] == 8080
@@ -36,12 +30,6 @@ class TestConfigLoading:
         """Test configuration loading with custom environment values."""
         custom_env = {
             "CHECK_INTERVAL_HOURS": "12",
-            "EMAIL_ENABLED": "true",
-            "EMAIL_FROM": "test@example.com",
-            "EMAIL_TO": "user@example.com",
-            "EMAIL_PASSWORD": "secret123",
-            "SMTP_SERVER": "smtp.custom.com",
-            "SMTP_PORT": "465",
             "DISCORD_WEBHOOK": "https://discord.com/webhook/123",
             "API_HOST": "127.0.0.1",
             "API_PORT": "3000",
@@ -56,12 +44,6 @@ class TestConfigLoading:
 
             # Check custom values
             assert config["check_interval_hours"] == 12
-            assert config["email_enabled"] is True
-            assert config["email_from"] == "test@example.com"
-            assert config["email_to"] == "user@example.com"
-            assert config["email_password"] == "secret123"
-            assert config["smtp_server"] == "smtp.custom.com"
-            assert config["smtp_port"] == 465
             assert config["discord_webhook"] == "https://discord.com/webhook/123"
             assert config["api_host"] == "127.0.0.1"
             assert config["api_port"] == 3000
@@ -86,9 +68,9 @@ class TestConfigLoading:
     )
     def test_boolean_conversion(self, env_value: str, expected: bool) -> None:
         """Test boolean environment variable conversion."""
-        with patch.dict(os.environ, {"EMAIL_ENABLED": env_value}, clear=True):
+        with patch.dict(os.environ, {"API_DEBUG": env_value}, clear=True):
             config = load_config()
-            assert config["email_enabled"] is expected
+            assert config["api_debug"] is expected
 
     @pytest.mark.parametrize(
         "env_value,expected",
@@ -115,7 +97,6 @@ class TestConfigLoading:
         """Test configuration loading with mixed environment variables."""
         mixed_env = {
             "CHECK_INTERVAL_HOURS": "8",
-            "EMAIL_ENABLED": "true",
             "API_DEBUG": "false",
             "DB_PATH": "/custom/db.sqlite",
             # Leave others as defaults
@@ -126,12 +107,10 @@ class TestConfigLoading:
 
             # Check overridden values
             assert config["check_interval_hours"] == 8
-            assert config["email_enabled"] is True
             assert config["api_debug"] is False
             assert config["db_path"] == "/custom/db.sqlite"
 
             # Check default values still apply
-            assert config["smtp_server"] == "smtp.gmail.com"
             assert config["api_host"] == "0.0.0.0"
             assert config["poster_dir"] == "./data/posters"
 
@@ -141,7 +120,6 @@ class TestConfigLoading:
         with patch.dict(os.environ, {}, clear=True):
             config = load_config()
             assert config["discord_webhook"] is None
-            assert config["email_from"] == ""
             assert config["tmdb_api_key"] == ""
 
         # Set DISCORD_WEBHOOK to empty string
