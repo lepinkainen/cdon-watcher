@@ -44,6 +44,7 @@ CREATE TABLE movies (
     format TEXT,
     url TEXT,
     image_url TEXT,
+    production_year INTEGER,
     tmdb_id INTEGER,
     content_type TEXT DEFAULT 'movie',
     first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -67,6 +68,7 @@ CREATE INDEX idx_movies_tmdb_id ON movies(tmdb_id);
 - `format`: Media format (Blu-ray, 4K Blu-ray, etc.)
 - `url`: CDON product page URL
 - `image_url`: Movie poster image URL
+- `production_year`: Year the movie was produced
 - `tmdb_id`: The Movie Database ID for metadata
 - `content_type`: Content type (default: 'movie')
 - `first_seen`: When movie was first discovered
@@ -265,6 +267,7 @@ class Movie(SQLModel, table=True):
     format: str | None = None
     url: str | None = None
     image_url: str | None = None
+    production_year: int | None = None
     tmdb_id: int | None = None
     content_type: str = Field(default="movie")
     first_seen: datetime = Field(default_factory=datetime.utcnow)
@@ -369,6 +372,7 @@ class MovieWithPricing(SQLModel):
     format: str | None = None
     url: str | None = None
     image_url: str | None = None
+    production_year: int | None = None
     tmdb_id: int | None = None
     content_type: str = "movie"
     first_seen: datetime
@@ -392,6 +396,7 @@ class DealMovie(SQLModel):
     format: str | None = None
     url: str | None = None
     image_url: str | None = None
+    production_year: int | None = None
     tmdb_id: int | None = None
     current_price: float
     previous_price: float
@@ -414,6 +419,7 @@ class WatchlistMovie(SQLModel):
     format: str | None = None
     url: str | None = None
     image_url: str | None = None
+    production_year: int | None = None
     tmdb_id: int | None = None
     content_type: str = "movie"
     first_seen: datetime

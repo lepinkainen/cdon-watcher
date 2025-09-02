@@ -513,6 +513,7 @@ Brief description of changes
 src/cdon_watcher/
 ├── __init__.py          # Package initialization
 ├── __main__.py          # Module entry point
+├── add_test_case.py    # Helper script to add new test cases
 ├── cli.py              # Command-line interface
 ├── config.py           # Configuration management
 ├── models.py           # SQLModel database models
@@ -526,6 +527,7 @@ src/cdon_watcher/
 ├── database/           # Database layer
 │   ├── __init__.py
 │   ├── connection.py   # Database connection setup
+│   ├── migrations/       # Database migration scripts
 │   └── repository.py   # Data access layer
 ├── web/               # Web application
 │   ├── __init__.py
@@ -673,7 +675,8 @@ engine = create_async_engine(
 def validate_product_id(product_id: str) -> bool:
     """Validate CDON product ID format."""
     import re
-    pattern = r'^[A-Z0-9_]{1,50}$'
+    pattern = r'^[A-Z0-9_]{1,50}
+
     return bool(re.match(pattern, product_id))
 
 def sanitize_url(url: str) -> str:

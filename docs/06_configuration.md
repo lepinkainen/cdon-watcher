@@ -81,6 +81,13 @@ CDON Watcher uses **environment variables** as the primary configuration mechani
 - **Example**: `5`
 - **Notes**: Helps with temporary network issues
 
+#### `PLAYWRIGHT_BROWSERS_PATH`
+
+- **Description**: Path to Playwright browsers for the crawler service.
+- **Default**: `/app/playwright_browsers`
+- **Example**: `/app/playwright_browsers`
+- **Notes**: Used in containerized environments.
+
 ### Notification Configuration
 
 #### Discord Notifications
@@ -118,6 +125,22 @@ CDON Watcher uses **environment variables** as the primary configuration mechani
 - **Default**: `INFO`
 - **Example**: `DEBUG`
 - **Notes**: Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+#### `PRODUCTION_MODE`
+
+- **Description**: Set to "true" in production environments.
+- **Default**: `false`
+- **Example**: `true`
+- **Notes**: May disable certain development features.
+
+### Service Configuration
+
+#### `SERVICE_MODE`
+
+- **Description**: Determines which service to run.
+- **Default**: `web`
+- **Example**: `monitor`, `crawl`
+- **Notes**: Used internally by Docker to start the correct service.
 
 ## Configuration File Format
 
@@ -174,6 +197,7 @@ API_HOST=0.0.0.0
 ENABLE_QUERY_LOGGING=false
 LOG_LEVEL=WARNING
 CHECK_INTERVAL_HOURS=6
+PRODUCTION_MODE=true
 ```
 
 #### Container Configuration
@@ -182,6 +206,7 @@ CHECK_INTERVAL_HOURS=6
 # Container-specific paths
 DB_PATH=/app/data/cdon_movies.db
 POSTER_DIR=/app/data/posters
+PLAYWRIGHT_BROWSERS_PATH=/app/playwright_browsers
 
 # Container networking
 API_HOST=0.0.0.0
@@ -204,9 +229,9 @@ Configuration values are loaded in this order (last wins):
 from cdon_watcher.config import CONFIG
 
 # Access configuration values
-db_path = CONFIG['db_path']
-api_port = CONFIG['api_port']
-discord_webhook = CONFIG['discord_webhook']
+db_path = CONFIG["db_path"]
+api_port = CONFIG["api_port"]
+discord_webhook = CONFIG["discord_webhook"]
 ```
 
 ### Dynamic Configuration
@@ -315,6 +340,7 @@ PLAYWRIGHT_HEADLESS=false
 API_DEBUG=false
 LOG_LEVEL=WARNING
 ENABLE_QUERY_LOGGING=false
+PRODUCTION_MODE=true
 
 # Performance tuning
 CHECK_INTERVAL_HOURS=4
@@ -399,7 +425,7 @@ python -c "import dotenv; dotenv.load_dotenv(); print('OK')"
 
 ```bash
 # Check current environment
-env | grep -E "(DB_PATH|API_PORT|EMAIL)"
+env | grep -E "(DB_PATH|API_PORT|DISCORD_WEBHOOK)"
 
 # Set environment variable
 export API_PORT=3000
