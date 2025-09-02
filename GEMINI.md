@@ -8,7 +8,7 @@ The system is designed to be deployed with Docker, providing a web dashboard to 
 
 ## Key Technologies
 
-- **Backend:** Python 3.11, Flask
+- **Backend:** Python 3.11, FastAPI, SQLModel
 - **Scraping:** Playwright, Requests, BeautifulSoup
 - **Database:** SQLite
 - **Deployment:** Docker, Docker Compose (or Podman, podman-compose)
@@ -23,7 +23,7 @@ The application utilizes a hybrid scraping architecture to efficiently gather da
 - **`product_parser.py`**: A lightweight and efficient parser using `requests` and `BeautifulSoup`. It takes a product URL, fetches the static HTML, and parses it to extract details like title, price, and movie format. This avoids the overhead of a full browser for simple pages.
 - **`cdon_scraper.py`**: The orchestrator that combines the two components above. It gets URLs from the `listing_crawler` and passes them to the `product_parser` for processing, then stores the results in the database.
 - **`monitor.py`**: The main entry point for the application, which can be run in three modes:
-  - `web`: Starts the Flask web server for the user-facing dashboard.
+  - `web`: Starts the FastAPI web server for the user-facing dashboard.
   - `monitor`: Runs the background price monitoring service.
   - `crawl`: Executes the one-time crawl to populate the database.
 
@@ -31,7 +31,7 @@ The application utilizes a hybrid scraping architecture to efficiently gather da
 
 The `docker-compose.yml` defines three main services:
 
-- **`web`**: Runs the Flask web application, serving the dashboard on port 8080.
+- **`web`**: Runs the FastAPI web application, serving the dashboard on port 8080.
 - **`monitor`**: Runs the background price checking service, which periodically checks for updates.
 - **`crawler`**: A one-time service profile for running the main scraper (`cdon_scraper.py`) to populate the database.
 
@@ -41,7 +41,7 @@ The `docker-compose.yml` defines three main services:
 2. **Parse**: For each URL, `product_parser.py` (Requests + BeautifulSoup) fetches and parses the product page to extract movie details.
 3. **Store**: The extracted data is saved to the SQLite database (`data/cdon_movies.db`).
 4. **Monitor**: The `monitor` service runs in the background, periodically checking prices of items in the database and sending alerts for price drops.
-5. **View**: The `web` service provides a Flask-based dashboard to view the collected data, watchlist, and alerts.
+5. **View**: The `web` service provides a FastAPI-based dashboard to view the collected data, watchlist, and alerts.
 
 ## Development Workflows
 
@@ -50,13 +50,11 @@ This project uses `uv` for managing dependencies and running scripts.
 ### Environment Setup
 
 1. **Install dependencies:**
-
    ```bash
    uv sync --extra test
    ```
 
 2. **Install Playwright browser:**
-
    ```bash
    uv run playwright install chromium
    ```

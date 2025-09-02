@@ -4,8 +4,8 @@ services:
   web:
     # Development-specific settings
     environment:
-      - FLASK_DEBUG=true
-      - FLASK_PORT=8080
+      - API_DEBUG=true
+      - API_PORT=8080
     volumes:
       # Mount source code for hot reload in development
       - ./src:/app/src

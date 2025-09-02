@@ -4,7 +4,7 @@ services:
   web:
     # Production settings
     environment:
-      - FLASK_DEBUG=false
+      - API_DEBUG=false
     deploy:
       resources:
         limits:

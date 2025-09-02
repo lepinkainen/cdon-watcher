@@ -479,7 +479,7 @@ class TestHTTPMethods:
         assert response.status_code == 200
 
         # Should not accept GET on specific watchlist item path
-        # (This would be handled by Flask routing)
+        # (This would be handled by FastAPI routing)
 
 
 class TestErrorResponseContract:

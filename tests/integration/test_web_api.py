@@ -339,7 +339,7 @@ class TestCORSHeaders:
         response = client.get("/api/stats")
         assert response.status_code == 200
 
-        # Check for CORS headers (flask-cors should add these)
+        # Check for CORS headers (FastAPI CORS should add these)
         dict(response.headers)
         # Note: In testing mode, CORS headers might not be added
         # This test documents expected behavior for production

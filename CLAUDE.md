@@ -191,3 +191,11 @@ Refer to `llm-shared/` submodule for:
 - **Python conventions**: `languages/python.md` (libraries, tools, patterns)
 - **Shell tools**: `shell_commands.md` (use `rg` instead of `grep`, `fd` instead of `find`)
 - **GitHub workflow**: `GITHUB.md` (issue management)
+
+### Critical Implementation Notes
+
+- **TMDB Integration**: Movie posters and metadata fetched from TMDB API (key in `TMDB_API_KEY` env var)
+- **Test Management**: Use `add_test_case.py` to manage test URLs in `test_data.json` for regression testing
+- **Container Platform Detection**: Scripts auto-detect Podman (macOS dev) vs Docker (Linux prod)
+- **Scan Modes**: Three speed modes (fast/moderate/slow) configured via `SCAN_MODE` environment variable
+- **Repository Pattern**: Database operations follow async repository pattern in `database/repository.py`
