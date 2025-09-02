@@ -162,7 +162,7 @@ function createMovieCard(movie, showTarget = false, showIgnore = false) {
             }
             ${posterHtml}
             <div class="movie-info">
-                <div class="movie-title">${movie.title}</div>
+                <div class="movie-title">${movie.title}${movie.production_year ? ' (' + movie.production_year + ')' : ''}</div>
                 <span class="movie-format">${movie.format}</span>
                 <div class="price-info">
                     <span class="current-price">€${
