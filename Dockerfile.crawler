@@ -24,19 +24,12 @@ RUN uv pip install --system --no-cache -e .
 # Runtime stage
 FROM python:3-slim as runtime
 
-# Install only runtime system dependencies for Playwright chromium
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        libnss3 \
-        libatk1.0-0 \
-        libatk-bridge2.0-0 \
-        libdrm2 \
-        libxcomposite1 \
-        libxdamage1 \
-        libxrandr2 \
-        libgbm1 \
-        libxss1 \
-        libasound2 && \
+# Copy Python packages from builder first (to have playwright command available)
+COPY --from=builder /usr/local/lib/python3.13/site-packages/ /usr/local/lib/python3.13/site-packages/
+COPY --from=builder /usr/local/bin/ /usr/local/bin/
+
+# Install Playwright system dependencies using official command
+RUN playwright install-deps chromium && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
@@ -44,10 +37,6 @@ RUN apt-get update && \
 RUN useradd -m -u 1000 tracker
 
 WORKDIR /app
-
-# Copy Python packages from builder (use dynamic path matching)
-COPY --from=builder /usr/local/lib/python3.13/site-packages/ /usr/local/lib/python3.13/site-packages/
-COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
 # Copy application files
 COPY --chown=tracker:tracker src/ /app/src/

@@ -212,7 +212,7 @@ tasks:
     desc: Create production release package in release/ directory
     cmds:
       - mkdir -p release
-      - cp docker-compose.yml docker-compose.prod.yml .env Dockerfile.base Dockerfile.crawler nginx.conf pyproject.toml uv.lock release/
+      - cp docker-compose.yml docker-compose.prod.yml Dockerfile.base Dockerfile.crawler nginx.conf pyproject.toml uv.lock release/
       - cp -r scripts release/
       - cp -r src release/
       - cp -r data release/
