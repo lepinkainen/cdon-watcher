@@ -215,7 +215,8 @@ tasks:
       - cp docker-compose.yml docker-compose.prod.yml Dockerfile.base Dockerfile.crawler nginx.conf pyproject.toml uv.lock release/
       - cp -r scripts release/
       - cp -r src release/
-      - cp -r data release/
+      - mkdir -p release/data
+      - cp -r data/posters release/data/ 2>/dev/null || true
       - echo "✅ Release package created in release/ directory"
       - echo "📁 Contents:"
       - ls -la release/
