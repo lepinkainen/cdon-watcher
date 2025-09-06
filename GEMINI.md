@@ -50,6 +50,7 @@ This project uses `uv` for managing dependencies and running scripts.
 ### Environment Setup
 
 1. **Install dependencies:**
+
    ```bash
    uv sync --extra test
    ```

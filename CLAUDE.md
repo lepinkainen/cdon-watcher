@@ -29,7 +29,7 @@ task test              # Fast unit tests (no network)
 task test-integration  # Slow integration tests (requires network)
 task lint              # ruff check + mypy type checking
 
-# CI-friendly commands  
+# CI-friendly commands
 task build-ci          # Build without tests
 task test-ci           # Tests with coverage reporting
 ```
@@ -65,7 +65,7 @@ task docker-stop      # Stop all containers
 task docker-logs      # View container logs
 
 # Alternative scripts (platform detection built-in)
-./scripts/build.sh    # Build containers  
+./scripts/build.sh    # Build containers
 ./scripts/run-dev.sh  # Development mode
 ./scripts/run-prod.sh # Production mode
 ```
@@ -82,7 +82,7 @@ uv run python -m cdon_watcher update-scan  # Update existing movies
 # Task-based shortcuts (preferred)
 task crawl             # Container-based crawling (fast mode)
 task crawl-moderate    # Moderate speed crawl (local)
-task crawl-slow        # Slow speed crawl (local) 
+task crawl-slow        # Slow speed crawl (local)
 task monitor           # Local monitoring service
 task web               # Local web dashboard
 
@@ -203,7 +203,8 @@ podman-compose logs -f monitor                       # View monitor logs
 ### LLM Assistant Guidelines
 
 Refer to `llm-shared/` submodule for additional conventions:
+
 - **General development**: `project_tech_stack.md` (project management, validation patterns)
-- **Python conventions**: `languages/python.md` (modern Python libraries, tools, patterns)  
+- **Python conventions**: `languages/python.md` (modern Python libraries, tools, patterns)
 - **Shell tools**: `shell_commands.md` (use `rg` instead of `grep`, `fd` instead of `find`)
 - **GitHub workflow**: `GITHUB.md` (issue management, PR creation)

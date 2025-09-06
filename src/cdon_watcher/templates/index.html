@@ -45,6 +45,19 @@
             placeholder="Search for movies..."
             onkeypress="if(event.key==='Enter') searchMovies()"
           />
+          <input
+            type="number"
+            id="max-price-input"
+            placeholder="Max price €"
+            step="0.01"
+            min="0"
+            title="Maximum price filter"
+          />
+          <select id="category-select" title="Movie category">
+            <option value="all">All Movies</option>
+            <option value="bluray">Blu-ray</option>
+            <option value="4k">4K</option>
+          </select>
           <button onclick="searchMovies()">Search</button>
         </div>
         <div id="search-results" class="movie-grid"></div>

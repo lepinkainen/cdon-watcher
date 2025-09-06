@@ -79,9 +79,23 @@ async function loadWatchlist() {
 
 async function searchMovies() {
   const query = document.getElementById('search-input').value
-  if (!query) return
+  const maxPrice = document.getElementById('max-price-input').value
+  const category = document.getElementById('category-select').value
 
-  const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
+  // Require either a query or filters
+  const hasFilters = maxPrice || (category && category !== 'all')
+  if (!query && !hasFilters) return
+
+  // Build query parameters
+  const params = new URLSearchParams({ q: query || '' })
+  if (maxPrice) {
+    params.append('max_price', maxPrice)
+  }
+  if (category && category !== 'all') {
+    params.append('category', category)
+  }
+
+  const response = await fetch(`/api/search?${params}`)
   const movies = await response.json()
   const container = document.getElementById('search-results')
 

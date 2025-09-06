@@ -238,38 +238,72 @@ class DatabaseRepository:
                 await self.session.delete(watchlist_item)
             return True
 
-    async def search_movies(self, query: str, limit: int = 20) -> list[MovieWithPricing]:
-        """Search for movies by title."""
-        if not query or not query.strip():
+    async def search_movies(
+        self, query: str, limit: int = 20, max_price: float | None = None, category: str = "all"
+    ) -> list[MovieWithPricing]:
+        """Search for movies by title with optional price and category filtering."""
+        # Allow empty queries if we have filters
+        has_filters = max_price is not None or category != "all"
+        if not has_filters and (not query or not query.strip()):
             return []
 
         current_price_sq = self._current_price_subquery()
         lowest_price_sq = self._lowest_price_subquery()
         highest_price_sq = self._highest_price_subquery()
 
-        sql_query = (
-            select(
-                Movie.id,
-                Movie.product_id,
-                Movie.title,
-                Movie.format,
-                Movie.url,
-                Movie.image_url,
-                Movie.production_year,
-                Movie.tmdb_id,
-                Movie.content_type,
-                Movie.first_seen,
-                Movie.last_updated,
-                current_price_sq.label("current_price"),
-                lowest_price_sq.label("lowest_price"),
-                highest_price_sq.label("highest_price"),
-            )  # type: ignore[call-overload, misc]
-            .where(Movie.title.ilike(f"%{query}%"))  # type: ignore[attr-defined]
-            .order_by(Movie.title)
-            .limit(limit)
-        )
+        # Start with base query
+        sql_query = select(
+            Movie.id,
+            Movie.product_id,
+            Movie.title,
+            Movie.format,
+            Movie.url,
+            Movie.image_url,
+            Movie.production_year,
+            Movie.tmdb_id,
+            Movie.content_type,
+            Movie.first_seen,
+            Movie.last_updated,
+            current_price_sq.label("current_price"),
+            lowest_price_sq.label("lowest_price"),
+            highest_price_sq.label("highest_price"),
+        )  # type: ignore[call-overload, misc]
 
-        self._log_query(f"search_movies(query='{query}')")
+        # Build WHERE conditions
+        conditions = []
+
+        # Add title search only if query is provided
+        if query and query.strip():
+            conditions.append(Movie.title.ilike(f"%{query}%"))  # type: ignore[attr-defined]
+
+        # Add price filtering
+        if max_price is not None:
+            conditions.append(current_price_sq <= max_price)
+            conditions.append(current_price_sq.is_not(None))
+
+        # Add category filtering
+        if category == "bluray":
+            conditions.extend(
+                [
+                    Movie.format.ilike("%Blu-ray%"),  # type: ignore[union-attr]
+                    ~Movie.format.ilike("%4K%"),  # type: ignore[union-attr]
+                ]
+            )
+        elif category == "4k":
+            conditions.append(Movie.format.ilike("%4K%"))  # type: ignore[union-attr]
+
+        # Apply conditions if any exist
+        if conditions:
+            sql_query = sql_query.where(and_(*conditions))
+
+        # Always order by price (lowest to highest), with NULL prices last
+        sql_query = sql_query.order_by(current_price_sq.asc().nulls_last())
+
+        sql_query = sql_query.limit(limit)
+
+        self._log_query(
+            f"search_movies(query='{query}', max_price={max_price}, category='{category}')"
+        )
         result = await self.session.execute(sql_query)
 
         return [MovieWithPricing.model_validate(dict(row._mapping)) for row in result.all()]

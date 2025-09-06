@@ -111,14 +111,13 @@ async def api_remove_from_watchlist(
 
 @router.get("/api/search", response_model=list[MovieWithPricing])
 async def api_search(
-    q: str = Query(..., description="Search query"),
+    q: str = Query("", description="Search query"),
+    max_price: float | None = Query(None, description="Maximum price filter"),
+    category: str = Query("all", description="Category filter: all, bluray, or 4k"),
     repo: DatabaseRepository = Depends(get_repository),
 ) -> list[MovieWithPricing]:
-    """Search for movies."""
-    if not q:
-        return []
-
-    movies = await repo.search_movies(q, 20)
+    """Search for movies with optional price and category filtering."""
+    movies = await repo.search_movies(q, 20, max_price, category)
     return movies
 
 
