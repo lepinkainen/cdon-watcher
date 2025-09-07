@@ -23,6 +23,7 @@ def load_config() -> dict[str, Any]:
         ),  # seconds (3 minutes)
         "slow_scan_delay": int(os.environ.get("SLOW_SCAN_DELAY", 1800)),  # seconds (30 minutes)
         "production_mode": os.environ.get("PRODUCTION_MODE", "false").lower() == "true",
+        "min_deal_diff": float(os.environ.get("MIN_DEAL_DIFF", "5.0")),  # minimum deal difference in euros
     }
 
 

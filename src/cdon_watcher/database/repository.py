@@ -11,6 +11,7 @@ from sqlalchemy import and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from ..config import CONFIG
 from ..models import (
     DealMovie,
     IgnoredMovie,
@@ -135,7 +136,8 @@ class DatabaseRepository:
         lowest_price_sq = self._lowest_price_subquery()
         highest_price_sq = self._highest_price_subquery()
 
-        # Main query with price drop filter
+        # Main query with price drop filter and minimum deal difference
+        min_deal_diff = CONFIG["min_deal_diff"]
         query = (
             select(  # type: ignore
                 Movie.id,
@@ -157,9 +159,10 @@ class DatabaseRepository:
                     current_price_sq.is_not(None),
                     previous_price_sq.is_not(None),
                     current_price_sq < previous_price_sq,
+                    (previous_price_sq - current_price_sq) >= min_deal_diff,
                 )
             )
-            .order_by((previous_price_sq - current_price_sq).asc())
+            .order_by((previous_price_sq - current_price_sq).desc())
             .limit(limit)
         )
 
