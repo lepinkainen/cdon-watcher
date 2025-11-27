@@ -15,7 +15,7 @@ uv sync --extra test --extra dev
 uv run playwright install chromium
 
 # Environment configuration (optional for notifications)
-cp .env.example .env   # Edit with TMDB_API_KEY, email/Discord settings
+cp .env.example .env   # Edit with TMDB_API_KEY, Discord webhook settings
 ```
 
 ### Build and Quality Checks
@@ -28,6 +28,7 @@ task build
 task test              # Fast unit tests (no network)
 task test-integration  # Slow integration tests (requires network)
 task lint              # ruff check + mypy type checking
+task lint-fix          # Auto-fix all linting issues
 
 # CI-friendly commands
 task build-ci          # Build without tests
@@ -90,6 +91,11 @@ task web               # Local web dashboard
 podman-compose --profile crawler run --rm crawler   # One-time crawl
 podman-compose up web monitor                        # Start services
 podman-compose logs -f monitor                       # View monitor logs
+
+# Utility commands
+task backup-db         # Backup SQLite database with timestamp
+task release           # Create production release package
+task clean             # Remove build artifacts
 ```
 
 ## Architecture Overview
@@ -119,7 +125,15 @@ podman-compose logs -f monitor                       # View monitor logs
 - **Anti-bot protection**: Stealth browser settings, realistic headers, rate limiting
 - **Anti-"vihdoin arki" logic**: Filters promotional text that was corrupting title extraction
 - **SQLModel database**: Type-safe async operations with SQLAlchemy + aiosqlite backend
-- **FastAPI web API**: `/api/stats`, `/api/alerts`, `/api/deals`, `/api/watchlist`, `/api/search` with Pydantic response models
+- **FastAPI web API**: Full REST API with Pydantic response models:
+  - `/api/stats` - Dashboard statistics (total movies, price drops, watchlist count)
+  - `/api/deals` - Movies with biggest price drops (sorted best-to-worst, minimum €5 difference)
+  - `/api/alerts` - Recent price alerts
+  - `/api/watchlist` - GET/POST/DELETE watchlist management
+  - `/api/search?q=&max_price=&category=` - Search with price and category filtering (results in price order)
+  - `/api/cheapest-blurays`, `/api/cheapest-4k-blurays` - Cheapest movies by format
+  - `/api/ignore-movie` - Add movies to ignore list
+  - `/posters/{filename}` - Serve cached movie poster images
 - **Database models**: `Movie`, `PriceHistory`, `Watchlist`, `PriceAlert`, `IgnoredMovie` with proper SQLModel relationships
 - **TMDB integration**: Movie posters and metadata fetched via TMDB API (requires `TMDB_API_KEY`)
 - **Speed modes**: Three scan modes (fast/moderate/slow) configurable via `SCAN_MODE` environment variable
@@ -131,9 +145,12 @@ podman-compose logs -f monitor                       # View monitor logs
 - **Core dependencies**: FastAPI, SQLModel, Playwright, requests+BeautifulSoup, Jinja2, aiosqlite
 - **Configuration**: Environment variables in `.env` file (copy from `.env.example`), key vars:
   - `TMDB_API_KEY`: Required for movie posters/metadata
-  - `DB_PATH`: Database location (`/app/data/cdon_movies.db` in containers)
+  - `DB_PATH`: Database location (default: `./data/cdon_movies.db`, `/app/data/cdon_movies.db` in containers)
   - `SCAN_MODE`: Speed control (fast/moderate/slow)
-  - Email/Discord notification settings (optional)
+  - `MIN_DEAL_DIFF`: Minimum price difference to show as "deal" (default: €5.00)
+  - `CHECK_INTERVAL_HOURS`: Monitor check frequency (default: 6)
+  - `DISCORD_WEBHOOK`: Discord notification webhook URL (optional)
+  - `API_HOST`/`API_PORT`: Web server binding (default: 0.0.0.0:8080)
 - **Test data**: JSON-based test case management via `add_test_case.py` (stored in `src/cdon_watcher/test_data.json`)
 
 ### Data Flow

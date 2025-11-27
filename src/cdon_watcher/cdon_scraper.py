@@ -119,6 +119,12 @@ class CDONScraper:
                 await asyncio.sleep(delay)
 
         logger.info(f"Crawl complete: saved {saved_count} Blu-ray movies to database")
+
+        # Mark movies not seen in recent crawls as unavailable
+        stale_count = await self.mark_stale_movies_unavailable(days_threshold=3)
+        if stale_count > 0:
+            logger.info(f"Marked {stale_count} stale movies as unavailable")
+
         return saved_count
 
     def _get_product_scan_delay(self, scan_mode: str) -> int:
@@ -191,6 +197,7 @@ class CDONScraper:
                 if existing_movie:
                     # Update existing movie
                     existing_movie.last_updated = datetime.now(UTC)
+                    existing_movie.available = True  # Mark as available since we found it
                     # Update production year if we have it and it's not set
                     if movie.production_year and not existing_movie.production_year:
                         existing_movie.production_year = movie.production_year
@@ -399,6 +406,48 @@ class CDONScraper:
             except Exception as e:
                 logger.error(f"Error marking alerts as notified: {e}")
                 await session.rollback()
+
+    async def mark_stale_movies_unavailable(self, days_threshold: int = 3) -> int:
+        """Mark movies as unavailable if not updated within the threshold days.
+
+        This should be called after a crawl completes to mark products that
+        are no longer listed on CDON as unavailable.
+
+        Args:
+            days_threshold: Number of days without update before marking unavailable
+
+        Returns:
+            Number of movies marked as unavailable
+        """
+        from datetime import timedelta
+
+        async with AsyncSessionLocal() as session:
+            try:
+                cutoff_date = datetime.now(UTC) - timedelta(days=days_threshold)
+
+                # Find movies that haven't been updated recently and are still marked available
+                result = await session.execute(
+                    select(SQLMovie).where(
+                        SQLMovie.available == True,  # noqa: E712
+                        SQLMovie.last_updated < cutoff_date,
+                    )
+                )
+                stale_movies = result.scalars().all()
+
+                count = 0
+                for movie in stale_movies:
+                    movie.available = False
+                    count += 1
+                    logger.info(f"Marked as unavailable: {movie.title} (last updated: {movie.last_updated})")
+
+                await session.commit()
+                logger.info(f"Marked {count} stale movies as unavailable")
+                return count
+
+            except Exception as e:
+                logger.error(f"Error marking stale movies as unavailable: {e}")
+                await session.rollback()
+                return 0
 
     async def search_movies(self, query: str) -> list[MovieWithPricing]:
         """Search for movies in the database using SQLModel"""

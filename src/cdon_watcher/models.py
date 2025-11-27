@@ -19,6 +19,7 @@ class Movie(SQLModel, table=True):
     production_year: int | None = None
     tmdb_id: int | None = None
     content_type: str = Field(default="movie")
+    available: bool = Field(default=True)
     first_seen: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_updated: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

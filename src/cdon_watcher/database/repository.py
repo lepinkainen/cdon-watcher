@@ -156,6 +156,7 @@ class DatabaseRepository:
             )
             .where(
                 and_(
+                    Movie.available == True,  # type: ignore[arg-type]  # noqa: E712
                     current_price_sq.is_not(None),
                     previous_price_sq.is_not(None),
                     current_price_sq < previous_price_sq,
@@ -342,6 +343,7 @@ class DatabaseRepository:
             )  # type: ignore[call-overload, misc]
             .where(
                 and_(
+                    Movie.available == True,  # type: ignore[arg-type]  # noqa: E712
                     Movie.format.ilike("%Blu-ray%"),  # type: ignore[union-attr]
                     ~Movie.format.ilike("%4K%"),  # type: ignore[union-attr]
                     Movie.id.not_in(ignored_movies_sq),  # type: ignore[union-attr]
@@ -389,6 +391,7 @@ class DatabaseRepository:
             )  # type: ignore[call-overload, misc]
             .where(
                 and_(
+                    Movie.available == True,  # type: ignore[arg-type]  # noqa: E712
                     Movie.format.ilike("%4K%"),  # type: ignore[union-attr]
                     Movie.id.not_in(ignored_movies_sq),  # type: ignore[union-attr]
                     Movie.id.not_in(watchlist_movies_sq),  # type: ignore[union-attr]

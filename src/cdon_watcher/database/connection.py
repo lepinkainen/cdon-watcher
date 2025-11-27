@@ -27,6 +27,24 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
 
+    # Run migrations for existing databases
+    await _run_migrations()
+
+
+async def _run_migrations() -> None:
+    """Run database migrations for schema changes."""
+    from sqlalchemy import text
+
+    async with engine.begin() as conn:
+        # Migration: Add 'available' column if it doesn't exist
+        # SQLite will error if column already exists, which we can safely ignore
+        try:
+            await conn.execute(
+                text("ALTER TABLE movies ADD COLUMN available BOOLEAN DEFAULT 1")
+            )
+        except Exception:
+            pass  # Column already exists
+
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """Get database session for dependency injection."""

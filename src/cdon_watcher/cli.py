@@ -15,6 +15,10 @@ async def run_crawl(max_pages: int, scan_mode: str = "fast") -> None:
     print(f"📄 Pages per category: {max_pages} (Total: {max_pages * 2} pages across 2 categories)")
     # Import CDONScraper only when needed for crawling
     from .cdon_scraper import CDONScraper
+    from .database.connection import init_db
+
+    # Initialize database (runs migrations for new columns)
+    await init_db()
 
     scraper = CDONScraper()
 
@@ -37,6 +41,11 @@ async def run_crawl(max_pages: int, scan_mode: str = "fast") -> None:
 
 async def run_monitor() -> None:
     """Run the price monitoring service."""
+    from .database.connection import init_db
+
+    # Initialize database (runs migrations for new columns)
+    await init_db()
+
     print("Starting price monitor...")
     monitor = PriceMonitor()
 
