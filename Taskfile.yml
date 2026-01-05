@@ -64,7 +64,7 @@ tasks:
     cmds:
       - uv sync --extra test --extra dev
       - mkdir -p {{.BUILD_DIR}}
-      - podman-compose build
+      - docker compose build
 
   test-python:
     desc: Run Python unit tests (fast)
@@ -123,7 +123,7 @@ tasks:
   docker-build:
     desc: Build Docker containers
     cmds:
-      - podman-compose build
+      - docker compose build
 
   docker-dev:
     desc: Run development environment with hot reload
@@ -138,18 +138,18 @@ tasks:
   docker-stop:
     desc: Stop all containers
     cmds:
-      - podman-compose down
+      - docker compose down
 
   docker-logs:
     desc: View container logs
     cmds:
-      - podman-compose logs -f
+      - docker compose logs -f
 
   # CDON Watcher specific tasks
   crawl:
     desc: Run initial CDON crawl (fast mode)
     cmds:
-      - podman-compose --profile crawler run --rm crawler
+      - docker compose --profile crawler run --rm crawler
 
   crawl-moderate:
     desc: Run moderate speed CDON crawl

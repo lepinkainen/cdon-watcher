@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from src.cdon_watcher.database.repository import DatabaseRepository
-from src.cdon_watcher.models import Movie, PriceHistory, Watchlist
+from src.cdon_watcher.models import Movie, PriceHistory, TMDBMovie, Watchlist
 
 
 @pytest.fixture
@@ -66,13 +66,26 @@ async def _populate_test_data(session):
     """Populate database with test data for watchlist exclusion tests."""
     now = datetime.now(UTC)
 
-    # Create test movies
+    # Create TMDB movies first (for linking to watchlist)
+    tmdb_movies = [
+        TMDBMovie(tmdb_id=1001, title="Test Movie 1", release_year=2020, created_at=now),
+        TMDBMovie(tmdb_id=1003, title="Test Movie 3", release_year=2021, created_at=now),
+    ]
+
+    for tmdb_movie in tmdb_movies:
+        session.add(tmdb_movie)
+
+    await session.commit()
+
+    # Create test movies with TMDB links
     movies = [
         Movie(
             product_id="movie-1",
             title="Test Movie 1",
             format="Blu-ray",
             url="https://cdon.fi/movie-1",
+            tmdb_id=1001,  # Linked to TMDB
+            tmdb_status="verified",
             first_seen=now,
             last_updated=now,
         ),
@@ -81,6 +94,7 @@ async def _populate_test_data(session):
             title="Test Movie 2",
             format="Blu-ray",
             url="https://cdon.fi/movie-2",
+            tmdb_id=None,  # Not linked - won't be excluded by watchlist
             first_seen=now,
             last_updated=now,
         ),
@@ -89,6 +103,8 @@ async def _populate_test_data(session):
             title="Test Movie 3",
             format="4K Blu-ray",
             url="https://cdon.fi/movie-3",
+            tmdb_id=1003,  # Linked to TMDB
+            tmdb_status="verified",
             first_seen=now,
             last_updated=now,
         ),
@@ -97,6 +113,7 @@ async def _populate_test_data(session):
             title="Test Movie 4",
             format="4K Blu-ray",
             url="https://cdon.fi/movie-4",
+            tmdb_id=None,  # Not linked - won't be excluded by watchlist
             first_seen=now,
             last_updated=now,
         ),
@@ -125,17 +142,15 @@ async def _populate_test_data(session):
     for price in price_history:
         session.add(price)
 
-    # Add movie-1 and movie-3 to watchlist (one regular Blu-ray, one 4K)
+    # Add TMDB movie-1001 and movie-1003 to watchlist (one regular Blu-ray, one 4K)
     watchlist = [
         Watchlist(
-            movie_id=movies[0].id,  # movie-1
-            product_id="movie-1",
+            tmdb_id=1001,  # movie-1's TMDB ID
             target_price=8.99,
             created_at=now,
         ),
         Watchlist(
-            movie_id=movies[2].id,  # movie-3
-            product_id="movie-3",
+            tmdb_id=1003,  # movie-3's TMDB ID
             target_price=20.00,
             created_at=now,
         ),
@@ -157,7 +172,7 @@ class TestWatchlistExclusion:
         # Get cheapest Blu-rays
         movies = await repo.get_cheapest_blurays(limit=10)
 
-        # Should only return movie-2 (movie-1 is watchlisted)
+        # Should only return movie-2 (movie-1 is watchlisted via TMDB ID)
         assert len(movies) == 1
         assert movies[0].product_id == "movie-2"
         assert movies[0].title == "Test Movie 2"
@@ -170,7 +185,7 @@ class TestWatchlistExclusion:
         # Get cheapest 4K Blu-rays
         movies = await repo.get_cheapest_4k_blurays(limit=10)
 
-        # Should only return movie-4 (movie-3 is watchlisted)
+        # Should only return movie-4 (movie-3 is watchlisted via TMDB ID)
         assert len(movies) == 1
         assert movies[0].product_id == "movie-4"
         assert movies[0].title == "Test Movie 4"
@@ -203,10 +218,11 @@ class TestWatchlistExclusion:
         assert fourk_movies[1].product_id == "movie-3"  # 25.99
 
     async def test_cheapest_lists_with_all_movies_watchlisted(self, test_db_session):
-        """Test that lists return empty when all movies are watchlisted."""
+        """Test that lists return empty when all TMDB-linked movies are watchlisted."""
         repo = DatabaseRepository(test_db_session)
+        now = datetime.now(UTC)
 
-        # Get all movies to find the IDs we need
+        # Get all movies to link movie-2 and movie-4 to TMDB
         from sqlmodel import select
 
         result = await test_db_session.execute(select(Movie))
@@ -216,18 +232,31 @@ class TestWatchlistExclusion:
         movie_2 = next(m for m in all_movies if m.product_id == "movie-2")
         movie_4 = next(m for m in all_movies if m.product_id == "movie-4")
 
+        # Create TMDB records for movie-2 and movie-4
+        tmdb_movies = [
+            TMDBMovie(tmdb_id=1002, title="Test Movie 2", release_year=2020, created_at=now),
+            TMDBMovie(tmdb_id=1004, title="Test Movie 4", release_year=2021, created_at=now),
+        ]
+        for tmdb_movie in tmdb_movies:
+            test_db_session.add(tmdb_movie)
+        await test_db_session.commit()
+
+        # Link movie-2 and movie-4 to TMDB
+        movie_2.tmdb_id = 1002
+        movie_2.tmdb_status = "verified"
+        movie_4.tmdb_id = 1004
+        movie_4.tmdb_status = "verified"
+        await test_db_session.commit()
+
         # Add remaining movies to watchlist
-        now = datetime.now(UTC)
         additional_watchlist = [
             Watchlist(
-                movie_id=movie_2.id,
-                product_id="movie-2",
+                tmdb_id=1002,  # movie-2's TMDB ID
                 target_price=12.99,
                 created_at=now,
             ),
             Watchlist(
-                movie_id=movie_4.id,
-                product_id="movie-4",
+                tmdb_id=1004,  # movie-4's TMDB ID
                 target_price=18.99,
                 created_at=now,
             ),

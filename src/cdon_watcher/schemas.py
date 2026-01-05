@@ -1,5 +1,7 @@
 """Pydantic schemas for API requests only. Response models are now SQLModel variants."""
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -35,3 +37,25 @@ class SuccessResponse(BaseModel):
     """Success response model."""
 
     message: str
+
+
+# TMDB Matching Queue schemas
+class MatchConfirmRequest(BaseModel):
+    """Request model for confirming a TMDB match."""
+
+    movie_id: int
+    tmdb_id: int | None  # None means "no match found"
+
+
+class MatchSkipRequest(BaseModel):
+    """Request model for skipping a match queue item."""
+
+    movie_id: int
+
+
+class ActionResponse(BaseModel):
+    """Response model for watchlist/ignore actions."""
+
+    status: Literal["confirmed", "queued", "error"]
+    message: str | None = None
+    tmdb_id: int | None = None

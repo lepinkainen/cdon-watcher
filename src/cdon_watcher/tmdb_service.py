@@ -3,12 +3,37 @@
 import logging
 import re
 import time
+from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
 import requests
 
 logger = logging.getLogger(__name__)
+
+# Confidence thresholds
+CONFIDENCE_AUTO_CONFIRM = 0.95  # Skip dialog for near-perfect matches
+CONFIDENCE_HIGH = 0.85
+CONFIDENCE_MEDIUM = 0.60
+
+
+@dataclass
+class TMDBCandidateData:
+    """TMDB candidate for disambiguation."""
+
+    tmdb_id: int
+    imdb_id: str | None = None
+    title: str = ""
+    original_title: str | None = None
+    release_year: int | None = None
+    poster_path: str | None = None
+    overview: str | None = None
+    director: str | None = None
+    cast: list[str] = field(default_factory=list)
+    popularity: float = 0.0
+    content_type: str = "movie"
+    confidence_score: float = 0.0
 
 
 class TMDBService:
@@ -46,12 +71,11 @@ class TMDBService:
             r"\bSeries\s+\d+",
             r"\bComplete\s+Series",
             r"\bTV\s+Series",
-            r"\bSeason\s+\d+[-–]\d+",  # Season 1-3
+            r"\bSeason\s+\d+[-–]\d*",  # Season 1-3
             r"\bS\d+\b",  # S01, S02, etc.
             r"\bEpisode\s+\d+",
             r"\bComplete\s+Collection",  # Often indicates TV box sets
             r"\bComplete\s+Seasons",  # Dexter: Complete Seasons 1-8
-            r"\bSeason\s+\d+[-–]\d+",  # Season ranges
             r"\bThe\s+Complete\s+Collection",  # Avatar - The Last Airbender - The Complete Collection
         ]
 
@@ -116,6 +140,248 @@ class TMDBService:
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
         return cleaned
+
+    def calculate_confidence(
+        self, source_title: str, source_year: int | None, candidate_title: str,
+        candidate_year: int | None, candidate_popularity: float
+    ) -> float:
+        """Calculate match confidence score (0.0-1.0)."""
+        score = 0.0
+
+        # Title similarity (fuzzy match) - max 0.5
+        cleaned_source = self._clean_title_for_search(source_title).lower()
+        cleaned_candidate = candidate_title.lower()
+        ratio = SequenceMatcher(None, cleaned_source, cleaned_candidate).ratio()
+        score += ratio * 0.5
+
+        # Year matching - max 0.3
+        if source_year and candidate_year:
+            year_diff = abs(source_year - candidate_year)
+            if year_diff == 0:
+                score += 0.3
+            elif year_diff == 1:
+                score += 0.2
+            elif year_diff == 2:
+                score += 0.1
+
+        # Popularity bonus (helps distinguish between similarly named films) - max 0.2
+        # Normalize popularity (TMDB popularity can range widely, typical range 0-100+)
+        if candidate_popularity:
+            pop_score = min(candidate_popularity / 100, 1.0) * 0.2
+            score += pop_score
+
+        return min(score, 1.0)
+
+    def get_credits(self, tmdb_id: int, content_type: str = "movie") -> tuple[str | None, list[str]]:
+        """Fetch director and top cast for disambiguation."""
+        self._rate_limit()
+
+        endpoint = "movie" if content_type == "movie" else "tv"
+
+        try:
+            params = {"api_key": self.api_key_param}
+            response = self.session.get(f"{self.base_url}/{endpoint}/{tmdb_id}/credits", params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            # Get director (for movies) or creator (for TV)
+            director = None
+            if content_type == "movie":
+                crew = data.get("crew", [])
+                directors = [c["name"] for c in crew if c.get("job") == "Director"]
+                director = ", ".join(directors[:2]) if directors else None
+            else:
+                # For TV, creator info is in the main TV endpoint, not credits
+                pass
+
+            # Get top 3 cast members
+            cast = data.get("cast", [])
+            top_cast = [c["name"] for c in cast[:3]]
+
+            return director, top_cast
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching credits for TMDB ID {tmdb_id}: {e}")
+            return None, []
+
+    def get_external_ids(self, tmdb_id: int, content_type: str = "movie") -> dict[str, Any]:
+        """Fetch external IDs including IMDB ID."""
+        self._rate_limit()
+
+        endpoint = "movie" if content_type == "movie" else "tv"
+
+        try:
+            params = {"api_key": self.api_key_param}
+            response = self.session.get(f"{self.base_url}/{endpoint}/{tmdb_id}/external_ids", params=params)
+            response.raise_for_status()
+            external_ids: dict[str, Any] = response.json()
+            return external_ids
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching external IDs for TMDB ID {tmdb_id}: {e}")
+            return {}
+
+    def search_candidates(
+        self, title: str, year: int | None = None, limit: int = 5
+    ) -> list[TMDBCandidateData]:
+        """Search TMDB and return multiple candidates with full metadata."""
+        candidates: list[TMDBCandidateData] = []
+        is_tv = self._is_tv_series(title)
+
+        # Search for movies or TV based on title analysis
+        if is_tv:
+            candidates = self._search_tv_candidates(title, year, limit)
+            # If no TV results, try movie search as fallback
+            if not candidates:
+                candidates = self._search_movie_candidates(title, year, limit)
+        else:
+            candidates = self._search_movie_candidates(title, year, limit)
+            # If no movie results, try TV search as fallback
+            if not candidates:
+                candidates = self._search_tv_candidates(title, year, limit)
+
+        # Calculate confidence scores and sort
+        for candidate in candidates:
+            candidate.confidence_score = self.calculate_confidence(
+                title, year, candidate.title, candidate.release_year, candidate.popularity
+            )
+
+        # Sort by confidence score descending
+        candidates.sort(key=lambda c: c.confidence_score, reverse=True)
+
+        return candidates[:limit]
+
+    def _search_movie_candidates(
+        self, title: str, year: int | None = None, limit: int = 5
+    ) -> list[TMDBCandidateData]:
+        """Search for movies and return candidates."""
+        self._rate_limit()
+
+        cleaned_title = self._clean_title_for_search(title, is_tv=False)
+
+        params: dict[str, str | int] = {
+            "api_key": self.api_key_param,
+            "query": cleaned_title,
+            "include_adult": "false",
+            "language": "en-US",
+            "page": 1,
+        }
+
+        if year:
+            params["year"] = year
+
+        try:
+            response = self.session.get(f"{self.base_url}/search/movie", params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            results = data.get("results", [])
+            candidates: list[TMDBCandidateData] = []
+
+            for result in results[:limit]:
+                release_year = None
+                if result.get("release_date"):
+                    try:
+                        release_year = int(result["release_date"][:4])
+                    except (ValueError, IndexError):
+                        pass
+
+                candidate = TMDBCandidateData(
+                    tmdb_id=result["id"],
+                    title=result.get("title", ""),
+                    original_title=result.get("original_title"),
+                    release_year=release_year,
+                    poster_path=result.get("poster_path"),
+                    overview=result.get("overview"),
+                    popularity=result.get("popularity", 0),
+                    content_type="movie",
+                )
+
+                # Fetch additional metadata (credits, external IDs)
+                director, cast = self.get_credits(candidate.tmdb_id, "movie")
+                candidate.director = director
+                candidate.cast = cast
+
+                external_ids = self.get_external_ids(candidate.tmdb_id, "movie")
+                candidate.imdb_id = external_ids.get("imdb_id")
+
+                candidates.append(candidate)
+
+            return candidates
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error searching TMDB movies for '{title}': {e}")
+            return []
+
+    def _search_tv_candidates(
+        self, title: str, year: int | None = None, limit: int = 5
+    ) -> list[TMDBCandidateData]:
+        """Search for TV series and return candidates."""
+        self._rate_limit()
+
+        cleaned_title = self._clean_title_for_search(title, is_tv=True)
+
+        params: dict[str, str | int] = {
+            "api_key": self.api_key_param,
+            "query": cleaned_title,
+            "include_adult": "false",
+            "language": "en-US",
+            "page": 1,
+        }
+
+        if year:
+            params["first_air_date_year"] = year
+
+        try:
+            response = self.session.get(f"{self.base_url}/search/tv", params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            results = data.get("results", [])
+            candidates: list[TMDBCandidateData] = []
+
+            for result in results[:limit]:
+                release_year = None
+                if result.get("first_air_date"):
+                    try:
+                        release_year = int(result["first_air_date"][:4])
+                    except (ValueError, IndexError):
+                        pass
+
+                candidate = TMDBCandidateData(
+                    tmdb_id=result["id"],
+                    title=result.get("name", ""),
+                    original_title=result.get("original_name"),
+                    release_year=release_year,
+                    poster_path=result.get("poster_path"),
+                    overview=result.get("overview"),
+                    popularity=result.get("popularity", 0),
+                    content_type="tv",
+                )
+
+                # Fetch additional metadata (credits, external IDs)
+                director, cast = self.get_credits(candidate.tmdb_id, "tv")
+                candidate.director = director
+                candidate.cast = cast
+
+                external_ids = self.get_external_ids(candidate.tmdb_id, "tv")
+                candidate.imdb_id = external_ids.get("imdb_id")
+
+                candidates.append(candidate)
+
+            return candidates
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error searching TMDB TV for '{title}': {e}")
+            return []
+
+    def get_poster_url(self, poster_path: str | None) -> str | None:
+        """Get full poster URL from poster path."""
+        if not poster_path:
+            return None
+        return f"{self.image_base_url}{poster_path}"
+
+    # Legacy methods for backward compatibility during migration
 
     def search_tv(self, title: str, year: int | None = None) -> dict[str, Any] | None:
         """Search for a TV series on TMDB and return the best match."""

@@ -3,10 +3,22 @@
 import argparse
 import asyncio
 import os
+import sys
+from collections.abc import Coroutine
 from datetime import datetime
+from typing import Any
 
 from .config import CONFIG
 from .monitoring_service import PriceMonitor
+
+
+def run_async_with_graceful_shutdown(coro: Coroutine[Any, Any, Any]) -> None:
+    """Run an async coroutine with graceful handling of Ctrl+C."""
+    try:
+        asyncio.run(coro)
+    except KeyboardInterrupt:
+        print("\n\nInterrupted by user. Shutting down...")
+        sys.exit(0)
 
 
 async def run_crawl(max_pages: int, scan_mode: str = "fast") -> None:
@@ -122,12 +134,12 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "crawl":
-        asyncio.run(run_crawl(args.max_pages, args.scan_mode))
+        run_async_with_graceful_shutdown(run_crawl(args.max_pages, args.scan_mode))
     elif args.command == "update-scan":
         # Update scan uses moderate mode by default for development
-        asyncio.run(run_crawl(args.max_pages, "moderate"))
+        run_async_with_graceful_shutdown(run_crawl(args.max_pages, "moderate"))
     elif args.command == "monitor":
-        asyncio.run(run_monitor())
+        run_async_with_graceful_shutdown(run_monitor())
     elif args.command == "web":
         run_web()
     else:

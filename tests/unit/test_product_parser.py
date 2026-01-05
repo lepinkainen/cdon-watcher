@@ -88,8 +88,8 @@ class TestProductParser:
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
 
-        # Create parser and test
-        parser = ProductParser()
+        # Create parser and test (disable cache to ensure HTTP mock is used)
+        parser = ProductParser(use_cache=False)
         url = "https://cdon.fi/tuote/batman-1989-4k-ultra-hd-blu-ray-5cb24b79a41d59c4/"
 
         movie = parser.parse_product_page(url)
@@ -132,8 +132,8 @@ class TestProductParser:
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
 
-        # Create parser and test
-        parser = ProductParser()
+        # Create parser and test (disable cache to ensure HTTP mock is used)
+        parser = ProductParser(use_cache=False)
         url = "https://cdon.fi/tuote/some-movie-blu-ray-abc123/"
 
         movie = parser.parse_product_page(url)
@@ -150,8 +150,8 @@ class TestProductParserPureFunctions:
 
     @pytest.fixture
     def parser(self) -> ProductParser:
-        """Create ProductParser instance for testing pure functions."""
-        return ProductParser()
+        """Create ProductParser instance for testing pure functions (cache disabled)."""
+        return ProductParser(use_cache=False)
 
     @pytest.mark.parametrize(
         "title,expected",

@@ -183,15 +183,13 @@ class TestRelatedModels:
     def test_watchlist_relationship(self) -> None:
         """Test that Watchlist can be created independently."""
         watchlist_entry = Watchlist(
-            movie_id=1,
-            product_id="abc123",
+            tmdb_id=12345,
             target_price=15.00,
-            notify_on_availability=True,
         )
 
-        assert watchlist_entry.movie_id == 1
+        assert watchlist_entry.tmdb_id == 12345
         assert watchlist_entry.target_price == 15.00
-        assert watchlist_entry.notify_on_availability is True
+        assert isinstance(watchlist_entry.created_at, datetime)
 
     def test_price_alert_relationship(self) -> None:
         """Test that PriceAlert can be created independently."""
@@ -212,12 +210,10 @@ class TestRelatedModels:
     def test_ignored_movie_relationship(self) -> None:
         """Test that IgnoredMovie can be created independently."""
         ignored = IgnoredMovie(
-            movie_id=1,
-            product_id="abc123",
+            tmdb_id=12345,
         )
 
-        assert ignored.movie_id == 1
-        assert ignored.product_id == "abc123"
+        assert ignored.tmdb_id == 12345
         assert isinstance(ignored.ignored_at, datetime)
 
 

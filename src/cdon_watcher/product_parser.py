@@ -9,6 +9,8 @@ from dataclasses import dataclass
 import requests
 from bs4 import BeautifulSoup
 
+from .page_cache import PageCache, get_page_cache
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -31,7 +33,15 @@ class Movie:
 class ProductParser:
     """Parser for individual CDON product pages using HTTP requests + BeautifulSoup"""
 
-    def __init__(self) -> None:
+    def __init__(
+        self, cache: PageCache | None = None, *, use_cache: bool = True
+    ) -> None:
+        """Initialize the product parser.
+
+        Args:
+            cache: Optional page cache instance. If None, uses the global cache.
+            use_cache: Whether to use caching. Set to False to disable caching entirely.
+        """
         self.session = requests.Session()
         # Set up realistic headers to avoid blocking
         self.session.headers.update(
@@ -44,15 +54,47 @@ class ProductParser:
                 "Connection": "keep-alive",
             }
         )
+        # Initialize cache
+        if not use_cache:
+            self._cache: PageCache | None = None
+        else:
+            self._cache = cache if cache is not None else get_page_cache()
+
+    def _fetch_page_content(self, url: str) -> bytes | None:
+        """Fetch page content, using cache if available.
+
+        Args:
+            url: The URL to fetch.
+
+        Returns:
+            Page content as bytes, or None if fetch failed.
+        """
+        # Check cache first
+        if self._cache:
+            cached_content = self._cache.get(url)
+            if cached_content is not None:
+                logger.info(f"Using cached page: {url}")
+                return cached_content
+
+        # Fetch from network
+        logger.info(f"Fetching product page: {url}")
+        response = self.session.get(url, timeout=10)
+        response.raise_for_status()
+
+        # Store in cache
+        if self._cache:
+            self._cache.set(url, response.content)
+
+        return response.content
 
     def parse_product_page(self, url: str) -> Movie | None:
         """Parse a single product page and extract movie information"""
         try:
-            logger.info(f"Fetching product page: {url}")
-            response = self.session.get(url, timeout=10)
-            response.raise_for_status()
+            content = self._fetch_page_content(url)
+            if content is None:
+                return None
 
-            soup = BeautifulSoup(response.content, "html.parser")
+            soup = BeautifulSoup(content, "html.parser")
 
             # Extract components
             title = self._extract_title(soup)

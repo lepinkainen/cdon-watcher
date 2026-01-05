@@ -36,8 +36,8 @@ def temp_db_path() -> Generator[str, None, None]:
 
 @pytest.fixture
 def product_parser() -> Generator[ProductParser, None, None]:
-    """Provide a ProductParser instance for tests."""
-    parser = ProductParser()
+    """Provide a ProductParser instance for tests (with cache disabled for test isolation)."""
+    parser = ProductParser(use_cache=False)
     yield parser
     parser.close()
 

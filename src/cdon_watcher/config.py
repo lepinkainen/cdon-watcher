@@ -24,6 +24,9 @@ def load_config() -> dict[str, Any]:
         "slow_scan_delay": int(os.environ.get("SLOW_SCAN_DELAY", 1800)),  # seconds (30 minutes)
         "production_mode": os.environ.get("PRODUCTION_MODE", "false").lower() == "true",
         "min_deal_diff": float(os.environ.get("MIN_DEAL_DIFF", "5.0")),  # minimum deal difference in euros
+        # Page cache configuration
+        "cache_db_path": os.environ.get("CACHE_DB_PATH", "./data/page_cache.db"),
+        "cache_ttl_hours": int(os.environ.get("CACHE_TTL_HOURS", 12)),
     }
 
 
