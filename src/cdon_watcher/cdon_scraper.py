@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from .box_set_detector import is_box_set
 from .config import CONFIG
 from .database.connection import AsyncSessionLocal, init_db
 from .listing_crawler import ListingCrawler
@@ -144,12 +145,15 @@ class CDONScraper:
         """Save a single movie to database using SQLModel and return success status"""
         async with AsyncSessionLocal() as session:
             try:
-                # Try to fetch TMDB data if service is available
+                # Detect box set FIRST - they skip TMDB matching
+                movie_is_box_set = is_box_set(movie.title)
+
+                # Try to fetch TMDB data if service is available (skip for box sets)
                 tmdb_id = None
                 local_poster_path = None
                 content_type = "movie"  # Default to movie
 
-                if self.tmdb_service and movie.title:
+                if not movie_is_box_set and self.tmdb_service and movie.title:
                     try:
                         # Detect if it's a TV series
                         if self.tmdb_service._is_tv_series(movie.title):
@@ -198,21 +202,26 @@ class CDONScraper:
                     # Update existing movie
                     existing_movie.last_updated = datetime.now(UTC)
                     existing_movie.available = True  # Mark as available since we found it
+                    existing_movie.is_box_set = movie_is_box_set  # Update box set status
                     # Update production year if we have it and it's not set
                     if movie.production_year and not existing_movie.production_year:
                         existing_movie.production_year = movie.production_year
                     db_movie = existing_movie
                 else:
+                    # For box sets, always use CDON image (no TMDB poster)
+                    box_set_image_url = movie.image_url if movie_is_box_set else final_image_url
+
                     # Create new movie
                     db_movie = SQLMovie(
                         product_id=product_id,
                         title=movie.title,
                         format=movie.format,
                         url=movie.url,
-                        image_url=final_image_url,
+                        image_url=box_set_image_url,
                         production_year=movie.production_year,
                         tmdb_id=tmdb_id,
                         content_type=content_type,
+                        is_box_set=movie_is_box_set,
                         first_seen=datetime.now(UTC),
                         last_updated=datetime.now(UTC),
                     )
@@ -297,9 +306,11 @@ class CDONScraper:
                     f"Price drop detected for movie {movie_id}: €{old_price} -> €{new_price}"
                 )
 
-        # Check watchlist targets
+        # Check watchlist targets - need to join through Movie.tmdb_id to Watchlist
         result = await session.execute(
-            select(Watchlist.target_price).where(Watchlist.movie_id == movie_id)
+            select(Watchlist.target_price)
+            .join(SQLMovie, SQLMovie.tmdb_id == Watchlist.tmdb_id)  # type: ignore[arg-type]
+            .where(SQLMovie.id == movie_id)
         )
         watchlist_target = result.scalar_one_or_none()
 
@@ -315,51 +326,6 @@ class CDONScraper:
             )
             session.add(target_alert)
             logger.info(f"Target price reached for movie {movie_id}: €{new_price}")
-
-    async def add_to_watchlist(self, product_id: str, target_price: float) -> bool:
-        """Add a movie to the watchlist using product_id"""
-        async with AsyncSessionLocal() as session:
-            try:
-                # Find movie by product_id
-                result = await session.execute(
-                    select(SQLMovie).where(SQLMovie.product_id == product_id)
-                )
-                movie = result.scalar_one_or_none()
-
-                if movie and movie.id is not None:
-                    # Check if already in watchlist
-                    existing_result = await session.execute(
-                        select(Watchlist).where(Watchlist.movie_id == movie.id)
-                    )
-                    existing_watchlist = existing_result.scalar_one_or_none()
-
-                    if existing_watchlist:
-                        # Update existing entry
-                        existing_watchlist.target_price = target_price
-                        existing_watchlist.created_at = datetime.now(UTC)
-                    else:
-                        # Create new entry
-                        watchlist_item = Watchlist(
-                            movie_id=movie.id,
-                            product_id=movie.product_id,
-                            target_price=target_price,
-                            created_at=datetime.now(UTC),
-                        )
-                        session.add(watchlist_item)
-
-                    await session.commit()
-                    logger.info(
-                        f"Added movie {movie.id} to watchlist with target price €{target_price}"
-                    )
-                    return True
-
-                logger.warning(f"Movie with product_id '{product_id}' not found in database")
-                return False
-
-            except Exception as e:
-                logger.error(f"Error adding to watchlist: {e}")
-                await session.rollback()
-                return False
 
     async def get_price_alerts(self) -> list[dict]:
         """Get unnotified price alerts using SQLModel"""

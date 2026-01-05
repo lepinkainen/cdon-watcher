@@ -153,6 +153,29 @@ h2 {
   font-size: 0.8em;
   margin-bottom: 8px;
 }
+.tmdb-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #01b4e4;
+  color: white;
+  border-radius: 3px;
+  font-size: 0.7em;
+  font-weight: bold;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+.box-set-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #e83e8c;
+  color: white;
+  border-radius: 3px;
+  font-size: 0.7em;
+  font-weight: bold;
+  margin-left: 5px;
+  vertical-align: middle;
+}
 .price-info {
   display: flex;
   justify-content: space-between;
@@ -327,4 +350,94 @@ h2 {
 .remove-from-watchlist:hover {
   opacity: 1;
   background: #c82333;
+}
+
+/* Match queue badge */
+.match-queue-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #667eea;
+  text-decoration: none;
+  padding: 8px 16px;
+  background: #f8f9ff;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.match-queue-link:hover {
+  background: #667eea;
+  color: white;
+}
+
+.match-queue-badge {
+  display: none;
+  background: #dc3545;
+  color: white;
+  font-size: 0.75em;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* Watchlist card with versions */
+.watchlist-card {
+  flex-direction: column;
+}
+
+.watchlist-card .movie-poster {
+  width: 100px;
+  height: 150px;
+  margin: 0 auto 15px;
+}
+
+.watchlist-versions {
+  margin-top: 10px;
+  border-top: 1px solid #eee;
+  padding-top: 10px;
+}
+
+.watchlist-version {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  margin-bottom: 5px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  font-size: 0.9em;
+}
+
+.watchlist-version.at-target {
+  background: #d4edda;
+  border: 1px solid #28a745;
+}
+
+.version-format {
+  font-weight: 500;
+  color: #333;
+  flex: 1;
+}
+
+.version-price {
+  font-weight: bold;
+  color: #28a745;
+}
+
+.target-reached {
+  color: #155724;
+  font-weight: bold;
+  font-size: 0.85em;
+}
+
+.version-link {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.version-link:hover {
+  text-decoration: underline;
 }

@@ -12,29 +12,50 @@ from ..config import CONFIG
 from ..database.connection import get_db_session
 from ..database.repository import DatabaseRepository
 from ..models import (
+    BoxSetWatchlistItem,
     DealMovie,
+    MatchQueueResponse,
     MovieWithPricing,
     PriceAlertWithTitle,
     StatsData,
+    WatchlistItem,
     WatchlistMovie,
 )
 from ..schemas import (
-    ErrorResponse,
+    ActionResponse,
     IgnoreMovieRequest,
+    MatchConfirmRequest,
+    MatchSkipRequest,
     SuccessResponse,
     WatchlistRequest,
 )
+from ..tmdb_service import TMDBService
 
 # Create router
 router = APIRouter()
 
+# Global TMDB service instance (lazy init)
+_tmdb_service: TMDBService | None = None
+
+
+def get_tmdb_service() -> TMDBService | None:
+    """Get or create TMDB service instance."""
+    global _tmdb_service
+    if _tmdb_service is None:
+        tmdb_api_key = CONFIG.get("tmdb_api_key")
+        if tmdb_api_key:
+            poster_dir = CONFIG.get("poster_dir", "./data/posters")
+            _tmdb_service = TMDBService(tmdb_api_key, poster_dir)
+    return _tmdb_service
+
 
 # Dependency function for DatabaseRepository
 async def get_repository(session: AsyncSession = Depends(get_db_session)) -> DatabaseRepository:
-    """Get DatabaseRepository instance."""
+    """Get DatabaseRepository instance with TMDB service."""
     # Enable query logging in development mode (can be controlled via environment variable)
     enable_logging = CONFIG.get("debug", False) or CONFIG.get("enable_query_logging", False)
-    return DatabaseRepository(session, enable_query_logging=enable_logging)
+    tmdb_service = get_tmdb_service()
+    return DatabaseRepository(session, enable_query_logging=enable_logging, tmdb_service=tmdb_service)
 
 
 @router.get("/")
@@ -43,6 +64,13 @@ async def index(request: Request) -> Response:
     # Get templates from app state
     templates: Jinja2Templates = request.app.state.templates
     return templates.TemplateResponse(request, "index.html")
+
+
+@router.get("/match")
+async def match_page(request: Request) -> Response:
+    """TMDB matching queue page."""
+    templates: Jinja2Templates = request.app.state.templates
+    return templates.TemplateResponse(request, "match.html")
 
 
 @router.get("/api/stats", response_model=StatsData)
@@ -68,45 +96,147 @@ async def api_deals(repo: DatabaseRepository = Depends(get_repository)) -> list[
     return deals
 
 
-@router.get("/api/watchlist", response_model=list[WatchlistMovie])
+# ==================== Watchlist (TMDB-based) ====================
+
+
+@router.get("/api/watchlist", response_model=list[WatchlistItem])
 async def api_get_watchlist(
     repo: DatabaseRepository = Depends(get_repository),
-) -> list[WatchlistMovie]:
-    """Get watchlist items."""
+) -> list[WatchlistItem]:
+    """Get watchlist items with TMDB info and all format versions."""
     watchlist = await repo.get_watchlist()
     return watchlist
 
 
-@router.post("/api/watchlist")
+@router.get("/api/watchlist/legacy", response_model=list[WatchlistMovie])
+async def api_get_watchlist_legacy(
+    repo: DatabaseRepository = Depends(get_repository),
+) -> list[WatchlistMovie]:
+    """Get watchlist items in legacy format (flat list)."""
+    watchlist = await repo.get_watchlist_legacy()
+    return watchlist
+
+
+@router.post("/api/watchlist", response_model=ActionResponse)
 async def api_add_to_watchlist(
     request: WatchlistRequest, repo: DatabaseRepository = Depends(get_repository)
-) -> SuccessResponse | ErrorResponse:
-    """Add item to watchlist."""
+) -> ActionResponse:
+    """Add item to watchlist. May queue for TMDB matching if no confident match."""
     if not request.target_price:
         raise HTTPException(status_code=400, detail="Missing target_price")
 
     if not request.product_id:
         raise HTTPException(status_code=400, detail="Missing product_id")
 
-    success = await repo.add_to_watchlist(request.product_id, request.target_price)
+    result = await repo.initiate_watchlist_action(request.product_id, request.target_price)
 
-    if success:
-        return SuccessResponse(message="Added to watchlist")
-    else:
-        raise HTTPException(status_code=500, detail="Failed to add to watchlist")
+    return ActionResponse(
+        status=result.get("status", "error"),
+        message=result.get("message"),
+        tmdb_id=result.get("tmdb_id"),
+    )
 
 
-@router.delete("/api/watchlist/{product_id}")
+@router.delete("/api/watchlist/{tmdb_id}")
 async def api_remove_from_watchlist(
-    product_id: str, repo: DatabaseRepository = Depends(get_repository)
+    tmdb_id: int, repo: DatabaseRepository = Depends(get_repository)
 ) -> SuccessResponse:
-    """Remove movie from watchlist by product_id."""
-    success = await repo.remove_from_watchlist(product_id)
+    """Remove movie from watchlist by TMDB ID."""
+    success = await repo.remove_from_watchlist(tmdb_id)
 
     if success:
         return SuccessResponse(message="Removed from watchlist")
     else:
         raise HTTPException(status_code=500, detail="Failed to remove from watchlist")
+
+
+# ==================== Ignore Movies (TMDB-based) ====================
+
+
+@router.post("/api/ignore-movie", response_model=ActionResponse)
+async def api_ignore_movie(
+    request: IgnoreMovieRequest, repo: DatabaseRepository = Depends(get_repository)
+) -> ActionResponse:
+    """Add movie to ignored list. May queue for TMDB matching if no confident match."""
+    if not request.product_id:
+        raise HTTPException(status_code=400, detail="Missing product_id")
+
+    result = await repo.initiate_ignore_action(request.product_id)
+
+    return ActionResponse(
+        status=result.get("status", "error"),
+        message=result.get("message"),
+        tmdb_id=result.get("tmdb_id"),
+    )
+
+
+# ==================== Match Queue ====================
+
+
+@router.get("/api/match/queue", response_model=MatchQueueResponse)
+async def api_get_match_queue(
+    offset: int = Query(0, ge=0, description="Queue offset"),
+    include_skipped: bool = Query(False, description="Include skipped items"),
+    repo: DatabaseRepository = Depends(get_repository),
+) -> MatchQueueResponse:
+    """Get match queue items with pagination."""
+    return await repo.get_match_queue(offset, include_skipped)
+
+
+@router.post("/api/match/confirm", response_model=SuccessResponse)
+async def api_confirm_match(
+    request: MatchConfirmRequest, repo: DatabaseRepository = Depends(get_repository)
+) -> SuccessResponse:
+    """Confirm TMDB match and execute the pending action."""
+    # Get the queue item to find action and target_price
+    queue_item = None
+    match_queue = await repo.get_match_queue()
+    if match_queue.movie and match_queue.movie.id == request.movie_id:
+        queue_item = await repo.get_match_queue_item(match_queue.queue_id)  # type: ignore
+
+    if not queue_item:
+        raise HTTPException(status_code=404, detail="Queue item not found")
+
+    # If tmdb_id is provided, save the TMDB movie first
+    if request.tmdb_id and repo.tmdb_service:
+        candidates = repo.tmdb_service.search_candidates(
+            match_queue.movie.title if match_queue.movie else "",
+            match_queue.movie.production_year if match_queue.movie else None,
+            limit=5,
+        )
+        # Find the matching candidate
+        for candidate in candidates:
+            if candidate.tmdb_id == request.tmdb_id:
+                await repo.save_tmdb_movie(candidate)
+                break
+
+    success = await repo.confirm_match(
+        request.movie_id,
+        request.tmdb_id,
+        queue_item.action,
+        queue_item.target_price,
+    )
+
+    if success:
+        return SuccessResponse(message="Match confirmed")
+    else:
+        raise HTTPException(status_code=500, detail="Failed to confirm match")
+
+
+@router.post("/api/match/skip", response_model=SuccessResponse)
+async def api_skip_match(
+    request: MatchSkipRequest, repo: DatabaseRepository = Depends(get_repository)
+) -> SuccessResponse:
+    """Skip a match queue item."""
+    success = await repo.skip_match_queue_item(request.movie_id)
+
+    if success:
+        return SuccessResponse(message="Item skipped")
+    else:
+        raise HTTPException(status_code=500, detail="Failed to skip item")
+
+
+# ==================== Search ====================
 
 
 @router.get("/api/search", response_model=list[MovieWithPricing])
@@ -119,6 +249,9 @@ async def api_search(
     """Search for movies with optional price and category filtering."""
     movies = await repo.search_movies(q, 20, max_price, category)
     return movies
+
+
+# ==================== Cheapest Movies ====================
 
 
 @router.get("/api/cheapest-blurays", response_model=list[MovieWithPricing])
@@ -139,20 +272,51 @@ async def api_cheapest_4k_blurays(
     return movies
 
 
-@router.post("/api/ignore-movie")
-async def api_ignore_movie(
-    request: IgnoreMovieRequest, repo: DatabaseRepository = Depends(get_repository)
+# ==================== Box Sets ====================
+
+
+@router.get("/api/box-sets", response_model=list[MovieWithPricing])
+async def api_get_box_sets(
+    repo: DatabaseRepository = Depends(get_repository),
+) -> list[MovieWithPricing]:
+    """Get available box sets."""
+    box_sets = await repo.get_box_sets(21)
+    return box_sets
+
+
+@router.get("/api/box-sets/watchlist", response_model=list[BoxSetWatchlistItem])
+async def api_get_box_set_watchlist(
+    repo: DatabaseRepository = Depends(get_repository),
+) -> list[BoxSetWatchlistItem]:
+    """Get box set watchlist."""
+    watchlist = await repo.get_box_set_watchlist()
+    return watchlist
+
+
+@router.delete("/api/box-sets/watchlist/{movie_id}")
+async def api_remove_box_set_from_watchlist(
+    movie_id: int, repo: DatabaseRepository = Depends(get_repository)
 ) -> SuccessResponse:
-    """Add movie to ignored list."""
-    if not request.product_id:
-        raise HTTPException(status_code=400, detail="Missing product_id")
-
-    success = await repo.ignore_movie_by_product_id(request.product_id)
-
+    """Remove box set from watchlist."""
+    success = await repo.remove_box_set_from_watchlist(movie_id)
     if success:
-        return SuccessResponse(message="Movie ignored")
-    else:
-        raise HTTPException(status_code=500, detail="Failed to ignore movie")
+        return SuccessResponse(message="Removed from box set watchlist")
+    raise HTTPException(status_code=500, detail="Failed to remove")
+
+
+# ==================== TMDB Versions ====================
+
+
+@router.get("/api/tmdb/{tmdb_id}/versions", response_model=list[MovieWithPricing])
+async def api_get_tmdb_versions(
+    tmdb_id: int, repo: DatabaseRepository = Depends(get_repository)
+) -> list[MovieWithPricing]:
+    """Get all movie versions (formats) sharing a TMDB ID."""
+    movies = await repo.get_movies_by_tmdb_id(tmdb_id)
+    return movies
+
+
+# ==================== Static Files ====================
 
 
 @router.get("/posters/{filename}")

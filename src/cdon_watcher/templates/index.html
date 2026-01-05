@@ -10,6 +10,13 @@
     <div class="container">
       <h1>🎬 CDON Blu-ray Price Tracker</h1>
 
+      <div style="text-align: center; margin-bottom: 20px">
+        <a href="/match" class="match-queue-link">
+          TMDB Matching Queue
+          <span id="match-queue-badge" class="match-queue-badge">0</span>
+        </a>
+      </div>
+
       <div class="stats">
         <div class="stat-card">
           <h3 id="total-movies">-</h3>
@@ -88,6 +95,20 @@
         <h2>🎞️ Cheapest 4K Blu-rays</h2>
         <div id="cheapest-4k-blurays-container" class="movie-grid">
           <div class="loading">Loading cheapest 4K Blu-rays...</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>📦 Box Sets</h2>
+        <div id="box-sets-container" class="movie-grid">
+          <div class="loading">Loading box sets...</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>📦 Box Set Watchlist</h2>
+        <div id="box-set-watchlist-container" class="movie-grid">
+          <div class="loading">Loading box set watchlist...</div>
         </div>
       </div>
     </div>
