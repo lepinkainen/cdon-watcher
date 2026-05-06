@@ -81,6 +81,16 @@ tasks:
     cmds:
       - PYTHONPATH={{.PWD}}/src uv run pytest tests/integration/ --timeout=180
 
+  test-live:
+    desc: Run live cdon.fi shape regression tests (requires network)
+    cmds:
+      - PYTHONPATH={{.PWD}}/src uv run pytest tests/integration/test_live_cdon_pages.py --timeout=180 -v
+
+  test-with-live:
+    desc: Run unit tests + live cdon.fi shape tests
+    cmds:
+      - PYTHONPATH={{.PWD}}/src uv run pytest tests/unit/ tests/integration/test_live_cdon_pages.py --timeout=180
+
   test-all:
     desc: Run all Python tests (unit + integration)
     cmds:
