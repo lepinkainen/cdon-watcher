@@ -70,5 +70,9 @@ def sample_product_urls() -> list[str]:
 
 @pytest.fixture
 def sample_category_url() -> str:
-    """Provide a sample category URL for testing."""
-    return "https://cdon.fi/elokuvat/?facets=property_preset_media_format%3Ablu-ray&q="
+    """Provide a sample category URL for testing.
+
+    Plain /elokuvat/ — CDON's facet+page combo is broken, so the production
+    crawler uses the plain URL with client-side slug filtering instead.
+    """
+    return "https://cdon.fi/elokuvat/"
