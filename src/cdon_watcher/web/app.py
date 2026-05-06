@@ -10,15 +10,24 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from ..database.connection import init_db
+from ..scheduler import start_scheduler
 from .routes import router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan manager."""
-    # Initialize database on startup
     await init_db()
-    yield
+    scheduler_task = start_scheduler()
+    try:
+        yield
+    finally:
+        if scheduler_task is not None:
+            scheduler_task.cancel()
+            try:
+                await scheduler_task
+            except BaseException:
+                pass
 
 
 def create_app() -> FastAPI:

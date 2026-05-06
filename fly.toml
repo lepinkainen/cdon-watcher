@@ -1,0 +1,51 @@
+# fly.toml app configuration file generated for cdon-watcher on 2026-05-05T23:12:00+03:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'cdon-watcher'
+primary_region = 'arn'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[deploy]
+  strategy = 'immediate'
+
+[env]
+  API_HOST = '0.0.0.0'
+  API_PORT = '8080'
+  CACHE_DB_PATH = '/app/data/page_cache.db'
+  DB_PATH = '/app/data/cdon_movies.db'
+  MAX_PAGES_PER_CATEGORY = '10'
+  POSTER_DIR = '/app/data/posters'
+  PYTHONPATH = '/app'
+  RUN_SCHEDULER = 'true'
+  SCAN_MODE = 'fast'
+  SCHEDULER_INTERVAL_HOURS = '24'
+  TZ = 'Europe/Helsinki'
+
+[[mounts]]
+  source = 'cdon_data'
+  destination = '/app/data'
+  initial_size = '3gb'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'requests'
+    hard_limit = 250
+    soft_limit = 200
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 1024
