@@ -107,7 +107,7 @@ class ProductParser:
                 logger.warning(f"No price found for {url}")
                 return None
 
-            format_type = self._determine_format(title)
+            format_type = self._determine_format(title, url)
             availability = self._extract_availability(soup)
             image_url = self._extract_image_url(soup)
             product_id = self._extract_product_id(url)
@@ -132,54 +132,87 @@ class ProductParser:
             return None
 
     def _extract_title(self, soup: BeautifulSoup) -> str | None:
-        """Extract movie title with anti-promotional filtering"""
-        # Try different title selectors in order of preference
-        title_selectors = [
-            "h1",  # Most likely
-            "h2",
-            '[data-testid*="title"]',
-            ".product-title",
-            ".title",
-        ]
+        """Extract movie title with anti-promotional filtering.
 
-        for selector in title_selectors:
-            elements = soup.select(selector)
-            for element in elements:
+        og:title is preferred — CDON populates it with the canonical product
+        name even on pages where the visible h1 is a marketing banner
+        (box-set landing pages cycle through banners like
+        "Elokuvaboksit, jotka luovat ikimuistoisia elokuvailtoja").
+        """
+        og_candidate = self._title_from_og(soup)
+        if og_candidate:
+            return og_candidate
+
+        for selector in ("h1", "h2", '[data-testid*="title"]', ".product-title", ".title"):
+            for element in soup.select(selector):
                 candidate = element.get_text(strip=True)
-
-                # Apply the same filtering logic from the original scraper
                 if self._is_valid_title(candidate):
                     logger.debug(f"Found title with selector '{selector}': {candidate}")
                     return str(candidate)
 
-        # Fallback: try to extract from page title
-        page_title = soup.find("title")
-        if page_title:
-            title_text = page_title.get_text(strip=True)
-            # Remove " | CDON" suffix if present
-            if " | " in title_text:
-                candidate = title_text.split(" | ")[0].strip()
-                if self._is_valid_title(candidate):
-                    logger.debug(f"Found title from page title: {candidate}")
-                    return str(candidate)
+        return self._title_from_page_title(soup)
 
+    def _title_from_og(self, soup: BeautifulSoup) -> str | None:
+        from bs4.element import Tag
+
+        og_title = soup.find("meta", attrs={"property": "og:title"})
+        if not isinstance(og_title, Tag):
+            return None
+        content = og_title.get("content")
+        if not isinstance(content, str):
+            return None
+        candidate = content.strip()
+        if " | " in candidate:
+            candidate = candidate.split(" | ")[0].strip()
+        if self._is_valid_title(candidate):
+            logger.debug(f"Found title from og:title: {candidate}")
+            return candidate
         return None
 
+    def _title_from_page_title(self, soup: BeautifulSoup) -> str | None:
+        page_title = soup.find("title")
+        if not page_title:
+            return None
+        title_text = page_title.get_text(strip=True)
+        if " | " not in title_text:
+            return None
+        candidate = title_text.split(" | ")[0].strip()
+        if self._is_valid_title(candidate):
+            logger.debug(f"Found title from page title: {candidate}")
+            return candidate
+        return None
+
+    # Finnish words/phrases that strongly indicate a sentence-style banner
+    # rather than a product title. Movie/box titles never contain these.
+    _BANNER_MARKERS = (
+        "vihdoin arki",
+        "myyty tänään",
+        "elokuvaboksit, jotka",
+        "elokuvailtoja",
+        "ikimuistoisia",
+        "tarjouksessa",
+        "valitut tuotteet",
+        "kaikki tuotteet",
+        " jotka ",
+        " joka luo",
+        " joiden ",
+    )
+
     def _is_valid_title(self, title: str) -> bool:
-        """Check if a title candidate is valid (not promotional text)"""
+        """Reject obvious banners and noise; accept anything else."""
         if not title or len(title) < 10:
             return False
 
-        # Filter out promotional text and other non-title content
-        promotional_terms = ["vihdoin arki", "myyty tänään", "€", "osta"]
+        lowered = title.lower()
 
-        if any(promo in title.lower() for promo in promotional_terms):
+        if any(marker in lowered for marker in self._BANNER_MARKERS):
             return False
 
-        if title.endswith("%"):
+        # Promotional fragments and currency lines.
+        if "€" in lowered or "osta" in lowered or lowered.endswith("%"):
             return False
 
-        # Filter out pure numbers
+        # Pure-number garbage.
         if title.replace(".", "").replace(",", "").replace(" ", "").isdigit():
             return False
 
@@ -358,12 +391,23 @@ class ProductParser:
 
         return None
 
-    def _determine_format(self, title: str) -> str:
-        """Determine if movie is Blu-ray or 4K Blu-ray (reuse existing logic)"""
-        title_lower = title.lower()
-        if "4k" in title_lower or "uhd" in title_lower or "ultra hd" in title_lower:
+    def _determine_format(self, title: str, url: str = "") -> str:
+        """Determine if movie is Blu-ray, 4K Blu-ray, or DVD.
+
+        Considers both the parsed title and the product URL slug. The URL
+        slug is the more reliable signal (CDON's slugs always include the
+        media format), so titles that drop the format tag (common on box
+        sets) still classify correctly.
+        """
+        haystack = f"{title} {url}".lower()
+        if "4k" in haystack or "uhd" in haystack or "ultra hd" in haystack:
             return "4K Blu-ray"
-        elif "blu-ray" in title_lower or "bluray" in title_lower or "bd" in title_lower:
+        if (
+            "blu-ray" in haystack
+            or "bluray" in haystack
+            or "blu_ray" in haystack
+            or re.search(r"\bbd\b", haystack)
+        ):
             return "Blu-ray"
         return "DVD"  # Default fallback
 
