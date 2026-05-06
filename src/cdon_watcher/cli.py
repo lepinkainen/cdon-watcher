@@ -34,18 +34,20 @@ async def run_crawl(max_pages: int, scan_mode: str = "fast") -> None:
 
     scraper = CDONScraper()
 
-    # Crawl Blu-ray category
+    # CDON's facet+page combo is broken — crawl the plain category and filter
+    # URLs by media-format slug client-side instead.
     await scraper.crawl_category(
-        "https://cdon.fi/elokuvat/?facets=property_preset_media_format%3Ablu-ray&q=",
+        "https://cdon.fi/elokuvat/",
         max_pages=max_pages,
         scan_mode=scan_mode,
+        format_filter="blu-ray",
     )
 
-    # Crawl 4K Ultra HD category
     await scraper.crawl_category(
-        "https://cdon.fi/elokuvat/?facets=property_preset_media_format%3A4k%20ultra%20hd&q=",
+        "https://cdon.fi/elokuvat/",
         max_pages=max_pages,
         scan_mode=scan_mode,
+        format_filter="4k",
     )
 
     print("Crawl complete!")

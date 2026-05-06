@@ -4,11 +4,21 @@ Listing crawler for CDON category pages using Playwright
 
 import asyncio
 import logging
+import re
 from typing import Any
 
 from playwright.async_api import Browser, ElementHandle, Page, async_playwright
 
 from .config import CONFIG
+
+# CDON's facet+page URL combo is broken (server returns "Sivu 1/1" regardless
+# of page parameter when a facet is applied). The plain category URL paginates
+# correctly, and the URL slug always carries the media format, so format
+# filtering is done client-side via these patterns.
+FORMAT_SLUG_PATTERNS: dict[str, re.Pattern[str]] = {
+    "blu-ray": re.compile(r"/tuote/[^/]*\bblu-?ray\b", re.IGNORECASE),
+    "4k": re.compile(r"/tuote/[^/]*(4k|uhd|ultra-hd)", re.IGNORECASE),
+}
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -54,7 +64,11 @@ class ListingCrawler:
         return browser, context, page
 
     async def crawl_category(
-        self, category_url: str, max_pages: int = 10, scan_mode: str = "fast"
+        self,
+        category_url: str,
+        max_pages: int = 10,
+        scan_mode: str = "fast",
+        format_filter: str | None = None,
     ) -> list[str]:
         """Crawl multiple pages of a category and return list of product URLs
 
@@ -62,7 +76,10 @@ class ListingCrawler:
             category_url: The category URL to crawl
             max_pages: Maximum number of pages to crawl
             scan_mode: Scan mode - 'fast', 'moderate', or 'slow'
+            format_filter: Optional 'blu-ray' or '4k' — only product URLs whose
+                slug matches the corresponding format pattern are returned.
         """
+        slug_pattern = self._resolve_slug_pattern(format_filter)
         browser, context, page = await self.create_browser()
 
         all_urls = set()  # Use set to avoid duplicates
@@ -87,6 +104,9 @@ class ListingCrawler:
 
                 logger.info(f"Crawling page {page_num}: {url}")
                 urls = await self._extract_product_urls_from_page(page, url)
+
+                if slug_pattern is not None:
+                    urls = [u for u in urls if slug_pattern.search(u)]
 
                 if not urls:
                     empty_page_count += 1
@@ -115,6 +135,18 @@ class ListingCrawler:
 
         logger.info(f"Scan complete: collected {len(all_urls)} unique product URLs")
         return list(all_urls)
+
+    @staticmethod
+    def _resolve_slug_pattern(format_filter: str | None) -> re.Pattern[str] | None:
+        if format_filter is None:
+            return None
+        pattern = FORMAT_SLUG_PATTERNS.get(format_filter)
+        if pattern is None:
+            raise ValueError(
+                f"Unknown format_filter {format_filter!r}; "
+                f"expected one of {sorted(FORMAT_SLUG_PATTERNS)}"
+            )
+        return pattern
 
     def _get_scan_delay(self, scan_mode: str) -> int:
         """Get delay in seconds based on scan mode"""
@@ -157,6 +189,8 @@ class ListingCrawler:
         logger.debug(f"Navigating to {url}")
         await page.goto(url, wait_until="networkidle", timeout=20000)
 
+        await self._dismiss_cookie_banner(page)
+
         # Wait for content to load
         await self._wait_for_page_content(page)
 
@@ -176,6 +210,31 @@ class ListingCrawler:
         unique_urls = list(set(urls))
         logger.info(f"Extracted {len(unique_urls)} unique product URLs")
         return unique_urls
+
+    async def _dismiss_cookie_banner(self, page: Page) -> None:
+        """Click the Didomi cookie consent banner if present.
+
+        CDON loads a Didomi consent overlay on first visit. Left in place it
+        captures clicks/scroll and reportedly suppresses paginated grid render
+        (server returns "Sivu 1/1" with the overlay active for facet URLs).
+        """
+        try:
+            await page.evaluate(
+                """
+                () => {
+                    const sel = document.querySelector(
+                        '#didomi-notice-agree-button, button.didomi-button-highlight'
+                    );
+                    if (sel) { sel.click(); return; }
+                    const fallback = Array.from(document.querySelectorAll('button'))
+                        .find(b => /hyväksy/i.test(b.textContent || ''));
+                    if (fallback) fallback.click();
+                }
+                """
+            )
+            await asyncio.sleep(0.5)
+        except Exception as exc:  # noqa: BLE001 — cookie banner is best-effort
+            logger.debug(f"Cookie banner dismissal skipped: {exc}")
 
     async def _wait_for_page_content(self, page: Page) -> None:
         """Wait for page content with fallback selectors"""

@@ -57,7 +57,11 @@ class CDONScraper:
         logger.info(f"Database initialized using SQLModel at {CONFIG['db_path']}")
 
     async def crawl_category(
-        self, category_url: str, max_pages: int = 5, scan_mode: str = "fast"
+        self,
+        category_url: str,
+        max_pages: int = 5,
+        scan_mode: str = "fast",
+        format_filter: str | None = None,
     ) -> int:
         """Main crawl workflow: get URLs then parse products, returns count of saved movies
 
@@ -65,12 +69,16 @@ class CDONScraper:
             category_url: The category URL to crawl
             max_pages: Maximum number of pages to crawl
             scan_mode: Scan mode - 'fast', 'moderate', or 'slow'
+            format_filter: Optional 'blu-ray' or '4k' — passed through to the
+                listing crawler to filter URLs by media-format slug.
         """
         logger.info(f"Starting {scan_mode} hybrid crawl of {category_url}")
 
         # Step 1: Use listing crawler to get product URLs
         logger.info("Phase 1: Collecting product URLs with Playwright...")
-        product_urls = await self.listing_crawler.crawl_category(category_url, max_pages, scan_mode)
+        product_urls = await self.listing_crawler.crawl_category(
+            category_url, max_pages, scan_mode, format_filter=format_filter
+        )
 
         if not product_urls:
             logger.warning("No product URLs found")
