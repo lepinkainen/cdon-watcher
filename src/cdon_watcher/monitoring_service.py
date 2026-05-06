@@ -8,8 +8,8 @@ from datetime import datetime as dt
 from sqlmodel import select
 
 from .database.connection import AsyncSessionLocal
+from .models import BoxSetWatchlist, PriceHistory, Watchlist
 from .models import Movie as SQLMovie
-from .models import PriceHistory, Watchlist
 from .notifications import NotificationService
 from .product_parser import Movie as ParsedMovie
 from .product_parser import ProductParser
@@ -23,15 +23,32 @@ class PriceMonitor:
         self.notification_service = NotificationService()
 
     async def check_watchlist_prices(self) -> None:
-        """Check prices for all watchlist items using SQLModel."""
+        """Check prices for all watchlist items using SQLModel.
+
+        Watchlist tracks TMDB IDs (covers all format variants of a film), and
+        BoxSetWatchlist tracks individual Movie rows. Both expand to a set of
+        Movie URLs to refresh.
+        """
         async with AsyncSessionLocal() as session:
-            # Get all watchlist items with their URLs
-            query = select(Watchlist, SQLMovie.url, SQLMovie.title).join(
-                SQLMovie,
-                Watchlist.movie_id == SQLMovie.id,  # type: ignore
+            tmdb_query = (
+                select(SQLMovie.url, SQLMovie.title)
+                .join(Watchlist, Watchlist.tmdb_id == SQLMovie.tmdb_id)  # type: ignore[arg-type]
+                .where(SQLMovie.url.is_not(None))  # type: ignore[union-attr]
             )
-            result = await session.execute(query)
-            watchlist_items = result.all()
+            box_set_query = (
+                select(SQLMovie.url, SQLMovie.title)
+                .join(BoxSetWatchlist, BoxSetWatchlist.movie_id == SQLMovie.id)  # type: ignore[arg-type]
+                .where(SQLMovie.url.is_not(None))  # type: ignore[union-attr]
+            )
+            tmdb_rows = (await session.execute(tmdb_query)).all()
+            box_rows = (await session.execute(box_set_query)).all()
+
+        seen_urls: set[str] = set()
+        watchlist_items: list[tuple[str, str]] = []
+        for url, title in list(tmdb_rows) + list(box_rows):
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                watchlist_items.append((url, title))
 
         if not watchlist_items:
             print("No items in watchlist")
@@ -39,8 +56,7 @@ class PriceMonitor:
 
         print(f"Checking {len(watchlist_items)} watchlist items...")
 
-        # Check each item using the product parser
-        for _watchlist_item, url, title in watchlist_items:
+        for url, title in watchlist_items:
             print(f"Checking: {title}")
 
             try:
