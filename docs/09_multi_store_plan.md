@@ -381,8 +381,7 @@ collections and remain unmatched products in this scope.
    deployment.
 
 Finish each implementation increment with appropriate tests, `task lint`, and
-`task build`. Web changes also require Playwright verification. Do not modify
-`llm-shared`.
+`task build`. Web changes also require Playwright verification.
 
 ## Deferred work
 

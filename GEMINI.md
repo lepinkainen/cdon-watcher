@@ -85,4 +85,4 @@ This project uses `uv` for managing dependencies and running scripts.
 - **Configuration:** Application configuration is handled via environment variables, documented in `.env.example`. The database path is set with `DB_PATH`.
 - **Database:** The SQLite database is located at `data/cdon_movies.db` and is persisted via a Docker volume.
 - **Source Code:** All main application code resides in the `src/cdon_watcher` directory.
-- **AI Guidelines:** This project includes a `llm-shared` submodule. Refer to the `README.md` and other files in that directory for general AI development conventions.
+- **AI Guidelines:** Shared AI development conventions come from the `llm-shared` MCP server.

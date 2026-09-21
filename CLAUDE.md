@@ -85,9 +85,9 @@ DISCORD_WEBHOOK=xxx       # Optional notifications
 
 ## LLM Guidelines
 
-Refer to `llm-shared/` submodule:
+Shared conventions come from the `llm-shared` MCP server (no longer a
+submodule). Key rules it carries:
 
-- `project_tech_stack.md` - Project management, validation patterns
-- `languages/python.md` - Python conventions (uv, ruff, mypy)
-- `shell_commands.md` - Use `rg` instead of `grep`, `fd` instead of `find`
-- `GITHUB.md` - Never commit to main directly, use feature branches
+- Python: uv, ruff, strict mypy
+- Shell: use `rg` instead of `grep`, `fd` instead of `find`
+- GitHub: never commit to main directly, use feature branches
