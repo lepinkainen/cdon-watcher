@@ -21,14 +21,14 @@ PYTHONPATH=./src uv run pytest tests/integration/test_live_cdon_pages.py -v
 
 Layer mapping:
 
-| Failing test                               | Likely layer       |
-| ------------------------------------------ | ------------------ |
-| `test_listing_page_shape[...]`             | listing crawler    |
-| `test_pagination_increases_url_count`      | pagination         |
-| `test_can_paginate_three_pages`            | pagination         |
-| `test_product_page_fields[...]`            | product parser     |
-| `test_invalid_product_url_returns_none`    | product parser     |
-| `test_listing_to_product_pipeline`         | both layers        |
+| Failing test                            | Likely layer    |
+| --------------------------------------- | --------------- |
+| `test_listing_page_shape[...]`          | listing crawler |
+| `test_pagination_increases_url_count`   | pagination      |
+| `test_can_paginate_three_pages`         | pagination      |
+| `test_product_page_fields[...]`         | product parser  |
+| `test_invalid_product_url_returns_none` | product parser  |
+| `test_listing_to_product_pipeline`      | both layers     |
 
 Don't proceed to step 2 until you know which layer to inspect.
 
@@ -46,16 +46,17 @@ Navigate, then run these via `browser_evaluate`. Each is one-shot, copy-paste.
 **Count product links + grab pagination indicator:**
 
 ```js
-() => {
-  const links = Array.from(document.querySelectorAll('a[href*="/tuote/"]'))
-    .map(a => a.getAttribute('href'));
-  const sivu = (document.body.innerText.match(/Sivu\s+\d+\/\d+/i) || [])[0];
+;() => {
+  const links = Array.from(document.querySelectorAll('a[href*="/tuote/"]')).map(
+    (a) => a.getAttribute('href')
+  )
+  const sivu = (document.body.innerText.match(/Sivu\s+\d+\/\d+/i) || [])[0]
   return {
     count: links.length,
     unique: [...new Set(links)].length,
     sample: links.slice(0, 3),
     sivu,
-  };
+  }
 }
 ```
 
@@ -65,29 +66,34 @@ non-trivial URL = pagination is being ignored server-side.
 **Find pagination/load-more controls:**
 
 ```js
-() => {
+;() => {
   const candidates = Array.from(document.querySelectorAll('button, a'))
-    .filter(el => /näytä lisää|load more|seuraava|sivu/i.test(el.textContent || ''))
-    .map(el => ({ tag: el.tagName, text: el.textContent.trim().slice(0, 60) }));
+    .filter((el) =>
+      /näytä lisää|load more|seuraava|sivu/i.test(el.textContent || '')
+    )
+    .map((el) => ({
+      tag: el.tagName,
+      text: el.textContent.trim().slice(0, 60),
+    }))
   const paramHrefs = Array.from(document.querySelectorAll('a'))
-    .map(a => a.getAttribute('href'))
-    .filter(h => h && /(page=|p=|offset=|sivu=)/i.test(h));
-  return { candidates, paramHrefs: [...new Set(paramHrefs)].slice(0, 10) };
+    .map((a) => a.getAttribute('href'))
+    .filter((h) => h && /(page=|p=|offset=|sivu=)/i.test(h))
+  return { candidates, paramHrefs: [...new Set(paramHrefs)].slice(0, 10) }
 }
 ```
 
 **Check infinite-scroll behavior:**
 
 ```js
-async () => {
-  const wait = ms => new Promise(r => setTimeout(r, ms));
-  const counts = [document.querySelectorAll('a[href*="/tuote/"]').length];
+;async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+  const counts = [document.querySelectorAll('a[href*="/tuote/"]').length]
   for (let i = 0; i < 6; i++) {
-    window.scrollTo(0, document.body.scrollHeight);
-    await wait(1500);
-    counts.push(document.querySelectorAll('a[href*="/tuote/"]').length);
+    window.scrollTo(0, document.body.scrollHeight)
+    await wait(1500)
+    counts.push(document.querySelectorAll('a[href*="/tuote/"]').length)
   }
-  return { counts };
+  return { counts }
 }
 ```
 
@@ -97,10 +103,10 @@ required (and the crawler must scroll, not just `goto`).
 **Read Next.js page state:**
 
 ```js
-() => {
-  const node = document.getElementById('__NEXT_DATA__');
-  if (!node) return null;
-  return JSON.stringify(JSON.parse(node.textContent)).slice(0, 4000);
+;() => {
+  const node = document.getElementById('__NEXT_DATA__')
+  if (!node) return null
+  return JSON.stringify(JSON.parse(node.textContent)).slice(0, 4000)
 }
 ```
 
@@ -115,15 +121,22 @@ URL combos the server returns a stripped-down `Sivu 1/1` response. Always
 dismiss it before measuring anything:
 
 ```js
-() => {
+;() => {
   const sel = document.querySelector(
     '#didomi-notice-agree-button, button.didomi-button-highlight'
-  );
-  if (sel) { sel.click(); return 'clicked'; }
-  const fallback = Array.from(document.querySelectorAll('button'))
-    .find(b => /hyväksy/i.test(b.textContent || ''));
-  if (fallback) { fallback.click(); return 'clicked-fallback'; }
-  return 'not-found';
+  )
+  if (sel) {
+    sel.click()
+    return 'clicked'
+  }
+  const fallback = Array.from(document.querySelectorAll('button')).find((b) =>
+    /hyväksy/i.test(b.textContent || '')
+  )
+  if (fallback) {
+    fallback.click()
+    return 'clicked-fallback'
+  }
+  return 'not-found'
 }
 ```
 
@@ -190,16 +203,16 @@ python -m cdon_watcher crawl   # uses the same code path as the scheduler
 
 When you've identified a fix, change one of these places:
 
-| Symptom                                    | File                                                          |
-| ------------------------------------------ | ------------------------------------------------------------- |
-| Cookie banner selector changed             | `listing_crawler.py::_dismiss_cookie_banner`                  |
-| Pagination param renamed                   | `listing_crawler.py::crawl_category` (URL construction loop)  |
-| New format (e.g. SteelBook) needs filter   | `listing_crawler.py::FORMAT_SLUG_PATTERNS`                    |
-| Title selector / banner blocklist          | `product_parser.py::_extract_title`, `_BANNER_MARKERS`        |
-| Format detection heuristic                 | `product_parser.py::_determine_format`                        |
-| Price selector changed                     | `product_parser.py::_extract_price`                           |
-| Production-year DOM structure changed      | `product_parser.py::_extract_production_year`                 |
-| Category URLs themselves moved             | `cli.py::run_crawl`, `scheduler.py::_run_once`                |
+| Symptom                                  | File                                                         |
+| ---------------------------------------- | ------------------------------------------------------------ |
+| Cookie banner selector changed           | `listing_crawler.py::_dismiss_cookie_banner`                 |
+| Pagination param renamed                 | `listing_crawler.py::crawl_category` (URL construction loop) |
+| New format (e.g. SteelBook) needs filter | `listing_crawler.py::FORMAT_SLUG_PATTERNS`                   |
+| Title selector / banner blocklist        | `product_parser.py::_extract_title`, `_BANNER_MARKERS`       |
+| Format detection heuristic               | `product_parser.py::_determine_format`                       |
+| Price selector changed                   | `product_parser.py::_extract_price`                          |
+| Production-year DOM structure changed    | `product_parser.py::_extract_production_year`                |
+| Category URLs themselves moved           | `cli.py::run_crawl`, `scheduler.py::_run_once`               |
 
 After editing, this is the validation loop — run it every time:
 
