@@ -9,8 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from ..catalog.db import open_catalog
+from ..config import CONFIG
 from ..database.connection import init_db
 from ..scheduler import start_scheduler
+from .catalog_routes import router as catalog_router
+from .filters import register_filters
 from .routes import router
 
 
@@ -18,6 +22,7 @@ from .routes import router
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan manager."""
     await init_db()
+    app.state.catalog_engine = open_catalog(CONFIG["db_path"])
     scheduler_task = start_scheduler()
     try:
         yield
@@ -59,11 +64,13 @@ def create_app() -> FastAPI:
 
     # Set up Jinja2 templates
     templates = Jinja2Templates(directory=templates_folder)
+    register_filters(templates)
 
     # Pass templates to routes (we'll add this to the router)
     app.state.templates = templates
 
-    # Include routers
+    # Include routers: the catalog UI owns "/", the legacy API stays until removed.
+    app.include_router(catalog_router)
     app.include_router(router)
 
     return app

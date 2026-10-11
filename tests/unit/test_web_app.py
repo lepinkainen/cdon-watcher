@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from src.cdon_watcher.web.app import create_app
+from cdon_watcher.web.app import create_app
 
 
 @pytest.fixture
@@ -80,7 +80,7 @@ class TestFastAPIAppConfiguration:
         """Test app with custom database path."""
         with patch.dict(os.environ, {"DB_PATH": temp_db_path}):
             # Need to reload config after env change
-            from src.cdon_watcher import config
+            from cdon_watcher import config
 
             importlib.reload(config)
 
@@ -246,7 +246,7 @@ class TestFastAPIEnvironmentConfiguration:
             # Reload config to pick up environment change
             import importlib
 
-            from src.cdon_watcher import config
+            from cdon_watcher import config
 
             importlib.reload(config)
 

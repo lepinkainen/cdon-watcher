@@ -89,6 +89,8 @@ class ParsedRun(BaseModel):
     parser_version: str
     complete: bool
     parsed_at: datetime
+    expire_unseen: bool = True
+    """Whether a complete run of this store means unseen products left the scope."""
     snapshots: list[ParsedSnapshot] = Field(default_factory=list)
 
     @property

@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.cdon_watcher.listing_crawler import ListingCrawler
+from cdon_watcher.listing_crawler import ListingCrawler
 
 
 class TestListingCrawler:

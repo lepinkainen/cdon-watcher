@@ -1,0 +1,24 @@
+<tr class="product" data-product-id="{{ row.id }}" data-tmdb-id="{{ row.tmdb_id or '' }}">
+  <td class="title">
+    <a href="{{ row.edition_url }}" target="_blank" rel="noopener">{{ row.title }}</a>
+    {% if row.title != row.raw_title %}<span class="raw">{{ row.raw_title }}</span>{% endif %}
+    {% if row.is_collection %}<span class="tag">collection</span>{% endif %}
+    {% if row.match_status not in ('auto', 'manual', 'not_applicable') %}<span class="tag muted">unmatched</span>{% endif %}
+  </td>
+  <td><span class="fmt fmt-{{ row.format }}">{{ row.format_label }}</span></td>
+  <td>{{ row.condition }}</td>
+  <td>{{ row.store_name }}</td>
+  <td class="price">
+    <strong>{{ row.price_cents | euros }}</strong>
+    {% if row.regular_price_cents and row.regular_price_cents > row.price_cents %}<del>{{ row.regular_price_cents | euros }}</del>{% endif %}
+  </td>
+  <td class="actions">
+    {% if row.watched %}
+      <button data-action="unwatch" title="Remove from watchlist">★</button>
+    {% else %}
+      <button data-action="watch" title="Watch">☆</button>
+    {% endif %}
+    <button data-action="ignore" title="Ignore (hide everywhere)">✕</button>
+    <a class="history" href="/products/{{ row.id }}" title="Price history">⋯</a>
+  </td>
+</tr>

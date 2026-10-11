@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from src.cdon_watcher.database.repository import DatabaseRepository
-from src.cdon_watcher.models import Movie, PriceHistory, TMDBMovie, Watchlist
+from cdon_watcher.database.repository import DatabaseRepository
+from cdon_watcher.models import Movie, PriceHistory, TMDBMovie, Watchlist
 
 
 @pytest.fixture
@@ -28,7 +28,7 @@ def temp_db_path():
 async def test_db_session(temp_db_path, monkeypatch):
     """Create test database session with schema and test data."""
     # Mock config to use our test database
-    from src.cdon_watcher.config import CONFIG
+    from cdon_watcher.config import CONFIG
 
     monkeypatch.setitem(CONFIG, "db_path", temp_db_path)
 

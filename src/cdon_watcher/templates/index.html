@@ -1,120 +1,51 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CDON Blu-ray Price Tracker</title>
-    <link rel="stylesheet" href="/static/css/style.css" />
-  </head>
-  <body>
-    <div class="container">
-      <h1>🎬 CDON Blu-ray Price Tracker</h1>
+{% extends "layout.html" %}
+{% block content %}
+{% if page.watchlist %}
+<section class="watchlist">
+  <h2>Watchlist in stock</h2>
+  <table>
+    <tbody>
+    {% for row in page.watchlist %}{% include "_row.html" %}{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
 
-      <div style="text-align: center; margin-bottom: 20px">
-        <a href="/match" class="match-queue-link">
-          TMDB Matching Queue
-          <span id="match-queue-badge" class="match-queue-badge">0</span>
-        </a>
-      </div>
+<section>
+  <form class="filters" method="get" action="/">
+    <label>Blu-ray ≤ <input type="text" name="max_bd" inputmode="decimal" size="5" value="{{ max_bd_display }}"> €</label>
+    <label>4K ≤ <input type="text" name="max_4k" inputmode="decimal" size="5" value="{{ max_4k_display }}"> €</label>
+    <select name="format">
+      <option value="" {% if not page.filters.format %}selected{% endif %}>Any format</option>
+      <option value="bd" {% if page.filters.format == 'bd' %}selected{% endif %}>Blu-ray</option>
+      <option value="4k" {% if page.filters.format == '4k' %}selected{% endif %}>4K UHD</option>
+    </select>
+    <select name="store">
+      <option value="" {% if not page.filters.store %}selected{% endif %}>Any store</option>
+      {% for store in page.stores %}
+      <option value="{{ store.key }}" {% if page.filters.store == store.key %}selected{% endif %}>{{ store.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="condition">
+      <option value="" {% if not page.filters.condition %}selected{% endif %}>Any condition</option>
+      <option value="new" {% if page.filters.condition == 'new' %}selected{% endif %}>New</option>
+      <option value="used" {% if page.filters.condition == 'used' %}selected{% endif %}>Used</option>
+    </select>
+    <input type="search" name="q" placeholder="Title" value="{{ page.filters.q or '' }}">
+    <button type="submit">Filter</button>
+    <a class="reset" href="/">Reset</a>
+  </form>
 
-      <div class="stats">
-        <div class="stat-card">
-          <h3 id="total-movies">-</h3>
-          <p>Total Movies</p>
-        </div>
-        <div class="stat-card">
-          <h3 id="price-drops">-</h3>
-          <p>Price Drops Today</p>
-        </div>
-        <div class="stat-card">
-          <h3 id="watchlist-count">-</h3>
-          <p>Watchlist Items</p>
-        </div>
-        <div class="stat-card">
-          <h3 id="last-update">-</h3>
-          <p>Last Update</p>
-        </div>
-      </div>
-
-      <div class="section">
-        <h2>🔔 Recent Price Alerts</h2>
-        <div id="alerts-container">
-          <div class="loading">Loading alerts...</div>
-        </div>
-      </div>
-
-      <div class="section">
-        <h2>🔍 Search Movies</h2>
-        <div class="search-box">
-          <input
-            type="text"
-            id="search-input"
-            placeholder="Search for movies..."
-            onkeypress="if (event.key === 'Enter') searchMovies()"
-          />
-          <input
-            type="number"
-            id="max-price-input"
-            placeholder="Max price €"
-            step="0.01"
-            min="0"
-            title="Maximum price filter"
-          />
-          <select id="category-select" title="Movie category">
-            <option value="all">All Movies</option>
-            <option value="bluray">Blu-ray</option>
-            <option value="4k">4K</option>
-          </select>
-          <button onclick="searchMovies()">Search</button>
-        </div>
-        <div id="search-results" class="movie-grid"></div>
-      </div>
-
-      <div class="section">
-        <h2>💰 Best Deals</h2>
-        <div id="deals-container" class="movie-grid">
-          <div class="loading">Loading deals...</div>
-        </div>
-      </div>
-
-      <div class="section">
-        <h2>👀 Watchlist</h2>
-        <div id="watchlist-container" class="movie-grid">
-          <div class="loading">Loading watchlist...</div>
-        </div>
-      </div>
-
-      <div class="section">
-        <h2>💵 Cheapest Blu-rays</h2>
-        <div id="cheapest-blurays-container" class="movie-grid">
-          <div class="loading">Loading cheapest Blu-rays...</div>
-        </div>
-      </div>
-
-      <div class="section">
-        <h2>🎞️ Cheapest 4K Blu-rays</h2>
-        <div id="cheapest-4k-blurays-container" class="movie-grid">
-          <div class="loading">Loading cheapest 4K Blu-rays...</div>
-        </div>
-      </div>
-
-      <div class="section">
-        <h2>📦 Box Sets</h2>
-        <div id="box-sets-container" class="movie-grid">
-          <div class="loading">Loading box sets...</div>
-        </div>
-      </div>
-
-      <div class="section">
-        <h2>📦 Box Set Watchlist</h2>
-        <div id="box-set-watchlist-container" class="movie-grid">
-          <div class="loading">Loading box set watchlist...</div>
-        </div>
-      </div>
-    </div>
-
-    <script src="/static/js/main.js"></script>
-
-    <!-- Notification container will be added dynamically -->
-  </body>
-</html>
+  {% if page.rows %}
+  <table>
+    <thead><tr><th>Title</th><th>Format</th><th>Cond.</th><th>Store</th><th>Price</th><th></th></tr></thead>
+    <tbody>
+    {% for row in page.rows %}{% include "_row.html" %}{% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">Nothing in stock within these limits.</p>
+  {% endif %}
+  <p class="meta">{{ page.rows | length }} offers · last refresh {{ page.last_refresh | when }}</p>
+</section>
+{% endblock %}

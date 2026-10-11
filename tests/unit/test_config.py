@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.cdon_watcher.config import load_config
+from cdon_watcher.config import load_config
 
 
 class TestConfigLoading:

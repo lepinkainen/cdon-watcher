@@ -14,6 +14,7 @@ PARSED_FILENAME = "parsed.json"
 class StoreParser(Protocol):
     store: str
     version: str
+    expires_unseen: bool
 
     def parse(self, body: bytes) -> tuple[list[ParsedProduct], list[ParseError]]: ...
 
@@ -60,6 +61,7 @@ def parse_run(
         parser_version=parser.version,
         complete=manifest.complete,
         parsed_at=datetime.now(UTC),
+        expire_unseen=parser.expires_unseen,
     )
     for snapshot in manifest.snapshots:
         if snapshot.error is not None or snapshot.body_ref is None or snapshot.status != 200:

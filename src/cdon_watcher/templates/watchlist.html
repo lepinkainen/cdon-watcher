@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block title %}Watchlist{% endblock %}
+{% block content %}
+<h2>Watchlist</h2>
+{% if entries %}
+{% for entry in entries %}
+<section class="watch-entry" data-product-id="{{ entry.unwatch_product_id }}">
+  <h3>{{ entry.title }} <button data-action="unwatch">Unwatch</button></h3>
+  {% if entry.offers %}
+  <table><tbody>{% for row in entry.offers %}{% include "_row.html" %}{% endfor %}</tbody></table>
+  {% else %}<p class="empty">No in-stock offers</p>{% endif %}
+</section>
+{% endfor %}
+{% else %}<p class="empty">Nothing watched.</p>{% endif %}
+{% endblock %}

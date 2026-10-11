@@ -1,45 +1,21 @@
 """Offline parser for saved Levykauppa Äx offer listing pages."""
 
 import re
-from decimal import Decimal, InvalidOperation
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup, Tag
 
 from ..box_set_detector import is_box_set
 from .contract import Availability, Condition, Format, ParsedProduct, ParseError
+from .normalize import clean_title, format_from_text, parse_price_cents
 
 PARSER_VERSION = "ax-1"
 BASE_URL = "https://www.levykauppax.fi/"
 
 _USED_PREFIX = re.compile(r"^\s*käytetty\s+", re.IGNORECASE)
 _DISC_COUNT = re.compile(r"^\s*(\d+)\s*(?:x\s*)?(?=blu|dvd|ultra|4k|uhd)", re.IGNORECASE)
-_UHD = re.compile(r"4k|ultra\s*hd|uhd", re.IGNORECASE)
-_BLURAY = re.compile(r"blu", re.IGNORECASE)
-_DVD = re.compile(r"dvd", re.IGNORECASE)
 _QUANTITY = re.compile(r"(\d+)\s*kpl", re.IGNORECASE)
 _YEAR = re.compile(r"\b(19\d{2}|20\d{2})\b")
-_EDITION_TAG = re.compile(
-    r"\s*[(\[][^()\[\]]*(blu-?ray|4k|uhd|dvd|steelbook|limited|edition|remaster)[^()\[\]]*[)\]]",
-    re.IGNORECASE,
-)
-_WHITESPACE = re.compile(r"\s+")
-
-
-def parse_price_cents(text: str) -> int | None:
-    """Turn a localized price such as '1 234,56 €' into integer cents."""
-    cleaned = re.sub(r"[^\d,.]", "", text.replace("\xa0", ""))
-    if not cleaned:
-        return None
-    if "," in cleaned:
-        cleaned = cleaned.replace(".", "").replace(",", ".")
-    try:
-        value = Decimal(cleaned)
-    except InvalidOperation:
-        return None
-    if value <= 0 or value != value.quantize(Decimal("0.01")):
-        return None
-    return int(value * 100)
 
 
 def parse_format(raw: str) -> tuple[Format, Condition, int | None]:
@@ -48,15 +24,7 @@ def parse_format(raw: str) -> tuple[Format, Condition, int | None]:
     rest = _USED_PREFIX.sub("", raw)
     count_match = _DISC_COUNT.match(rest)
     disc_count = int(count_match.group(1)) if count_match else None
-    if _UHD.search(rest):
-        media = Format.UHD
-    elif _BLURAY.search(rest):
-        media = Format.BLURAY
-    elif _DVD.search(rest):
-        media = Format.DVD
-    else:
-        media = Format.UNKNOWN
-    return media, condition, disc_count
+    return format_from_text(rest), condition, disc_count
 
 
 def parse_availability(node: Tag | None) -> tuple[Availability, str | None]:
@@ -76,14 +44,10 @@ def parse_availability(node: Tag | None) -> tuple[Availability, str | None]:
     return Availability.UNKNOWN, text or None
 
 
-def clean_title(raw: str) -> str:
-    cleaned = _EDITION_TAG.sub("", raw)
-    return _WHITESPACE.sub(" ", cleaned).strip(" -–:") or raw.strip()
-
-
 class AxParser:
     store = "ax"
     version = PARSER_VERSION
+    expires_unseen = True
 
     def parse(self, body: bytes) -> tuple[list[ParsedProduct], list[ParseError]]:
         soup = BeautifulSoup(body, "html.parser")

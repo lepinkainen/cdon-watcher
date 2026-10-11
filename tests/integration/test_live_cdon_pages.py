@@ -20,8 +20,8 @@ import re
 import pytest
 import requests
 
-from src.cdon_watcher.listing_crawler import ListingCrawler
-from src.cdon_watcher.product_parser import ProductParser
+from cdon_watcher.listing_crawler import ListingCrawler
+from cdon_watcher.product_parser import ProductParser
 
 CATEGORY_URL = "https://cdon.fi/elokuvat/"
 

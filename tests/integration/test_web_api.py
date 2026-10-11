@@ -6,10 +6,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from src.cdon_watcher.cdon_scraper import CDONScraper
+from cdon_watcher.cdon_scraper import CDONScraper
 
 # DatabaseManager was removed - using CDONScraper for database initialization
-from src.cdon_watcher.web.app import create_app
+from cdon_watcher.web.app import create_app
 
 
 @pytest.fixture
@@ -33,7 +33,7 @@ def app(temp_db_path, monkeypatch):
     monkeypatch.setenv("DB_PATH", temp_db_path)
 
     # Import after setting environment variable
-    from src.cdon_watcher.config import CONFIG
+    from cdon_watcher.config import CONFIG
 
     monkeypatch.setitem(CONFIG, "db_path", temp_db_path)
 

@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.cdon_watcher.notifications import NotificationService
+from cdon_watcher.notifications import NotificationService
 
 
 class TestNotificationFormatting:

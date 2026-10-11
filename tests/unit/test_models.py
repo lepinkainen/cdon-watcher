@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from src.cdon_watcher.models import (
+from cdon_watcher.models import (
     DealMovie,
     IgnoredMovie,
     Movie,

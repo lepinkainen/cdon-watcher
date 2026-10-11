@@ -2,11 +2,9 @@
 
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.responses import Response
 
 from ..config import CONFIG
 from ..database.connection import get_db_session
@@ -55,22 +53,9 @@ async def get_repository(session: AsyncSession = Depends(get_db_session)) -> Dat
     # Enable query logging in development mode (can be controlled via environment variable)
     enable_logging = CONFIG.get("debug", False) or CONFIG.get("enable_query_logging", False)
     tmdb_service = get_tmdb_service()
-    return DatabaseRepository(session, enable_query_logging=enable_logging, tmdb_service=tmdb_service)
-
-
-@router.get("/")
-async def index(request: Request) -> Response:
-    """Main dashboard page."""
-    # Get templates from app state
-    templates: Jinja2Templates = request.app.state.templates
-    return templates.TemplateResponse(request, "index.html")
-
-
-@router.get("/match")
-async def match_page(request: Request) -> Response:
-    """TMDB matching queue page."""
-    templates: Jinja2Templates = request.app.state.templates
-    return templates.TemplateResponse(request, "match.html")
+    return DatabaseRepository(
+        session, enable_query_logging=enable_logging, tmdb_service=tmdb_service
+    )
 
 
 @router.get("/api/stats", response_model=StatsData)

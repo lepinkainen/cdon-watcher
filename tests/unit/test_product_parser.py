@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 from bs4 import BeautifulSoup
 
-from src.cdon_watcher.product_parser import ProductParser
+from cdon_watcher.product_parser import ProductParser
 
 
 class TestProductParser:
@@ -57,7 +57,7 @@ class TestProductParser:
         movie = product_parser.parse_product_page(url)
         assert movie is None, f"Should return None for malformed URL: {url}"
 
-    @patch("src.cdon_watcher.product_parser.requests.Session.get")
+    @patch("cdon_watcher.product_parser.requests.Session.get")
     def test_parse_product_page_includes_production_year(self, mock_get: Mock) -> None:
         """Test that production year is included in parsed movie data."""
         # Mock HTML response similar to Batman CDON page
@@ -106,7 +106,7 @@ class TestProductParser:
         # Verify HTTP call was made
         mock_get.assert_called_once_with(url, timeout=10)
 
-    @patch("src.cdon_watcher.product_parser.requests.Session.get")
+    @patch("cdon_watcher.product_parser.requests.Session.get")
     def test_parse_product_page_no_production_year(self, mock_get: Mock) -> None:
         """Test parsing when no production year is available."""
         # Mock HTML response without Nauhoitusvuosi

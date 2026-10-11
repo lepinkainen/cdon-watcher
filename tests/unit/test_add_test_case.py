@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.cdon_watcher.add_test_case import (
+from cdon_watcher.add_test_case import (
     determine_format_from_title,
     generate_test_name,
     load_test_data,
@@ -172,7 +172,7 @@ class TestDataPersistence:
 
     def test_load_test_data_nonexistent_file(self) -> None:
         """Test loading test data when file doesn't exist."""
-        with patch("src.cdon_watcher.add_test_case.os.path.exists", return_value=False):
+        with patch("cdon_watcher.add_test_case.os.path.exists", return_value=False):
             result = load_test_data()
             expected = {"test_cases": []}
             assert result == expected, "Should return default structure for nonexistent file"
@@ -200,8 +200,8 @@ class TestDataPersistence:
 
         try:
             # Mock the path to point to our temp file
-            with patch("src.cdon_watcher.add_test_case.os.path.join", return_value=temp_path):
-                with patch("src.cdon_watcher.add_test_case.os.path.exists", return_value=True):
+            with patch("cdon_watcher.add_test_case.os.path.join", return_value=temp_path):
+                with patch("cdon_watcher.add_test_case.os.path.exists", return_value=True):
                     result = load_test_data()
                     assert result == test_data, "Should load existing test data"
         finally:
@@ -230,7 +230,7 @@ class TestDataPersistence:
 
         try:
             # Mock the path to point to our temp file
-            with patch("src.cdon_watcher.add_test_case.os.path.join", return_value=temp_path):
+            with patch("cdon_watcher.add_test_case.os.path.join", return_value=temp_path):
                 save_test_data(test_data)
 
                 # Verify file was written correctly
@@ -272,12 +272,12 @@ class TestDataPersistence:
 
         try:
             # Mock the path for both save and load
-            with patch("src.cdon_watcher.add_test_case.os.path.join", return_value=temp_path):
+            with patch("cdon_watcher.add_test_case.os.path.join", return_value=temp_path):
                 # Save data
                 save_test_data(original_data)
 
                 # Load data back
-                with patch("src.cdon_watcher.add_test_case.os.path.exists", return_value=True):
+                with patch("cdon_watcher.add_test_case.os.path.exists", return_value=True):
                     loaded_data = load_test_data()
                     assert loaded_data == original_data, "Save/load should be consistent"
         finally:

@@ -30,6 +30,8 @@ class Snapshot(BaseModel):
     sha256: str | None
     body_ref: str | None
     attempt: int
+    rendered: bool = False
+    """True when the body is browser-rendered HTML rather than the raw HTTP response."""
     error: str | None = None
     products: list[Discovery] = Field(default_factory=list)
 
@@ -71,6 +73,7 @@ class ArchivedRun:
         status: int | None,
         body: bytes | None,
         attempt: int,
+        rendered: bool = False,
         error: str | None = None,
     ) -> Snapshot:
         snapshot_id = len(self.manifest.snapshots) + 1
@@ -87,6 +90,7 @@ class ArchivedRun:
             sha256=hashlib.sha256(body).hexdigest() if body is not None else None,
             body_ref=body_ref,
             attempt=attempt,
+            rendered=rendered,
             error=error,
         )
         self.manifest.snapshots.append(snapshot)

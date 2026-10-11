@@ -15,6 +15,7 @@ class Response:
     final_url: str
     status: int
     body: bytes
+    rendered: bool = False
 
 
 class HttpFetcher:
@@ -66,6 +67,7 @@ class Crawler:
             status=response.status,
             body=response.body,
             attempt=attempt,
+            rendered=response.rendered,
             error=None if response.status == 200 else f"HTTP {response.status}",
         )
         return snapshot, response.body if response.status == 200 else None

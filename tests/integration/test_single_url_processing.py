@@ -12,8 +12,8 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from src.cdon_watcher.cdon_scraper import CDONScraper
-from src.cdon_watcher.product_parser import ProductParser
+from cdon_watcher.cdon_scraper import CDONScraper
+from cdon_watcher.product_parser import ProductParser
 
 
 @pytest.fixture
