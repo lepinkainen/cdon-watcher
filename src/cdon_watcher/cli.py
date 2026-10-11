@@ -6,10 +6,10 @@ import os
 import sys
 from collections.abc import Coroutine
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from .config import CONFIG
-from .monitoring_service import PriceMonitor
 
 
 def run_async_with_graceful_shutdown(coro: Coroutine[Any, Any, Any]) -> None:
@@ -56,6 +56,7 @@ async def run_crawl(max_pages: int, scan_mode: str = "fast") -> None:
 async def run_monitor() -> None:
     """Run the price monitoring service."""
     from .database.connection import init_db
+    from .monitoring_service import PriceMonitor
 
     # Initialize database (runs migrations for new columns)
     await init_db()
@@ -101,6 +102,14 @@ def main() -> None:
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
+    raw_parser = subparsers.add_parser(
+        "crawl-raw", help="Archive store responses without importing"
+    )
+    raw_parser.add_argument("--store", choices=["ax"], required=True)
+    raw_parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
+    raw_parser.add_argument("--attempts", type=int, default=3)
+    raw_parser.add_argument("--delay", type=float, default=2.0, help="Seconds between requests")
+
     # Crawl command
     crawl_parser = subparsers.add_parser("crawl", help="Initial crawl of CDON")
     crawl_parser.add_argument(
@@ -135,7 +144,28 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.command == "crawl":
+    if args.command == "crawl-raw":
+        from .ingestion.archive import RawArchive, StoreBusyError
+        from .ingestion.crawler import Crawler, HttpFetcher
+        from .ingestion.stores import AxAdapter
+
+        fetcher = HttpFetcher()
+        try:
+            crawler = Crawler(
+                RawArchive(args.raw_dir), fetcher, attempts=args.attempts, delay=args.delay
+            )
+            run = crawler.crawl(AxAdapter())
+        except (ValueError, StoreBusyError) as error:
+            parser.exit(2, f"{error}\n")
+        finally:
+            fetcher.close()
+        print(run.path / "manifest.json")
+        print(f"{run.manifest.listing_count} pages, {run.manifest.product_count} eligible editions")
+        if not run.manifest.complete:
+            parser.exit(
+                1, "Incomplete crawl; saved responses remain available for offline import.\n"
+            )
+    elif args.command == "crawl":
         run_async_with_graceful_shutdown(run_crawl(args.max_pages, args.scan_mode))
     elif args.command == "update-scan":
         # Update scan uses moderate mode by default for development

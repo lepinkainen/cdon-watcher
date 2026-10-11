@@ -18,12 +18,22 @@ task lint-fix                   # Auto-fix linting issues
 uv run python -m cdon_watcher web      # Web dashboard at :8080
 uv run python -m cdon_watcher crawl    # Initial crawl
 uv run python -m cdon_watcher monitor  # Price monitoring service
+uv run python -m cdon_watcher crawl-raw --store ax  # Archive Äx offers, no DB writes
 
 # Run single test
 PYTHONPATH=./src uv run pytest tests/unit/test_file.py -k "test_name"
 ```
 
 ## Architecture Overview
+
+The multi-store rewrite in `docs/09_multi_store_plan.md` has started with the
+standalone raw crawler. `ingestion/archive.py` stores numbered runs and compressed
+responses with manifests; `ingestion/stores.py` owns Äx offer discovery;
+`ingestion/crawler.py` handles delayed requests and retries. `crawl-raw --store ax`
+fetches only offer listing pages and uses a per-store process lock. It returns 1
+for incomplete runs, preserving all received responses for later offline parsing.
+The parser, importer, and replacement UI are not implemented yet. The architecture
+below describes the existing application.
 
 **Hybrid web scraper** tracking Blu-ray prices on CDON.fi with three services:
 

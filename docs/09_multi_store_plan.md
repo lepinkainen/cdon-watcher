@@ -1,8 +1,17 @@
 # Physical movie store database plan
 
-Status: agreed scope and proposed implementation, 2026-09-21. Open questions
-resolved the same day; this is the v1 spec. The application does not implement
-it yet.
+Status: implementation started, 2026-09-21. Open questions resolved the same
+day; this is the v1 spec. Step 1 is implemented. Steps 2–7 remain pending,
+and the existing application still uses the proof-of-concept pipeline.
+
+The standalone command `uv run python -m cdon_watcher crawl-raw --store ax`
+saves offer listing responses under `data/raw/ax/<run>/`, without database
+imports or TMDB calls. Use `--raw-dir` to select another archive directory.
+Requests default to a two-second delay and three attempts per page; `--delay`
+and `--attempts` override these values. Incomplete crawls retain their responses
+and return exit code 1. A concurrent crawl for the same store returns exit code 2.
+The manifest records discovery counts, edition links, failures, and response
+provenance. Saved fixtures and offline tests cover the first and last offer pages.
 
 ## Operating context
 
@@ -126,10 +135,10 @@ products, apply shopping price limits, or call TMDB.
 
 Which pages each adapter fetches in v1:
 
-| Store | Listing pages                                  | Detail pages                                   |
-| ----- | ---------------------------------------------- | ---------------------------------------------- |
-| Äx    | All offer-category pages (`?p2=N`), plain HTTP | None. Listing rows carry everything v1 needs   |
-| CDON  | First N pages per format, Playwright           | Product page per discovered URL, plain HTTP    |
+| Store | Listing pages                                  | Detail pages                                 |
+| ----- | ---------------------------------------------- | -------------------------------------------- |
+| Äx    | All offer-category pages (`?p2=N`), plain HTTP | None. Listing rows carry everything v1 needs |
+| CDON  | First N pages per format, Playwright           | Product page per discovered URL, plain HTTP  |
 
 Äx detail pages (EAN, language, subtitles) are not fetched in v1. CDON product
 pages are required because the listing exposes only URLs.
@@ -253,12 +262,12 @@ carousels, no per-store sections.
 Every filter on section 2 is a query parameter so a view is bookmarkable. The
 page must answer questions of this shape directly:
 
-| Question                                     | Filters                            |
-| -------------------------------------------- | ---------------------------------- |
-| Blu-ray at €10 or less and 4K at €20 or less | (no parameters, defaults)          |
-| All movies at €10 or less                    | `max_bd=10&max_4k=10`              |
-| Only 4K at €20 or less                       | `format=4k`                        |
-| Blu-ray at €15 or less, one store            | `format=bd&max_bd=15&store=ax`     |
+| Question                                     | Filters                        |
+| -------------------------------------------- | ------------------------------ |
+| Blu-ray at €10 or less and 4K at €20 or less | (no parameters, defaults)      |
+| All movies at €10 or less                    | `max_bd=10&max_4k=10`          |
+| Only 4K at €20 or less                       | `format=4k`                    |
+| Blu-ray at €15 or less, one store            | `format=bd&max_bd=15&store=ax` |
 
 Filters: `max_bd` and `max_4k` (euros, decimals allowed, converted to cents),
 `format` (`bd`, `4k`, any), `store`, `condition` (`new`, `used`, any), and a
