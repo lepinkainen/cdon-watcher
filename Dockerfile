@@ -1,55 +1,36 @@
-# Dockerfile for fly.io deployment
-# Single image runs the web service 24/7 plus a daily background task that
-# refreshes the catalog (crawl) and checks watchlist prices (monitor).
-# Includes Playwright since the daily task needs the listing crawler.
+# Single container: web app plus the in-process daily refresh (RUN_SCHEDULER=true).
+# Dependencies come from uv.lock so the image matches what the tests ran against.
+# Playwright + Chromium are required for the CDON adapter.
 
-FROM python:3.13-slim AS builder
+FROM python:3.13-slim-bookworm
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends build-essential curl && \
-    pip install --no-cache-dir uv && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-COPY pyproject.toml uv.lock ./
-COPY src/ /app/src/
-
-RUN uv pip install --system --no-cache -e .
-
-FROM python:3.13-slim AS runtime
-
-COPY --from=builder /usr/local/lib/python3.13/site-packages/ /usr/local/lib/python3.13/site-packages/
-COPY --from=builder /usr/local/bin/ /usr/local/bin/
-
-RUN playwright install-deps chromium && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 RUN useradd -m -u 1000 tracker
 
 WORKDIR /app
+COPY pyproject.toml uv.lock ./
+COPY src/ /app/src/
+RUN uv sync --frozen --no-dev --no-editable
+ENV PATH="/app/.venv/bin:$PATH" \
+    PLAYWRIGHT_BROWSERS_PATH=/app/playwright_browsers
 
-COPY --chown=tracker:tracker src/ /app/src/
-
-ENV PLAYWRIGHT_BROWSERS_PATH=/app/playwright_browsers
-RUN mkdir -p ${PLAYWRIGHT_BROWSERS_PATH} && \
-    playwright install chromium && \
-    chown -R tracker:tracker ${PLAYWRIGHT_BROWSERS_PATH} /app
+RUN apt-get update && playwright install --with-deps chromium && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
+    mkdir -p /app/data && chown -R tracker:tracker /app
 
 USER tracker
 
-RUN mkdir -p /app/data/posters
-
 ENV PYTHONUNBUFFERED=1 \
-    DB_PATH=/app/data/cdon_movies.db \
-    POSTER_DIR=/app/data/posters \
-    CACHE_DB_PATH=/app/data/page_cache.db \
+    DB_PATH=/app/data/catalog.db \
+    RAW_DIR=/app/data/raw \
     API_HOST=0.0.0.0 \
     API_PORT=8080 \
-    PYTHONPATH=/app
+    RUN_SCHEDULER=true \
+    SCHEDULER_INTERVAL_HOURS=24 \
+    SCHEDULER_INITIAL_DELAY_SECONDS=300 \
+    TZ=Europe/Helsinki
 
 EXPOSE 8080
+VOLUME ["/app/data"]
 
 CMD ["python", "-m", "cdon_watcher", "web"]

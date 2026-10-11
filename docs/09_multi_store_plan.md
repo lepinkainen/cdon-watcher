@@ -1,8 +1,53 @@
 # Physical movie store database plan
 
-Status: agreed scope and proposed implementation, 2026-09-21. Open questions
-resolved the same day; this is the v1 spec. The application does not implement
-it yet.
+Status: implementation started, 2026-09-21. Open questions resolved the same
+day; this is the v1 spec. All seven implementation steps are done as of
+2026-10-12; the proof-of-concept modules, fly.io files and legacy tests are
+removed. Remaining v1 work is operational: run it, tune thresholds, fix
+whatever the live tests catch.
+
+The standalone command `uv run python -m cdon_watcher crawl-raw --store ax`
+saves offer listing responses under `data/raw/ax/<run>/`, without database
+imports or TMDB calls. Use `--raw-dir` to select another archive directory.
+Requests default to a two-second delay and three attempts per page; `--delay`
+and `--attempts` override these values. Incomplete crawls retain their responses
+and return exit code 1. A concurrent crawl for the same store returns exit code 2.
+The manifest records discovery counts, edition links, failures, and response
+provenance. Saved fixtures and offline tests cover the first and last offer pages.
+
+`uv run python -m cdon_watcher parse-raw --store ax [--run N] [--all-formats]`
+parses an archived run offline into `data/raw/ax/<run>/parsed.json` using the
+shared contract in `ingestion/contract.py` (`ParsedProduct`, integer cents,
+normalized format/condition/availability with raw text kept). Latest run by
+default; DVD and unknown formats are dropped unless `--all-formats`. Row-level
+parse errors are recorded, never fatal. Reparsing overwrites `parsed.json` only.
+
+`uv run python -m cdon_watcher import-run --store ax|cdon [--run N] [--db PATH]`
+imports `parsed.json` into the catalog tables (`stores`, `crawl_runs`,
+`store_products`, `price_observations`, versioned through `schema_version`).
+`crawl-raw --store cdon --max-pages N` crawls CDON through headless Chromium.
+
+Finding, 2026-10-11: cdon.fi now serves a Cloudflare "Just a moment" challenge
+to plain HTTP clients, so CDON product pages cannot be fetched with requests.
+The rendered category listing embeds `__NEXT_DATA__` with price, stock count,
+condition, format property and URL for every article, which covers v1. CDON is
+therefore listing-only through Playwright; no product pages are fetched.
+
+`uv run python -m cdon_watcher match [--store ax|cdon] [--limit N]` runs TMDB
+matching (schema v2: `movie_metadata`, `match_states`). One search request per
+product, details fetched only for accepted matches. Status values: `pending`,
+`auto`, `manual`, `rejected`, `ambiguous`, `unmatched`, `not_applicable`
+(collections), `error` (retried next run). Thresholds live in
+`catalog/matching.py` (`ACCEPT_SCORE` 0.80, `ACCEPT_MARGIN` 0.08).
+
+The web UI (schema v3: `user_preferences`) lives in `web/catalog_routes.py`,
+`catalog/queries.py`, `catalog/preferences.py` and `templates/`. Pages: `/`
+(watchlist section, then the filtered list), `/watchlist`, `/queue`,
+`/ignored`, `/products/<id>`, `/status`. Actions:
+`POST /api/v2/products/<id>/{watch|unwatch|ignore|unignore}`,
+`POST /api/v2/products/<id>/match` with `{"tmdb_id": int|null}`,
+`GET /api/v2/tmdb/search?q=`. Templates are excluded from prettier because it
+splits Jinja tags across lines.
 
 ## Operating context
 
@@ -28,10 +73,10 @@ it yet.
 
 ## Agreed scope
 
-- Keep CDON, scoped to the first N listing pages of `https://cdon.fi/elokuvat/`
-  per format filter (Blu-ray, 4K), N configurable with default 10, as today.
-  CDON has no offer category, so this page limit is CDON's normal scope and
-  does not make a CDON run incomplete.
+- Keep CDON, scoped to the first N listing pages of `https://cdon.fi/elokuvat/`,
+  N configurable with default 10. One run covers Blu-ray and 4K. CDON has no
+  offer category, so this page limit is CDON's normal scope and does not make
+  a CDON run incomplete.
 - Add Levykauppa Äx, limited to <https://www.levykauppax.fi/leffat/offer/>
   and products discovered there.
 - Include Blu-ray and 4K UHD, both new and used. Exclude DVD-only products.
@@ -126,13 +171,15 @@ products, apply shopping price limits, or call TMDB.
 
 Which pages each adapter fetches in v1:
 
-| Store | Listing pages                                  | Detail pages                                   |
-| ----- | ---------------------------------------------- | ---------------------------------------------- |
-| Äx    | All offer-category pages (`?p2=N`), plain HTTP | None. Listing rows carry everything v1 needs   |
-| CDON  | First N pages per format, Playwright           | Product page per discovered URL, plain HTTP    |
+| Store | Listing pages                                  | Detail pages                                    |
+| ----- | ---------------------------------------------- | ----------------------------------------------- |
+| Äx    | All offer-category pages (`?p2=N`), plain HTTP | None. Listing rows carry everything v1 needs    |
+| CDON  | First N pages of `/elokuvat/`, Playwright      | None. `__NEXT_DATA__` articles carry everything |
 
-Äx detail pages (EAN, language, subtitles) are not fetched in v1. CDON product
-pages are required because the listing exposes only URLs.
+Neither store needs detail pages in v1. Äx detail pages (EAN, language,
+subtitles) and CDON product pages (production year in the description) are
+deferred. CDON listing pages are fetched once and filtered to Blu-ray and 4K
+client-side, so one run covers both formats.
 
 Save every response with a run ID, store, scope, requested and final URL, fetch
 time, HTTP status, content hash, and body reference. Use a run manifest and
@@ -253,12 +300,12 @@ carousels, no per-store sections.
 Every filter on section 2 is a query parameter so a view is bookmarkable. The
 page must answer questions of this shape directly:
 
-| Question                                     | Filters                            |
-| -------------------------------------------- | ---------------------------------- |
-| Blu-ray at €10 or less and 4K at €20 or less | (no parameters, defaults)          |
-| All movies at €10 or less                    | `max_bd=10&max_4k=10`              |
-| Only 4K at €20 or less                       | `format=4k`                        |
-| Blu-ray at €15 or less, one store            | `format=bd&max_bd=15&store=ax`     |
+| Question                                     | Filters                        |
+| -------------------------------------------- | ------------------------------ |
+| Blu-ray at €10 or less and 4K at €20 or less | (no parameters, defaults)      |
+| All movies at €10 or less                    | `max_bd=10&max_4k=10`          |
+| Only 4K at €20 or less                       | `format=4k`                    |
+| Blu-ray at €15 or less, one store            | `format=bd&max_bd=15&store=ax` |
 
 Filters: `max_bd` and `max_4k` (euros, decimals allowed, converted to cents),
 `format` (`bd`, `4k`, any), `store`, `condition` (`new`, `used`, any), and a

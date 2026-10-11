@@ -22,3 +22,6 @@ test_posters/
 *.db
 *.db-journal
 *.sqlite3
+
+# Jinja templates: prettier splits {% %} tags across lines, which Jinja cannot parse
+src/cdon_watcher/templates/

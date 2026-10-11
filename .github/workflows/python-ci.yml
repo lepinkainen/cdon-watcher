@@ -16,7 +16,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.13'
 
       - name: Install uv
         uses: astral-sh/setup-uv@v2
@@ -41,7 +41,7 @@ jobs:
           uv run mypy src
 
       - name: Run tests
-        run: uv run pytest --cov=src --cov-report=xml --cov-report=term
+        run: PYTHONPATH=./src uv run pytest tests/unit/ --cov=src --cov-report=xml --cov-report=term
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v3

@@ -1,0 +1,19 @@
+{% extends "layout.html" %}
+{% block title %}Ignored{% endblock %}
+{% block content %}
+<h2>Ignored</h2>
+{% if rows %}
+<table>
+  <tbody>
+  {% for row in rows %}
+  <tr class="product" data-product-id="{{ row.id }}">
+    <td class="title">{{ row.title }}{% if row.is_collection %} <span class="tag">collection</span>{% endif %}</td>
+    <td>{{ row.format_label }}</td>
+    <td>{{ row.store_name }}</td>
+    <td class="actions"><button data-action="unignore">Unignore</button></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="empty">Nothing ignored.</p>{% endif %}
+{% endblock %}
