@@ -1,9 +1,10 @@
 # Physical movie store database plan
 
 Status: implementation started, 2026-09-21. Open questions resolved the same
-day; this is the v1 spec. Steps 1–5 are implemented. Steps 6–7 remain
-pending; the legacy proof-of-concept modules still exist until step 6 removes
-them.
+day; this is the v1 spec. All seven implementation steps are done as of
+2026-10-12; the proof-of-concept modules, fly.io files and legacy tests are
+removed. Remaining v1 work is operational: run it, tune thresholds, fix
+whatever the live tests catch.
 
 The standalone command `uv run python -m cdon_watcher crawl-raw --store ax`
 saves offer listing responses under `data/raw/ax/<run>/`, without database

@@ -1,241 +1,98 @@
-# Taskfile.yml for CDON Watcher
-# See: https://taskfile.dev/
+# Taskfile.yml — see https://taskfile.dev/
 version: '3'
 
-vars:
-  BUILD_DIR: build
-  PROJECT_NAME: cdon-watcher
-  VERSION: 0.1.0
-
 tasks:
-  # Core build task - depends on tests and linting
   build:
-    desc: Build the project
+    desc: Full check (deps + tests + lint)
     deps: [setup-env, test, lint]
-    cmds:
-      - task: build-python
 
-  # CI build without tests/linting (run separately in CI)
-  build-ci:
-    desc: Build for CI/CD (build only)
-    cmds:
-      - task: build-python
-
-  # Test tasks
-  test:
-    desc: Run tests
-    cmds:
-      - task: test-python
-
-  test-ci:
-    desc: Run tests with coverage for CI
-    cmds:
-      - task: test-python-ci
-
-  # Linting tasks
-  lint:
-    desc: Lint code
-    cmds:
-      - task: lint-python
-      - task: lint-js-check
-
-  lint-fix:
-    desc: Fix all linting issues
-    cmds:
-      - task: lint-python-fix
-      - task: lint-js-fix
-
-  # Clean build artifacts
-  clean:
-    desc: Clean build artifacts
-    cmds:
-      - rm -rf {{.BUILD_DIR}}
-      - mkdir -p {{.BUILD_DIR}}
-
-  # Setup environment with dependencies
   setup-env:
-    desc: Install all dependencies needed for build
+    desc: Install all dependencies for development
     cmds:
       - uv sync --extra test --extra dev
 
-  # Python-specific tasks
-  build-python:
-    desc: Build Python project and Docker containers
+  install:
+    desc: Install dependencies and the Playwright Chromium build
     cmds:
       - uv sync --extra test --extra dev
-      - mkdir -p {{.BUILD_DIR}}
-      - docker compose build
+      - uv run playwright install chromium
 
-  test-python:
-    desc: Run Python unit tests (fast)
+  test:
+    desc: Fast unit tests (no network)
     cmds:
       - PYTHONPATH={{.PWD}}/src uv run pytest tests/unit/ --timeout=30
 
-  test-python-ci:
-    desc: Run Python tests with coverage for CI
+  test-ci:
+    desc: Unit tests with coverage
     cmds:
-      - PYTHONPATH={{.PWD}}/src uv run pytest --cov=src --cov-report=xml --cov-report=term
-
-  test-integration:
-    desc: Run Python integration tests (slow, requires network)
-    cmds:
-      - PYTHONPATH={{.PWD}}/src uv run pytest tests/integration/ --timeout=180
+      - PYTHONPATH={{.PWD}}/src uv run pytest tests/unit/ --cov=src --cov-report=xml --cov-report=term
 
   test-live:
-    desc: Run live cdon.fi shape regression tests (requires network)
+    desc: Live store shape tests (network, Chromium for CDON)
     cmds:
-      - PYTHONPATH={{.PWD}}/src uv run pytest tests/integration/test_live_cdon_pages.py --timeout=180 -v
-
-  test-with-live:
-    desc: Run unit tests + live cdon.fi shape tests
-    cmds:
-      - PYTHONPATH={{.PWD}}/src uv run pytest tests/unit/ tests/integration/test_live_cdon_pages.py --timeout=180
+      - PYTHONPATH={{.PWD}}/src uv run pytest tests/integration/ --timeout=180 -v
 
   test-all:
-    desc: Run all Python tests (unit + integration)
+    desc: Unit + live tests
     cmds:
       - PYTHONPATH={{.PWD}}/src uv run pytest tests/ --timeout=180
 
-  lint-python:
-    desc: Lint Python code with auto-fix
+  lint:
+    desc: ruff + mypy + prettier
     cmds:
-      - uv run ruff check --fix .
+      - uv run ruff check .
+      - uv run ruff format --check .
       - uv run mypy src
+      - npx prettier --check .
 
-  lint-python-fix:
-    desc: Fix Python linting issues
+  lint-fix:
+    desc: Auto-fix lint and formatting
     cmds:
       - uv run ruff check --fix .
       - uv run ruff format .
-
-  lint-js-check:
-    desc: Check JavaScript/JSON/CSS formatting
-    cmds:
-      - npx prettier --check .
-
-  lint-js-fix:
-    desc: Fix JavaScript/JSON/CSS formatting
-    cmds:
       - npx prettier --write .
 
-  # Development tasks
-  dev:
-    desc: Start development environment
+  web:
+    desc: Start the web app locally
     cmds:
-      - task: dev-python
+      - uv run python -m cdon_watcher web
 
-  dev-python:
-    desc: Start Python development environment
+  refresh:
+    desc: Crawl, parse, import and match every configured store
     cmds:
-      - ./scripts/run-dev.sh
+      - uv run python -m cdon_watcher refresh
 
-  # Docker tasks
+  refresh-ax:
+    desc: Refresh Levykauppa Äx only
+    cmds:
+      - uv run python -m cdon_watcher refresh --store ax
+
+  refresh-cdon:
+    desc: Refresh CDON only
+    cmds:
+      - uv run python -m cdon_watcher refresh --store cdon
+
   docker-build:
-    desc: Build Docker containers
+    desc: Build the container image
     cmds:
       - docker compose build
 
-  docker-dev:
-    desc: Run development environment with hot reload
+  docker-up:
+    desc: Run the container (web + scheduler)
     cmds:
-      - ./scripts/run-dev.sh
+      - docker compose up -d
 
-  docker-prod:
-    desc: Run production environment
-    cmds:
-      - ./scripts/run-prod.sh
-
-  docker-stop:
-    desc: Stop all containers
+  docker-down:
+    desc: Stop the container
     cmds:
       - docker compose down
 
   docker-logs:
-    desc: View container logs
+    desc: Follow container logs
     cmds:
       - docker compose logs -f
 
-  # CDON Watcher specific tasks
-  crawl:
-    desc: Run initial CDON crawl (fast mode)
-    cmds:
-      - docker compose --profile crawler run --rm crawler
-
-  crawl-moderate:
-    desc: Run moderate speed CDON crawl
-    cmds:
-      - uv run python -m cdon_watcher crawl --scan-mode moderate
-
-  crawl-slow:
-    desc: Run slow speed CDON crawl
-    cmds:
-      - uv run python -m cdon_watcher crawl --scan-mode slow
-
-  update-scan:
-    desc: Run development update scan (moderate speed)
-    cmds:
-      - uv run python -m cdon_watcher update-scan
-
-  monitor:
-    desc: Start price monitoring service
-    cmds:
-      - uv run python -m cdon_watcher monitor
-
-  web:
-    desc: Start web dashboard (local development)
-    cmds:
-      - uv run python -m cdon_watcher web
-
-  # Testing tasks specific to CDON Watcher
-  test-hybrid:
-    desc: Run hybrid scraper tests
-    cmds:
-      - PYTHONPATH={{.PWD}}/src uv run pytest tests/integration/test_hybrid_workflow.py
-
-  test-url:
-    desc: Test a single URL (requires URL argument)
-    cmds:
-      - uv run python test_single_url.py "{{.URL}}"
-
-  # Database and data management
   backup-db:
-    desc: Backup database
+    desc: Copy the catalog database with a timestamp
     cmds:
-      - cp data/cdon_movies.db data/cdon_movies_backup_$(date +%Y%m%d_%H%M%S).db
-
-  # Installation and setup
-  install:
-    desc: Install all dependencies
-    cmds:
-      - uv sync --extra test
-      - uv run playwright install chromium
-
-  setup:
-    desc: Setup development environment
-    deps: [install]
-    cmds:
-      - mkdir -p data
-      - echo "Development environment ready!"
-
-  # Release and deployment tasks
-  release:
-    desc: Create production release package in release/ directory
-    cmds:
-      - mkdir -p release
-      - cp docker-compose.yml docker-compose.prod.yml Dockerfile.base Dockerfile.crawler nginx.conf pyproject.toml uv.lock release/
-      - cp -r scripts release/
-      - cp -r src release/
-      - mkdir -p release/data
-      - cp -r data/posters release/data/ 2>/dev/null || true
-      - echo "✅ Release package created in release/ directory"
-      - echo "📁 Contents:"
-      - ls -la release/
-      - echo ""
-      - echo "🚀 Transfer to production server:"
-      - echo "   rsync -avz release/ user@vps:/path/to/app/"
-
-  release-clean:
-    desc: Remove the release directory
-    cmds:
-      - rm -rf release
-      - echo "🧹 Release directory cleaned up"
+      - cp data/catalog.db data/catalog_backup_$(date +%Y%m%d_%H%M%S).db

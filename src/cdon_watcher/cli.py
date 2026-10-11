@@ -1,128 +1,24 @@
-"""Command-line interface for CDON Watcher."""
+"""Command-line interface: ingestion stages, refresh, and the web app."""
 
 import argparse
-import asyncio
-import os
-import sys
-from collections.abc import Coroutine
-from datetime import datetime
+import logging
 from pathlib import Path
 from typing import Any
 
 from .config import CONFIG
-
-
-def run_async_with_graceful_shutdown(coro: Coroutine[Any, Any, Any]) -> None:
-    """Run an async coroutine with graceful handling of Ctrl+C."""
-    try:
-        asyncio.run(coro)
-    except KeyboardInterrupt:
-        print("\n\nInterrupted by user. Shutting down...")
-        sys.exit(0)
-
-
-async def run_crawl(max_pages: int, scan_mode: str = "fast") -> None:
-    """Run initial crawl of CDON categories."""
-    print(f"Starting {scan_mode} initial crawl...")
-    print(f"📄 Pages per category: {max_pages} (Total: {max_pages * 2} pages across 2 categories)")
-    # Import CDONScraper only when needed for crawling
-    from .cdon_scraper import CDONScraper
-    from .database.connection import init_db
-
-    # Initialize database (runs migrations for new columns)
-    await init_db()
-
-    scraper = CDONScraper()
-
-    # CDON's facet+page combo is broken — crawl the plain category and filter
-    # URLs by media-format slug client-side instead.
-    await scraper.crawl_category(
-        "https://cdon.fi/elokuvat/",
-        max_pages=max_pages,
-        scan_mode=scan_mode,
-        format_filter="blu-ray",
-    )
-
-    await scraper.crawl_category(
-        "https://cdon.fi/elokuvat/",
-        max_pages=max_pages,
-        scan_mode=scan_mode,
-        format_filter="4k",
-    )
-
-    print("Crawl complete!")
-
-
-async def run_monitor() -> None:
-    """Run the price monitoring service."""
-    from .database.connection import init_db
-    from .monitoring_service import PriceMonitor
-
-    # Initialize database (runs migrations for new columns)
-    await init_db()
-
-    print("Starting price monitor...")
-    monitor = PriceMonitor()
-
-    while True:
-        print(f"\n🔄 Starting price check at {datetime.now()}")
-        await monitor.check_watchlist_prices()
-
-        print(f"✅ Check complete. Next check in {CONFIG['check_interval_hours']} hours")
-        await asyncio.sleep(CONFIG["check_interval_hours"] * 3600)
-
-
-def run_web() -> None:
-    """Run the web dashboard."""
-    import uvicorn
-
-    host = CONFIG.get("api_host", "127.0.0.1")
-    port = CONFIG.get("api_port", 8080)
-    debug = CONFIG.get("api_debug", False)
-
-    print(f"Starting web dashboard on http://{host}:{port}")
-
-    # Create app factory function for Uvicorn
-    uvicorn.run(
-        "cdon_watcher.web.app:create_app",
-        factory=True,
-        host=host,
-        port=port,
-        reload=debug,
-        access_log=True,
-    )
-
-
-STORES = ("ax", "cdon")
-
-
-def _store_parser(store: str) -> Any:
-    from .ingestion.ax_parser import AxParser
-    from .ingestion.cdon_parser import CdonParser
-
-    return {"ax": AxParser, "cdon": CdonParser}[store]()
+from .refresh import STORES, describe, make_adapter, make_fetcher, make_parser, refresh_all
 
 
 def _cmd_crawl_raw(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     from .ingestion.archive import RawArchive, StoreBusyError
-    from .ingestion.crawler import Crawler, HttpFetcher
-    from .ingestion.stores import AxAdapter, CdonAdapter
+    from .ingestion.crawler import Crawler
 
-    fetcher: Any
-    adapter: Any
-    if args.store == "cdon":
-        from .ingestion.browser import BrowserFetcher
-
-        fetcher = BrowserFetcher()
-        adapter = CdonAdapter(max_pages=args.max_pages)
-    else:
-        fetcher = HttpFetcher()
-        adapter = AxAdapter()
+    fetcher: Any = make_fetcher(args.store)
     try:
         crawler = Crawler(
             RawArchive(args.raw_dir), fetcher, attempts=args.attempts, delay=args.delay
         )
-        run = crawler.crawl(adapter)
+        run = crawler.crawl(make_adapter(args.store, args.max_pages))
     except (ValueError, StoreBusyError) as error:
         parser.exit(2, f"{error}\n")
     finally:
@@ -138,7 +34,7 @@ def _cmd_parse_raw(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
 
     try:
         parsed = parse_run(
-            args.raw_dir, _store_parser(args.store), args.run, eligible_only=not args.all_formats
+            args.raw_dir, make_parser(args.store), args.run, eligible_only=not args.all_formats
         )
     except (FileNotFoundError, ValueError) as error:
         parser.exit(2, f"{error}\n")
@@ -192,113 +88,104 @@ def _cmd_match(args: argparse.Namespace, parser: argparse.ArgumentParser) -> Non
     )
 
 
-INGESTION_COMMANDS = {
+def _cmd_refresh(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    reports = refresh_all(
+        args.store or None,
+        raw_dir=args.raw_dir,
+        db_path=args.db,
+        max_pages=args.max_pages,
+        skip_crawl=args.skip_crawl,
+    )
+    failed = False
+    for report in reports:
+        print(describe(report))
+        failed = failed or not report.ok
+    if failed:
+        parser.exit(1, "One or more stores did not import.\n")
+
+
+def _cmd_web(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    import uvicorn
+
+    host = CONFIG["api_host"]
+    port = CONFIG["api_port"]
+    print(f"Starting web app on http://{host}:{port}")
+    uvicorn.run(
+        "cdon_watcher.web.app:create_app",
+        factory=True,
+        host=host,
+        port=port,
+        reload=CONFIG["api_debug"],
+        access_log=True,
+    )
+
+
+COMMANDS = {
     "crawl-raw": _cmd_crawl_raw,
     "parse-raw": _cmd_parse_raw,
     "import-run": _cmd_import_run,
     "match": _cmd_match,
+    "refresh": _cmd_refresh,
+    "web": _cmd_web,
 }
 
 
-def main() -> None:
-    """Main CLI entry point."""
-    parser = argparse.ArgumentParser(
-        description="CDON Blu-ray Price Tracker",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
-
-    raw_parser = subparsers.add_parser(
-        "crawl-raw", help="Archive store responses without importing"
-    )
-    raw_parser.add_argument("--store", choices=STORES, required=True)
-    raw_parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
-    raw_parser.add_argument("--attempts", type=int, default=3)
-    raw_parser.add_argument(
-        "--max-pages",
-        type=int,
-        default=int(os.environ.get("MAX_PAGES_PER_CATEGORY", 10)),
-        help="CDON only: listing pages to fetch (default: 10)",
-    )
-    raw_parser.add_argument("--delay", type=float, default=2.0, help="Seconds between requests")
-
-    parse_parser = subparsers.add_parser(
-        "parse-raw", help="Parse an archived run offline, writing parsed.json next to it"
-    )
-    parse_parser.add_argument("--store", choices=STORES, required=True)
-    parse_parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
-    parse_parser.add_argument("--run", type=int, default=None, help="Run number (default: latest)")
-    parse_parser.add_argument(
-        "--all-formats", action="store_true", help="Keep DVD and unknown formats too"
-    )
-
-    import_parser = subparsers.add_parser(
-        "import-run", help="Import a parsed run into the catalog database"
-    )
-    import_parser.add_argument("--store", choices=STORES, required=True)
-    import_parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
-    import_parser.add_argument("--run", type=int, default=None, help="Run number (default: latest)")
-    import_parser.add_argument(
-        "--db", type=Path, default=None, help="Catalog SQLite path (default: DB_PATH)"
-    )
-
-    match_parser = subparsers.add_parser(
-        "match", help="Match unmatched single-movie products against TMDB"
-    )
-    match_parser.add_argument("--store", choices=STORES, default=None)
-    match_parser.add_argument("--limit", type=int, default=None)
-    match_parser.add_argument(
-        "--db", type=Path, default=None, help="Catalog SQLite path (default: DB_PATH)"
-    )
-
-    # Crawl command
-    crawl_parser = subparsers.add_parser("crawl", help="Initial crawl of CDON")
-    crawl_parser.add_argument(
-        "--max-pages",
-        type=int,
-        default=int(os.environ.get("MAX_PAGES_PER_CATEGORY", 10)),
-        help="Maximum pages to crawl per category (default: 10)",
-    )
-    crawl_parser.add_argument(
-        "--scan-mode",
-        choices=["fast", "moderate", "slow"],
-        default="fast",
-        help="Scan mode: fast (quick), moderate (development), slow (production)",
-    )
-
-    # Update scan command
-    update_parser = subparsers.add_parser(
-        "update-scan", help="Development scan for quick database updates"
-    )
-    update_parser.add_argument(
-        "--max-pages",
-        type=int,
-        default=int(os.environ.get("MAX_PAGES_PER_CATEGORY", 10)),
-        help="Maximum pages to crawl per category (default: 10)",
-    )
-
-    # Monitor command
-    subparsers.add_parser("monitor", help="Run price monitor (checks periodically)")
-
-    # Web command
-    subparsers.add_parser("web", help="Start web dashboard")
-
-    args = parser.parse_args()
-
-    if args.command in INGESTION_COMMANDS:
-        INGESTION_COMMANDS[args.command](args, parser)
-    elif args.command == "crawl":
-        run_async_with_graceful_shutdown(run_crawl(args.max_pages, args.scan_mode))
-    elif args.command == "update-scan":
-        # Update scan uses moderate mode by default for development
-        run_async_with_graceful_shutdown(run_crawl(args.max_pages, "moderate"))
-    elif args.command == "monitor":
-        run_async_with_graceful_shutdown(run_monitor())
-    elif args.command == "web":
-        run_web()
+def _add_common(sub: argparse.ArgumentParser, *, store_required: bool) -> None:
+    if store_required:
+        sub.add_argument("--store", choices=STORES, required=True)
     else:
+        sub.add_argument("--store", choices=STORES, action="append", default=[])
+    sub.add_argument("--raw-dir", type=Path, default=CONFIG["raw_dir"])
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Movie offer tracker (CDON + Levykauppa Äx)")
+    sub = parser.add_subparsers(dest="command", help="Available commands")
+
+    crawl = sub.add_parser("crawl-raw", help="Archive store listing responses without importing")
+    _add_common(crawl, store_required=True)
+    crawl.add_argument("--attempts", type=int, default=CONFIG["crawl_attempts"])
+    crawl.add_argument("--delay", type=float, default=CONFIG["crawl_delay"])
+    crawl.add_argument("--max-pages", type=int, default=CONFIG["max_pages"], help="CDON only")
+
+    parse = sub.add_parser("parse-raw", help="Parse an archived run offline into parsed.json")
+    _add_common(parse, store_required=True)
+    parse.add_argument("--run", type=int, default=None, help="Run number (default: latest)")
+    parse.add_argument("--all-formats", action="store_true", help="Keep DVD and unknown formats")
+
+    imp = sub.add_parser("import-run", help="Import a parsed run into the catalog database")
+    _add_common(imp, store_required=True)
+    imp.add_argument("--run", type=int, default=None, help="Run number (default: latest)")
+    imp.add_argument("--db", type=Path, default=None, help="Catalog SQLite path (default: DB_PATH)")
+
+    match = sub.add_parser("match", help="Match unmatched single-movie products against TMDB")
+    match.add_argument("--store", choices=STORES, default=None)
+    match.add_argument("--limit", type=int, default=None)
+    match.add_argument(
+        "--db", type=Path, default=None, help="Catalog SQLite path (default: DB_PATH)"
+    )
+
+    refresh = sub.add_parser(
+        "refresh", help="Crawl, parse, import and match, one store at a time (default: all)"
+    )
+    _add_common(refresh, store_required=False)
+    refresh.add_argument("--db", type=Path, default=None)
+    refresh.add_argument("--max-pages", type=int, default=None, help="CDON only")
+    refresh.add_argument("--skip-crawl", action="store_true", help="Reprocess the latest run")
+
+    sub.add_parser("web", help="Start the web app")
+    return parser
+
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    parser = build_parser()
+    args = parser.parse_args()
+    command = COMMANDS.get(args.command)
+    if command is None:
         parser.print_help()
+        return
+    command(args, parser)
 
 
 if __name__ == "__main__":
