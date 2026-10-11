@@ -110,6 +110,16 @@ def main() -> None:
     raw_parser.add_argument("--attempts", type=int, default=3)
     raw_parser.add_argument("--delay", type=float, default=2.0, help="Seconds between requests")
 
+    parse_parser = subparsers.add_parser(
+        "parse-raw", help="Parse an archived run offline, writing parsed.json next to it"
+    )
+    parse_parser.add_argument("--store", choices=["ax"], required=True)
+    parse_parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
+    parse_parser.add_argument("--run", type=int, default=None, help="Run number (default: latest)")
+    parse_parser.add_argument(
+        "--all-formats", action="store_true", help="Keep DVD and unknown formats too"
+    )
+
     # Crawl command
     crawl_parser = subparsers.add_parser("crawl", help="Initial crawl of CDON")
     crawl_parser.add_argument(
@@ -165,6 +175,22 @@ def main() -> None:
             parser.exit(
                 1, "Incomplete crawl; saved responses remain available for offline import.\n"
             )
+    elif args.command == "parse-raw":
+        from .ingestion.ax_parser import AxParser
+        from .ingestion.parse import PARSED_FILENAME, parse_run
+
+        try:
+            parsed = parse_run(
+                args.raw_dir, AxParser(), args.run, eligible_only=not args.all_formats
+            )
+        except (FileNotFoundError, ValueError) as error:
+            parser.exit(2, f"{error}\n")
+        print(args.raw_dir / parsed.store / str(parsed.run_id) / PARSED_FILENAME)
+        print(
+            f"run {parsed.run_id}: {len(parsed.products)} products, "
+            f"{len(parsed.errors)} row errors, "
+            f"{'complete' if parsed.complete else 'incomplete'} crawl"
+        )
     elif args.command == "crawl":
         run_async_with_graceful_shutdown(run_crawl(args.max_pages, args.scan_mode))
     elif args.command == "update-scan":

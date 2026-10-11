@@ -1,8 +1,8 @@
 # Physical movie store database plan
 
 Status: implementation started, 2026-09-21. Open questions resolved the same
-day; this is the v1 spec. Step 1 is implemented. Steps 2–7 remain pending,
-and the existing application still uses the proof-of-concept pipeline.
+day; this is the v1 spec. Steps 1 and 2 are implemented. Steps 3–7 remain
+pending, and the existing application still uses the proof-of-concept pipeline.
 
 The standalone command `uv run python -m cdon_watcher crawl-raw --store ax`
 saves offer listing responses under `data/raw/ax/<run>/`, without database
@@ -12,6 +12,13 @@ and `--attempts` override these values. Incomplete crawls retain their responses
 and return exit code 1. A concurrent crawl for the same store returns exit code 2.
 The manifest records discovery counts, edition links, failures, and response
 provenance. Saved fixtures and offline tests cover the first and last offer pages.
+
+`uv run python -m cdon_watcher parse-raw --store ax [--run N] [--all-formats]`
+parses an archived run offline into `data/raw/ax/<run>/parsed.json` using the
+shared contract in `ingestion/contract.py` (`ParsedProduct`, integer cents,
+normalized format/condition/availability with raw text kept). Latest run by
+default; DVD and unknown formats are dropped unless `--all-formats`. Row-level
+parse errors are recorded, never fatal. Reparsing overwrites `parsed.json` only.
 
 ## Operating context
 
