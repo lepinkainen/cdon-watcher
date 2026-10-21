@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+{% block title %}Match queue{% endblock %}
+{% block content %}
+<h2>Match queue</h2>
+{% if not has_tmdb %}<p class="warn">TMDB_API_KEY is not set; searching and confirming matches will fail.</p>{% endif %}
+{% if items %}
+{% for row, candidates in items %}
+<section class="queue-item" data-product-id="{{ row.id }}">
+  <h3>{{ row.raw_title }} <span class="tag muted">{{ row.match_status }}</span></h3>
+  <p class="meta">{{ row.store_name }} · {{ row.format_label }} · {{ row.price_cents | euros }} · <a href="{{ row.edition_url }}" target="_blank" rel="noopener">store page</a></p>
+  <ul class="candidates">
+    {% for c in candidates %}
+    <li><button data-match="{{ c.tmdb_id }}">Use</button> {{ c.title }} ({{ c.release_year or '?' }}){% if c.original_title and c.original_title != c.title %} · {{ c.original_title }}{% endif %} · score {{ c.score }}</li>
+    {% endfor %}
+  </ul>
+  <form class="search" data-search>
+    <input type="search" name="q" placeholder="Search TMDB" value="{{ row.raw_title }}">
+    <input type="number" name="year" placeholder="year" size="4">
+    <button type="submit">Search</button>
+    <button type="button" data-match="none">No match</button>
+    <button type="button" data-action="ignore">Ignore</button>
+  </form>
+  <ul class="candidates results"></ul>
+</section>
+{% endfor %}
+{% else %}<p class="empty">Nothing to review.</p>{% endif %}
+{% endblock %}
