@@ -104,6 +104,24 @@ def transfer_product_preferences(session: Session, product: StoreProduct) -> Non
     session.flush()
 
 
+def demote_movie_preferences(session: Session, product: StoreProduct, old_tmdb_id: int) -> None:
+    """Return preferences this product promoted onto old_tmdb_id to product level.
+
+    Used when a match is corrected or rejected; transfer_product_preferences then
+    re-promotes them onto the new movie. Preferences from other products stay.
+    """
+    assert product.id is not None
+    promoted = session.exec(
+        select(UserPreference).where(
+            UserPreference.tmdb_id == old_tmdb_id,
+            UserPreference.origin_store_product_id == product.id,
+        )
+    ).all()
+    for pref in promoted:
+        pref.tmdb_id, pref.store_product_id = None, product.id
+    session.flush()
+
+
 def preference_sets(session: Session) -> tuple[set[int], set[int], set[int], set[int]]:
     """(watched tmdb ids, watched product ids, ignored tmdb ids, ignored product ids)."""
     watched_movies: set[int] = set()

@@ -13,7 +13,8 @@ from cdon_watcher.catalog.matching import (
     search_query,
     set_manual_match,
 )
-from cdon_watcher.catalog.models import MatchState, MovieMetadata, StoreProduct
+from cdon_watcher.catalog.models import MatchState, MovieMetadata, StoreProduct, UserPreference
+from cdon_watcher.catalog.preferences import apply
 from cdon_watcher.catalog.tmdb import Candidate, MovieDetails, TmdbError
 from cdon_watcher.ingestion.contract import (
     Availability,
@@ -256,3 +257,30 @@ def test_match_cli_requires_api_key(tmp_path, monkeypatch):
     with pytest.raises(SystemExit) as error:
         main()
     assert error.value.code == 2
+
+
+def prefs(engine):
+    with Session(engine) as session:
+        rows = session.exec(select(UserPreference)).all()
+        return {(p.kind, p.tmdb_id, p.store_product_id, p.origin_store_product_id) for p in rows}
+
+
+def test_corrected_or_rejected_match_moves_its_promoted_preferences(engine):
+    imported(engine, [product("1", "Heat"), product("2", "Heat"), product("3", "Heat")])
+    with Session(engine) as session:
+        ids = {p.product_id: p.id for p in session.exec(select(StoreProduct)).all()}
+    client = FakeTmdb()
+    for pid in ids.values():
+        set_manual_match(engine, client, pid, 949)
+    apply(engine, ids["1"], "watch")
+    apply(engine, ids["2"], "ignore")  # replaces the watch on 949, origin product 2
+    apply(engine, ids["3"], "watch")  # replaces the ignore, origin product 3
+    assert prefs(engine) == {("watch", 949, None, ids["3"])}
+    apply(engine, ids["1"], "watch")  # already watched: keeps origin 3
+    # Correction moves only this product's promoted preference to the new movie.
+    set_manual_match(engine, client, ids["3"], 1091)
+    assert prefs(engine) == {("watch", 1091, None, ids["3"])}
+    apply(engine, ids["2"], "ignore")
+    # Rejection restores the product-level preference; 949's ignore from product 2 stays.
+    set_manual_match(engine, None, ids["3"], None)
+    assert prefs(engine) == {("watch", None, ids["3"], ids["3"]), ("ignore", 949, None, ids["2"])}

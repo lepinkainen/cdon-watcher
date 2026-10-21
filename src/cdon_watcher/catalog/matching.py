@@ -15,7 +15,7 @@ from sqlalchemy import Engine
 from sqlmodel import Session, select
 
 from .models import MatchState, MovieMetadata, StoreProduct
-from .preferences import transfer_product_preferences
+from .preferences import demote_movie_preferences, transfer_product_preferences
 from .tmdb import Candidate, MovieDetails, TmdbClient, TmdbError
 
 logger = logging.getLogger(__name__)
@@ -297,8 +297,11 @@ def set_manual_match(
             state.status = "manual"
         else:
             state.status = "rejected"
+        old_tmdb_id = product.tmdb_id
         state.tmdb_id = tmdb_id
         product.tmdb_id = tmdb_id
+        if old_tmdb_id is not None and old_tmdb_id != tmdb_id:
+            demote_movie_preferences(session, product, old_tmdb_id)
         if tmdb_id is not None:
             transfer_product_preferences(session, product)
         state.decided_at, state.decided_by = now, "user"
