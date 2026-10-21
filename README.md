@@ -25,7 +25,7 @@ docker compose build
 TMDB_API_KEY=... docker compose up -d          # web on :8080, refresh daily in-process
 ```
 
-Data (SQLite, raw page archive) lives in `./data`, mounted into the container.
+Data (SQLite, raw page archive) lives in the `data` named volume at `/app/data`.
 To schedule from host cron instead, set `RUN_SCHEDULER=false` and run
 `docker compose exec app python -m cdon_watcher refresh`.
 

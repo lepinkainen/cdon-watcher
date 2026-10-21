@@ -9,10 +9,13 @@ services:
     ports:
       - '8080:8080'
     volumes:
-      - ./data:/app/data
+      - data:/app/data
     environment:
       - TMDB_API_KEY=${TMDB_API_KEY:-}
       - RUN_SCHEDULER=${RUN_SCHEDULER:-true}
       - MAX_PAGES_PER_CATEGORY=${MAX_PAGES_PER_CATEGORY:-10}
       - STORES=${STORES:-ax,cdon}
     restart: unless-stopped
+
+volumes:
+  data:
