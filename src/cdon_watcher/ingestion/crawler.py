@@ -18,6 +18,10 @@ class Response:
     rendered: bool = False
 
 
+class FetchError(Exception):
+    """Transport failure from a non-requests fetcher; retried like a request error."""
+
+
 class HttpFetcher:
     def __init__(self) -> None:
         self.session = requests.Session()
@@ -57,7 +61,7 @@ class Crawler:
         self.requested = True
         try:
             response = self.fetch(url)
-        except requests.RequestException as error:
+        except (requests.RequestException, FetchError) as error:
             return run.record(
                 url, final_url=None, status=None, body=None, attempt=attempt, error=str(error)
             ), None

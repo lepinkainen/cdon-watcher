@@ -8,9 +8,11 @@ from unittest.mock import Mock
 import pytest
 import requests
 from bs4 import BeautifulSoup
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from cdon_watcher.ingestion.archive import RawArchive, RunManifest, StoreBusyError
-from cdon_watcher.ingestion.crawler import Crawler, HttpFetcher, Response
+from cdon_watcher.ingestion.browser import BrowserFetcher
+from cdon_watcher.ingestion.crawler import Crawler, FetchError, HttpFetcher, Response
 from cdon_watcher.ingestion.stores import AxAdapter
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "ax"
@@ -243,3 +245,36 @@ def test_raw_cli_incomplete_exit_preserves_archive(tmp_path, monkeypatch):
     saved = RunManifest.model_validate_json((tmp_path / "ax/1/manifest.json").read_text())
     assert not saved.complete
     assert saved.snapshots[0].status == 503
+
+
+def test_browser_transport_errors_are_archived_and_retried(tmp_path):
+    fetch = Mock(side_effect=[FetchError("Timeout 45000ms"), Response(URL, 200, small_page())])
+    run = crawler(tmp_path, fetch).crawl(AxAdapter())
+    assert run.manifest.complete
+    assert [(s.status, s.error) for s in run.manifest.snapshots] == [
+        (None, "Timeout 45000ms"),
+        (200, None),
+    ]
+
+
+def browser(page):
+    fetcher = BrowserFetcher.__new__(BrowserFetcher)
+    fetcher._page = page
+    fetcher.challenge_timeout, fetcher.content_timeout_ms, fetcher.settle_seconds = 5, 1, 0
+    return fetcher
+
+
+def test_browser_resolved_challenge_returns_final_page_as_ok(monkeypatch):
+    monkeypatch.setattr("cdon_watcher.ingestion.browser.time.sleep", Mock())
+    page = Mock(url=URL)
+    page.goto.return_value = Mock(status=403)
+    page.title.side_effect = ["Just a moment...", "Elokuvat"]
+    page.content.return_value = "<html>real</html>"
+    assert browser(page)(URL) == Response(URL, 200, b"<html>real</html>", True)
+
+
+def test_browser_playwright_errors_become_fetch_errors():
+    page = Mock()
+    page.goto.side_effect = PlaywrightTimeoutError("Timeout 45000ms exceeded")
+    with pytest.raises(FetchError, match="Timeout"):
+        browser(page)(URL)

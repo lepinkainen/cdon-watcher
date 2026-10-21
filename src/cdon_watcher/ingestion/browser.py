@@ -3,7 +3,9 @@
 import time
 from typing import Any
 
-from .crawler import Response
+from playwright.sync_api import Error as PlaywrightError
+
+from .crawler import FetchError, Response
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -59,12 +61,19 @@ class BrowserFetcher:
         self.settle_seconds = settle_seconds
 
     def __call__(self, url: str) -> Response:
+        try:
+            return self._fetch(url)
+        except PlaywrightError as error:
+            raise FetchError(str(error)) from error
+
+    def _fetch(self, url: str) -> Response:
         response: Any = self._page.goto(url, wait_until="domcontentloaded", timeout=45000)
         status = response.status if response is not None else 0
         deadline = time.monotonic() + self.challenge_timeout
         while CHALLENGE_TITLE in self._page.title().lower():
             if time.monotonic() > deadline:
                 return Response(self._page.url, 403, self._page.content().encode(), True)
+            status = 200  # The interstitial's 403/503 is stale once the challenge resolves.
             time.sleep(1.0)
         try:
             self._page.evaluate(COOKIE_BANNER_JS)
