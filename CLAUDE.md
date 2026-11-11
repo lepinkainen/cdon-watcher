@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guidance for Claude Code (claude.ai/code) when working in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Essential Commands
 
@@ -9,10 +9,11 @@ task install                 # uv sync + Playwright Chromium (one-time)
 task build                   # ALWAYS run before finishing: unit tests + lint
 task test                    # Fast unit tests, no network
 task test-live               # Live store shape tests (network; Chromium for CDON)
+task lint                    # ruff check + ruff format --check + mypy src + npx prettier --check
 task lint-fix                # ruff + prettier auto-fix
 
 uv run python -m cdon_watcher web                      # Web app at :8080
-uv run python -m cdon_watcher refresh [--store ax|cdon] # crawl → parse → import → match
+uv run python -m cdon_watcher refresh [--store ax|cdon] # crawl → parse → import → match (-v: per-page progress)
 uv run python -m cdon_watcher crawl-raw --store ax     # Stage 1 only: archive listing pages
 uv run python -m cdon_watcher parse-raw --store ax     # Stage 2 only: parsed.json from latest run
 uv run python -m cdon_watcher import-run --store ax    # Stage 3 only: import parsed.json
@@ -21,6 +22,9 @@ uv run python -m cdon_watcher match                    # Stage 4 only: TMDB matc
 # Run one test
 PYTHONPATH=./src uv run pytest tests/unit/test_file.py -k "test_name"
 ```
+
+`test_ui_integration.py` in the repo root is a manual, headed-browser script
+against a running server, not part of the pytest suite (`testpaths = ["tests"]`).
 
 ## What this is
 
@@ -68,13 +72,15 @@ Store facts that drive the design:
 
 ## Project Patterns
 
-- **Package manager**: `uv` only (`uv run`, `uv sync`).
-- **Types**: strict mypy on `src`; ruff with 100-char lines and C901 complexity 10.
+- **Package manager**: `uv` only (`uv run`, `uv sync`). Python 3.15 (`.python-version`, `requires-python`, ruff/mypy targets and the Docker base image move together).
+- **Types**: strict mypy on `src`; ruff with 100-char lines and C901 complexity 10. `ruff format` also formats code blocks in `docs/*.md`.
 - **Database**: sync SQLModel over SQLite. `CatalogModel` has its own metadata. Schema changes go through `catalog/db.py::MIGRATIONS` with a new version number; never silence schema errors.
 - **Money**: integer cents everywhere; `euros` Jinja filter for display.
-- **Timestamps**: naive UTC in the database (`importer.utc_naive`).
+- **Timestamps**: naive UTC in the database (`importer.utc_naive`). Model fields must be typed `pydantic.NaiveDatetime`, not `datetime`: SQLModel ≥ 0.0.49 maps bare `datetime` to a tz-aware column that rejects naive values.
 - **Templates**: Jinja; excluded from prettier (it splits `{% %}` tags).
-- **Fixtures**: gzip page captures under `tests/fixtures/<store>/` with a README per store. Unit tests never touch the network; `tests/integration/test_live_stores.py` does.
+- **Fixtures**: gzip page captures under `tests/fixtures/<store>/` with a README per store. Unit tests never touch the network; `tests/integration/test_live_stores.py` does. Web tests use FastAPI's `TestClient`, which needs `httpx2` (not `httpx`).
+- **Docker**: `python:*-slim-trixie` base; `libatomic1` is installed explicitly because Playwright's bundled Node needs it. uv is pinned to an exact version in both the Dockerfile and CI.
+- **CI**: `.github/workflows/python-ci.yml` pins actions to exact versions (`astral-sh/setup-uv` has no floating major tags) and reads Python from `.python-version`.
 - **Politeness**: one listing fetch per page, 2 s delay, a browser-identifying User-Agent for CDON only because the site requires a browser.
 
 ## Environment Variables
