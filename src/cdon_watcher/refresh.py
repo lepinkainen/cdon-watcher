@@ -98,19 +98,28 @@ def search_fetch(store: str, fetcher: Any) -> Callable[[str], Response]:
 
 
 def search_tasks(
-    engine: Engine, store: str, cap: int, *, now: datetime | None = None
+    engine: Engine,
+    store: str,
+    cap: int,
+    *,
+    min_interval_hours: float = 24.0,
+    now: datetime | None = None,
 ) -> list[SearchTask]:
     """Wishes to search now: least recently searched first, within the daily cap.
 
-    The cap counts search requests (fallbacks and retries included) archived
-    for this store in the last 24 hours.
+    A wish searched successfully at this store in the last min_interval_hours is
+    skipped: store prices don't move that fast. A failed search doesn't count, so
+    it is retried on the next run. The cap counts search requests (fallbacks and
+    retries included) archived for this store in the last 24 hours.
     """
     now = now or datetime.now(UTC).replace(tzinfo=None)
+    fresh_since = now - timedelta(hours=min_interval_hours)
     with Session(engine) as session:
         wanted = load_catalogue(session).wanted
         store_row = session.exec(select(Store).where(Store.key == store)).first()
         used = 0
         last: dict[int, datetime] = {}
+        fresh: set[int] = set()
         if store_row is not None:
             used = session.exec(
                 select(func.coalesce(func.sum(CrawlRun.snapshot_count), 0)).where(
@@ -124,7 +133,10 @@ def search_tasks(
             ).all():
                 attempted = max(t for t in (search.searched_at, search.failed_at) if t)
                 last[search.tmdb_id] = attempted
-    ordered = sorted(wanted.values(), key=lambda w: (last.get(w.tmdb_id, datetime.min), w.tmdb_id))
+                if search.searched_at is not None and search.searched_at > fresh_since:
+                    fresh.add(search.tmdb_id)
+    due = [w for w in wanted.values() if w.tmdb_id not in fresh]
+    ordered = sorted(due, key=lambda w: (last.get(w.tmdb_id, datetime.min), w.tmdb_id))
     tasks = [SearchTask(w.tmdb_id, w.title, w.original_title) for w in ordered]
     return tasks[: max(cap - int(used), 0)]
 
@@ -153,6 +165,7 @@ class _Settings:
     delay: float
     attempts: int
     search_cap: int
+    search_interval_hours: float
 
 
 def _crawl_stage(
@@ -189,7 +202,9 @@ def _crawl_stage(
 def _search_stage(
     store: str, engine: Engine, fetcher: _LazyFetcher, cfg: _Settings, report: RefreshReport
 ) -> int | None:
-    tasks = search_tasks(engine, store, cfg.search_cap)
+    tasks = search_tasks(
+        engine, store, cfg.search_cap, min_interval_hours=cfg.search_interval_hours
+    )
     if not tasks:
         return None
     try:
@@ -278,6 +293,7 @@ def refresh_store(
         delay=delay or CONFIG["crawl_delay"],
         attempts=attempts or CONFIG["crawl_attempts"],
         search_cap=CONFIG["search_daily_cap"] if search_cap is None else search_cap,
+        search_interval_hours=CONFIG["search_min_interval_hours"],
     )
     tmdb_api_key = CONFIG["tmdb_api_key"] if tmdb_api_key is None else tmdb_api_key
     engine = open_catalog(db_path or CONFIG["db_path"])

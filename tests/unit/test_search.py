@@ -373,6 +373,7 @@ OLDBOY = {
     "year": 2003,
     "formats": ["Blu-ray", "UHD"],
 }
+INNERSPACE_ID, OLDBOY_ID = INNERSPACE["tmdb_id"], OLDBOY["tmdb_id"]
 
 
 def statuses(engine):
@@ -498,10 +499,28 @@ def test_search_command_path_searches_imports_and_respects_the_cap(tmp_path, mon
     assert "searched 1 wishes" in refresh.describe(report)
     # The cap counts requests in the last 24 h; the next run has no budget left.
     assert refresh.search_tasks(engine, "ax", 1) == []
-    second = refresh.search_tasks(engine, "ax", 5)
-    assert [t.tmdb_id for t in second][0] != [t.tmdb_id for t in second][1]
     searched = report.searched.snapshots[0].search_tmdb_id
+    # The wish just searched is fresh for 24 h; only the other one is due.
+    assert [t.tmdb_id for t in refresh.search_tasks(engine, "ax", 5)] == [
+        w for w in (INNERSPACE_ID, OLDBOY_ID) if w != searched
+    ]
+    second = refresh.search_tasks(engine, "ax", 5, min_interval_hours=0)
+    assert len(second) == 2
     assert second[-1].tmdb_id == searched  # least recently searched goes first
+
+
+def test_search_interval_skips_fresh_wishes_but_retries_failures(engine):
+    wishes(engine, INNERSPACE, OLDBOY)
+    import_run(engine, search_run(1, {INNERSPACE_ID: [item("1")], OLDBOY_ID: "timeout"}))
+    with Session(engine) as session:
+        search = session.exec(select(WishSearch).where(WishSearch.tmdb_id == INNERSPACE_ID)).one()
+        searched_at = search.searched_at
+    soon, later = searched_at + timedelta(hours=23), searched_at + timedelta(hours=25)
+    assert [t.tmdb_id for t in refresh.search_tasks(engine, "ax", 100, now=soon)] == [OLDBOY_ID]
+    assert {t.tmdb_id for t in refresh.search_tasks(engine, "ax", 100, now=later)} == {
+        INNERSPACE_ID,
+        OLDBOY_ID,
+    }
 
 
 def test_cdon_covers_use_the_resized_cdn_image_when_cdon_hosts_it():

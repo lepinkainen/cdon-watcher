@@ -110,6 +110,7 @@ See `.env.example`. Key ones: `TMDB_API_KEY` (matching skipped without it),
 `MOVIECATALOG_URL` (sync, wish action; unset = no owned filtering or searches),
 `SEARCH_DAILY_CAP` (search requests per store per 24 h),
 `DB_PATH` (`./data/catalog.db`), `RAW_DIR`, `STORES`, `MAX_PAGES_PER_CATEGORY`,
+`SEARCH_MIN_INTERVAL_HOURS` (re-search gap per wish and store, default 24),
 `RUN_SCHEDULER` (in-process daily refresh; leave off when host cron runs
 `refresh`), `SCHEDULER_INTERVAL_HOURS`.
 
