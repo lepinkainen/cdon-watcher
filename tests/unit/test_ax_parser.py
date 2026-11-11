@@ -138,6 +138,7 @@ def test_parse_format(raw, expected):
         ('<p class="shipping">Toimitusaika n. 1-2 kuukautta.</p>', Availability.SUPPLIER_ORDER),
         ('<p class="shipping">Toimitusaika ei ole tiedossa</p>', Availability.UNKNOWN),
         ('<p class="shipping">Ennakkotilaus, julkaistaan 1.12.2026</p>', Availability.PREORDER),
+        ('<p class="shipping">Ilmestyy: 31.12.</p>', Availability.PREORDER),
         ('<p class="shipping">Loppuunmyyty</p>', Availability.OUT_OF_STOCK),
         ('<p class="shipping"></p>', Availability.UNKNOWN),
         ("", Availability.UNKNOWN),
@@ -233,7 +234,7 @@ def test_parse_run_writes_parsed_json_and_skips_failed_snapshots(tmp_path):
     archived_run(tmp_path, bodies, complete=False, broken_snapshot=True)
     parsed = parse_run(tmp_path, AxParser())
     assert parsed.run_id == 1
-    assert parsed.parser_version == "ax-1"
+    assert parsed.parser_version == "ax-2"
     assert not parsed.complete
     assert [s.snapshot_id for s in parsed.snapshots] == [1, 2]
     assert len(parsed.products) == 66 + 7  # eligible rows only

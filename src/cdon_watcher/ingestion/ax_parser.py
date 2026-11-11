@@ -9,7 +9,7 @@ from ..box_set_detector import is_box_set
 from .contract import Availability, Condition, Format, ParsedProduct, ParseError
 from .normalize import clean_title, format_from_text, parse_price_cents
 
-PARSER_VERSION = "ax-1"
+PARSER_VERSION = "ax-2"
 BASE_URL = "https://www.levykauppax.fi/"
 
 _USED_PREFIX = re.compile(r"^\s*käytetty\s+", re.IGNORECASE)
@@ -35,7 +35,8 @@ def parse_availability(node: Tag | None) -> tuple[Availability, str | None]:
     classes = node.get("class") or []
     if "in-stock" in classes or lowered.startswith("tuotetta hyllyssä"):
         return Availability.IN_STOCK, text
-    if "ennakko" in lowered:
+    if "ennakko" in lowered or lowered.startswith("ilmestyy"):
+        # "Ilmestyy: 31.12." means "released 31 December": a preorder.
         return Availability.PREORDER, text
     if "loppu" in lowered:
         return Availability.OUT_OF_STOCK, text
