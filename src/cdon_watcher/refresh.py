@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .catalog.catalogue import CatalogueClient, HttpCatalogueClient, sync_catalogue
 from .catalog.db import open_catalog
 from .catalog.importer import ImportResult, import_run
 from .catalog.matching import MatchResult, match_pending
@@ -144,7 +145,32 @@ def refresh_store(
     return report
 
 
-def refresh_all(stores: list[str] | None = None, **kwargs: Any) -> list[RefreshReport]:
+def catalogue_client() -> CatalogueClient | None:
+    url = CONFIG["moviecatalog_url"]
+    return HttpCatalogueClient(url) if url else None
+
+
+def sync_from_catalogue(
+    db_path: str | Path | None, client: CatalogueClient | None
+) -> tuple[bool, str]:
+    """Pull owned and wanted movies. A failure keeps the stored lists."""
+    if client is None:
+        return True, "MOVIECATALOG_URL not set; catalogue sync skipped"
+    catalogue = sync_catalogue(open_catalog(db_path or CONFIG["db_path"]), client)
+    if catalogue.last_error:
+        return False, f"Catalogue sync failed, using stored lists: {catalogue.last_error}"
+    return True, (f"Catalogue synced: {len(catalogue.owned)} owned, {len(catalogue.wanted)} wanted")
+
+
+def refresh_all(
+    stores: list[str] | None = None,
+    *,
+    catalogue: CatalogueClient | None = None,
+    **kwargs: Any,
+) -> list[RefreshReport]:
+    """Sync the catalogue once, then refresh each store in turn."""
+    client = catalogue if catalogue is not None else catalogue_client()
+    logger.info(sync_from_catalogue(kwargs.get("db_path"), client)[1])
     reports = []
     for store in stores or CONFIG["stores"]:
         try:

@@ -430,6 +430,118 @@ collections and remain unmatched products in this scope.
 Finish each implementation increment with appropriate tests, `task lint`, and
 `task build`. Web changes also require Playwright verification.
 
+## Phase 2: catalogue integration and wishlist searches
+
+Status: agreed 2026-11-11, not started.
+
+The watcher is paired with **moviecatalog**, a separate app that catalogues the
+discs I own and holds my wishlist. The catalogue owns everything about _me_
+(what I own, what I want, what I'd pay). The watcher stays a crawler, an offer
+database and a browsing UI. Data flows both ways, and each side keeps working
+when the other is down:
+
+```
+moviecatalog ──(owned titles, wishlist)──► watcher     pulled at the start of each refresh
+moviecatalog ◄──(offers for wished titles)── watcher   read by the catalogue's wishlist page
+```
+
+The shared key is the TMDB movie id. Formats translate as `bd` = Blu-ray and
+`4k` = UHD; the catalogue also knows DVD.
+
+### Two jobs
+
+1. **Browsing for deals outside the wishlist** ("didn't know I wanted that",
+   "so cheap I'll grab it anyway"). This is the existing category crawl and
+   main page, now with owned movies filtered out automatically.
+2. **Seeing when wished-for movies are on sale.** Each refresh also runs a
+   targeted store search for every wished-for movie, so they are found even
+   when they never show up in the crawled categories.
+
+### Pull from the catalogue
+
+At the start of each refresh the watcher fetches `GET <MOVIECATALOG_URL>/api/sync`:
+
+```json
+{
+  "owned": [{ "tmdb_id": 9874, "formats": ["Blu-ray"] }],
+  "wanted": [
+    {
+      "tmdb_id": 9874,
+      "title": "Cobra",
+      "original_title": "Cobra",
+      "year": 1986,
+      "formats": ["UHD"],
+      "max_price_cents": 2000
+    }
+  ]
+}
+```
+
+Movies only. The last successful response is stored, so a refresh never fails
+because the catalogue cannot be reached; it uses the stored lists and the
+status page says how old they are.
+
+### Owned movies on the main page
+
+| I own it on                        | Offers on the main page                                |
+| ---------------------------------- | ------------------------------------------------------ |
+| Nothing                            | Shown                                                  |
+| DVD only                           | Shown, with an "Own: DVD" badge (an upgrade candidate) |
+| Blu-ray or UHD                     | Hidden                                                 |
+| Anything, but it's on the wishlist | Shown, with an "On wishlist" badge                     |
+
+Upgrades from Blu-ray to UHD are rare and deliberate, so they go through the
+wishlist rather than general browsing. Manual ignore stays in the watcher for
+"not interested".
+
+### Wishlist on the main page
+
+- The watchlist section at the top becomes the **wishlist** section, filled
+  from the catalogue's `wanted` list: every in-stock offer of a wished-for movie
+  in an accepted format, regardless of the browsing price limits, cheapest first.
+  Offers at or under the wish's own `max_price_cents` are marked as deals.
+- Each offer on the main page gets an "Add to wishlist" action, which calls the
+  catalogue's `POST /api/wants`, so a find while browsing becomes a tracked wish.
+- The watcher's own `watch` preference is replaced by the catalogue's wishlist.
+
+### Targeted searches
+
+- After the category crawl, each refresh searches each store once per wished-for
+  movie, by title (falling back to the original title), and filters the results
+  by the wish's formats. There is one search per title, not one per format.
+- Politeness: the same per-store queue, lock and `CRAWL_DELAY_SECONDS` as the
+  crawl; the first results page only, never product pages; a per-store daily cap
+  on searches. For CDON each search is one headless-browser page.
+- Search hits are imported into `store_products` and `price_observations`
+  like crawled products.
+- **Discovery source.** Each product records how it was found: `category`
+  (crawl), `search`, or both. Äx's offer-category expiry applies only to
+  products found by the category crawl. A search hit expires when a later
+  search for the same movie no longer finds it. The 48-hour freshness limit
+  applies as before, so searches must run daily.
+- **Matching.** A search knows which TMDB id it is looking for. Hits are checked
+  against that movie (title, year) instead of running an open TMDB search for
+  each product. Uncertain hits go to the existing manual queue. Other movies in
+  the results are imported and matched normally.
+- Each search records its last run time, hit count and error, for the status
+  page and for the catalogue ("last searched 3 days ago, nothing found" is not
+  the same as "not in shops").
+
+### Read API for the catalogue
+
+`GET /api/offers?tmdb_id=…` (repeatable) returns the current offers per movie:
+store, listing title, format, condition, price, regular price, currency,
+availability, edition URL, image URL, last seen, and the movie's last search
+time. Until it exists, the catalogue reads the watcher's SQLite file directly,
+read-only.
+
+### To do before building
+
+- Capture the search URL and results-page structure for both stores: Äx over
+  plain HTTP, CDON through `BrowserFetcher`. Save them as fixtures.
+- Decide whether product-level watches (unmatched products, collections) are
+  still needed once movie-level watches move to the catalogue.
+
 ## Deferred work
 
 Sale percentages, historical comparison metrics, and their UI controls are
@@ -438,4 +550,5 @@ in this version. Collection membership linking, IMDb/OMDb
 API integration, checkout automation, shipping-inclusive comparisons, collecting
 the entire Äx catalog, raw-archive cleanup, Äx detail-page fetching, a
 labelled TMDB calibration set, notifications of any kind, and renaming the
-project are outside this plan.
+project are outside this plan. Targeted searches for wished-for movies (phase 2)
+are the only exception to the scope limit: they are searches, not a catalog crawl.

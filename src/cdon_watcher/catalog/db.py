@@ -8,7 +8,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import Engine, inspect
+from sqlalchemy import Engine, inspect, text
 from sqlmodel import Session, create_engine, select
 
 from . import models
@@ -46,10 +46,45 @@ def _v3_user_preferences(engine: Engine) -> None:
     )
 
 
+def _v4_catalogue_and_searches(engine: Engine) -> None:
+    """Phase 2: catalogue sync, wishlist searches, discovery source; watch is gone."""
+    # v1 creates tables from the current models, so a fresh database already has these.
+    columns = {
+        table: {c["name"] for c in inspect(engine).get_columns(table)}
+        for table in ("store_products", "crawl_runs")
+    }
+    additions = [
+        ("store_products", "category_member", "BOOLEAN NOT NULL DEFAULT 1"),
+        ("store_products", "category_run_id", "INTEGER"),
+        ("crawl_runs", "scope", "VARCHAR NOT NULL DEFAULT 'category'"),
+    ]
+    with engine.begin() as connection:
+        for table, column, definition in additions:
+            if column not in columns[table]:
+                connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {definition}"))
+        connection.execute(
+            text(
+                "UPDATE store_products SET category_run_id = last_seen_run_id "
+                "WHERE category_run_id IS NULL AND category_member"
+            )
+        )
+        # The catalogue's wishlist replaces watch; only ignores remain.
+        connection.execute(text("DELETE FROM user_preferences WHERE kind = 'watch'"))
+    models.CatalogModel.metadata.create_all(
+        engine,
+        tables=[
+            models.CatalogueSync.__table__,  # type: ignore[attr-defined]
+            models.WishSearch.__table__,  # type: ignore[attr-defined]
+            models.SearchHit.__table__,  # type: ignore[attr-defined]
+        ],
+    )
+
+
 MIGRATIONS: list[tuple[int, Migration]] = [
     (1, _v1_create_tables),
     (2, _v2_matching_tables),
     (3, _v3_user_preferences),
+    (4, _v4_catalogue_and_searches),
 ]
 CURRENT_VERSION = MIGRATIONS[-1][0]
 

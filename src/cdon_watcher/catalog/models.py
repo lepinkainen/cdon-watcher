@@ -46,6 +46,8 @@ class CrawlRun(CatalogModel, table=True):
     product_count: int
     error_count: int
     expired_count: int = 0
+    scope: str = "category"
+    """category for the listing crawl, search for wishlist searches."""
 
 
 class StoreProduct(CatalogModel, table=True):
@@ -86,6 +88,9 @@ class StoreProduct(CatalogModel, table=True):
     last_seen_run_id: int
     active: bool = Field(default=True, index=True)
     inactive_since: NaiveDatetime | None = None
+    category_member: bool = True
+    """Seen by the newest category crawl. Search-only products are not members."""
+    category_run_id: int | None = None
 
 
 class PriceObservation(CatalogModel, table=True):
@@ -172,3 +177,47 @@ class UserPreference(CatalogModel, table=True):
     store_product_id: int | None = Field(default=None, foreign_key="store_products.id", index=True)
     origin_store_product_id: int | None = None
     created_at: NaiveDatetime
+
+
+class CatalogueSync(CatalogModel, table=True):
+    """The last successful /api/sync response from moviecatalog (a single row, id 1)."""
+
+    __tablename__ = "catalogue_sync"
+
+    id: int = Field(default=1, primary_key=True)
+    payload_json: str | None = None
+    fetched_at: NaiveDatetime | None = None
+    last_attempt_at: NaiveDatetime | None = None
+    last_error: str | None = None
+
+
+class WishSearch(CatalogModel, table=True):
+    """The latest targeted search for one wished-for movie at one store."""
+
+    __tablename__ = "wish_searches"
+    __table_args__ = (UniqueConstraint("store_id", "tmdb_id", name="uq_wish_searches_store_tmdb"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    store_id: int = Field(foreign_key="stores.id", index=True)
+    tmdb_id: int = Field(index=True)
+    query: str
+    run_id: int
+    searched_at: NaiveDatetime
+    hit_count: int = 0
+    error: str | None = None
+
+
+class SearchHit(CatalogModel, table=True):
+    """A product the latest search for a wished-for movie found."""
+
+    __tablename__ = "search_hits"
+    __table_args__ = (
+        UniqueConstraint("store_product_id", "tmdb_id", name="uq_search_hits_product_tmdb"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    store_product_id: int = Field(foreign_key="store_products.id", index=True)
+    tmdb_id: int = Field(index=True)
+    run_id: int
+    first_found_at: NaiveDatetime
+    last_found_at: NaiveDatetime

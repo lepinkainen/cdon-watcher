@@ -104,6 +104,15 @@ def _cmd_refresh(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
         parser.exit(1, "One or more stores did not import.\n")
 
 
+def _cmd_sync(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    from .refresh import catalogue_client, sync_from_catalogue
+
+    ok, message = sync_from_catalogue(args.db, catalogue_client())
+    print(message)
+    if not ok:
+        parser.exit(1)
+
+
 def _cmd_web(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     import uvicorn
 
@@ -126,6 +135,7 @@ COMMANDS = {
     "import-run": _cmd_import_run,
     "match": _cmd_match,
     "refresh": _cmd_refresh,
+    "sync": _cmd_sync,
     "web": _cmd_web,
 }
 
@@ -172,6 +182,9 @@ def build_parser() -> argparse.ArgumentParser:
     refresh.add_argument("--db", type=Path, default=None)
     refresh.add_argument("--max-pages", type=int, default=None, help="CDON only")
     refresh.add_argument("--skip-crawl", action="store_true", help="Reprocess the latest run")
+
+    sync = sub.add_parser("sync", help="Pull owned and wanted movies from moviecatalog")
+    sync.add_argument("--db", type=Path, default=None)
 
     sub.add_parser("web", help="Start the web app")
     for command in sub.choices.values():

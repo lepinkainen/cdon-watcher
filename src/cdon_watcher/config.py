@@ -26,6 +26,8 @@ def load_config() -> dict[str, Any]:
         "max_pages": int(os.environ.get("MAX_PAGES_PER_CATEGORY", 10)),
         "crawl_delay": float(os.environ.get("CRAWL_DELAY_SECONDS", 2.0)),
         "crawl_attempts": int(os.environ.get("CRAWL_ATTEMPTS", 3)),
+        "moviecatalog_url": os.environ.get("MOVIECATALOG_URL", "").strip().rstrip("/"),
+        "search_daily_cap": int(os.environ.get("SEARCH_DAILY_CAP", 100)),
         "run_scheduler": _bool("RUN_SCHEDULER", False),
         "scheduler_interval_hours": float(os.environ.get("SCHEDULER_INTERVAL_HOURS", 24)),
         "scheduler_initial_delay": float(os.environ.get("SCHEDULER_INITIAL_DELAY_SECONDS", 300)),
