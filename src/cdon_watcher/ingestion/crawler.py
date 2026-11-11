@@ -1,5 +1,6 @@
 """Standalone polite HTTP crawler that only writes fetch evidence."""
 
+import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -8,6 +9,8 @@ import requests
 
 from .archive import ArchivedRun, RawArchive, Snapshot
 from .stores import StoreAdapter
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -117,7 +120,23 @@ class Crawler:
                     run.manifest.listing_count += 1
                     run.manifest.product_count = len(product_ids)
                     run.save()
+                    logger.debug(
+                        "%s page %d: %d products, %d editions so far (%s)",
+                        adapter.key,
+                        run.manifest.listing_count,
+                        len(listing.products),
+                        len(product_ids),
+                        url,
+                    )
                     return
+            logger.debug(
+                "%s attempt %d/%d failed: %s (%s)",
+                adapter.key,
+                attempt,
+                self.attempts,
+                snapshot.error,
+                url,
+            )
             run.save()
         run.manifest.failures.append(f"{url}: {snapshot.error} after {self.attempts} attempts")
         run.save()

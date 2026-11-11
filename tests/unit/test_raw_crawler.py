@@ -278,3 +278,40 @@ def test_browser_playwright_errors_become_fetch_errors():
     page.goto.side_effect = PlaywrightTimeoutError("Timeout 45000ms exceeded")
     with pytest.raises(FetchError, match="Timeout"):
         browser(page)(URL)
+
+
+def test_debug_log_per_page_and_failed_attempt(tmp_path, caplog):
+    fetch = Mock(
+        side_effect=[
+            Response(URL, 503, b"unavailable"),
+            Response(URL, 200, small_page(pages=2)),
+            Response(URL + "?p2=2", 200, small_page(2, 2, "222")),
+        ]
+    )
+    with caplog.at_level("DEBUG", logger="cdon_watcher.ingestion.crawler"):
+        crawler(tmp_path, fetch).crawl(AxAdapter())
+    assert caplog.messages == [
+        f"ax attempt 1/3 failed: HTTP 503 ({URL})",
+        f"ax page 1: 1 products, 1 editions so far ({URL})",
+        f"ax page 2: 1 products, 2 editions so far ({URL}?p2=2)",
+    ]
+
+
+@pytest.mark.parametrize(("flag", "level"), [([], "NOTSET"), (["-v"], "DEBUG")])
+def test_verbose_flag_enables_debug_for_project_loggers(tmp_path, monkeypatch, flag, level):
+    import logging
+
+    from cdon_watcher.cli import main
+
+    project = logging.getLogger("cdon_watcher")
+    monkeypatch.setattr(project, "level", logging.NOTSET)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["cdon-watcher", "crawl-raw", "--store", "ax", "--raw-dir", str(tmp_path), *flag],
+    )
+    monkeypatch.setattr(
+        "cdon_watcher.ingestion.crawler.HttpFetcher.__call__",
+        lambda self, url: Response(url, 200, small_page()),
+    )
+    main()
+    assert logging.getLevelName(project.level) == level

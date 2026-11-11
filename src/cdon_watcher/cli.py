@@ -174,6 +174,10 @@ def build_parser() -> argparse.ArgumentParser:
     refresh.add_argument("--skip-crawl", action="store_true", help="Reprocess the latest run")
 
     sub.add_parser("web", help="Start the web app")
+    for command in sub.choices.values():
+        command.add_argument(
+            "-v", "--verbose", action="store_true", help="Debug logging (per-page crawl progress)"
+        )
     return parser
 
 
@@ -181,6 +185,9 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     parser = build_parser()
     args = parser.parse_args()
+    if getattr(args, "verbose", False):
+        # Only our loggers: DEBUG on the root would flood with urllib3/asyncio noise.
+        logging.getLogger("cdon_watcher").setLevel(logging.DEBUG)
     command = COMMANDS.get(args.command)
     if command is None:
         parser.print_help()
