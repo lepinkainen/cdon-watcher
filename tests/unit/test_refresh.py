@@ -106,6 +106,38 @@ def test_incomplete_crawl_still_imports(env):
     assert any("incomplete" in n for n in report.notes)
 
 
+def test_crawl_that_saves_no_run_does_not_reimport_an_old_run(env, monkeypatch):
+    tmp_path, _ = env
+    kwargs = dict(raw_dir=tmp_path / "raw", db_path=tmp_path / "c.db", tmdb_api_key="")
+    assert refresh.refresh_store("ax", **kwargs).ok
+
+    def no_browser(store):
+        raise RuntimeError("browser failed to launch")
+
+    monkeypatch.setattr(refresh, "make_fetcher", no_browser)
+    report = refresh.refresh_store("ax", searches=False, **kwargs)
+    assert not report.ok and report.crawl_failed
+    assert report.crawl is None and report.parsed is None and report.imported is None
+    assert any("browser failed to launch" in n for n in report.notes)
+
+
+def test_aborted_crawl_imports_its_partial_run_but_fails(env):
+    tmp_path, fetchers = env
+
+    def crash_on_page_2(url):
+        if url.endswith("=2"):
+            raise RuntimeError("browser crashed")
+        return cdon_page(1)
+
+    fetchers["cdon"].pages = crash_on_page_2
+    report = refresh.refresh_store(
+        "cdon", raw_dir=tmp_path / "raw", db_path=tmp_path / "c.db", max_pages=2, tmdb_api_key=""
+    )
+    assert report.crawl_failed and not report.ok
+    assert report.crawl is not None and report.crawl.run_id == 1
+    assert report.imported is not None and report.imported.products_seen == 44
+
+
 def test_skip_crawl_reprocesses_latest_run(env):
     tmp_path, _ = env
     kwargs = dict(raw_dir=tmp_path / "raw", db_path=tmp_path / "c.db", tmdb_api_key="")

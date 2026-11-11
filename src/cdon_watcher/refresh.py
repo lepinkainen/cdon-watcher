@@ -46,11 +46,16 @@ class RefreshReport:
     searched: RunManifest | None = None
     search_imported: ImportResult | None = None
     matched: MatchResult | None = None
+    crawl_failed: bool = False
     notes: list[str] = field(default_factory=list)
 
     @property
-    def ok(self) -> bool:
+    def imported_any(self) -> bool:
         return self.imported is not None or self.search_imported is not None
+
+    @property
+    def ok(self) -> bool:
+        return self.imported_any and not self.crawl_failed
 
 
 def make_parser(store: str) -> Any:
@@ -153,6 +158,12 @@ class _Settings:
 def _crawl_stage(
     store: str, fetcher: _LazyFetcher, cfg: _Settings, report: RefreshReport
 ) -> int | None:
+    """Crawl one store. The new run's id, or None when the crawl saved no run.
+
+    An aborted crawl still returns its partial run so the pages it saved are
+    imported, but it marks the report failed.
+    """
+    crawler: Crawler | None = None
     try:
         crawler = Crawler(
             RawArchive(cfg.raw_dir), fetcher.get(), attempts=cfg.attempts, delay=cfg.delay
@@ -163,7 +174,12 @@ def _crawl_stage(
     except Exception as error:  # noqa: BLE001 - stage boundary, reported not raised
         logger.exception("Crawl failed for %s", store)
         report.notes.append(f"Crawl failed: {error}")
-        return None
+        report.crawl_failed = True
+        partial = crawler.run if crawler is not None else None
+        if partial is None:
+            return None
+        report.crawl = partial.manifest
+        return partial.manifest.run_id
     report.crawl = run.manifest
     if not run.manifest.complete:
         report.notes.append(f"Crawl incomplete: {len(run.manifest.failures)} failures")
@@ -216,7 +232,12 @@ def _category_stages(
     *,
     skip_crawl: bool,
 ) -> None:
-    run_id = None if skip_crawl else _crawl_stage(store, fetcher, cfg, report)
+    run_id = None
+    if not skip_crawl:
+        run_id = _crawl_stage(store, fetcher, cfg, report)
+        if run_id is None:
+            # Parsing with no run id would pick an older, already imported run.
+            return
     try:
         report.parsed = parse_run(cfg.raw_dir, make_parser(store), run_id, search=False)
     except FileNotFoundError as error:
@@ -244,8 +265,9 @@ def refresh_store(
     """Run every stage for one store. Stage failures are reported, not raised.
 
     Category crawl, parse, import; then one search per wished-for movie, parse,
-    import; then matching. A failed crawl still parses and imports whatever was
-    saved. skip_crawl reprocesses the latest saved runs without fetching. A
+    import; then matching. A failed crawl still parses and imports whatever it
+    saved, but the report is not ok; a crawl that saved no run imports nothing,
+    never an older run. skip_crawl reprocesses the latest saved runs without fetching. A
     missing TMDB key skips matching. The web app keeps serving committed data.
     """
     if store not in STORES:
@@ -278,7 +300,7 @@ def refresh_store(
         finally:
             fetcher.close()
 
-        if not report.ok:
+        if not report.imported_any:
             return report
         if not tmdb_api_key:
             report.notes.append("TMDB_API_KEY not set; matching skipped")

@@ -102,7 +102,7 @@ def _cmd_refresh(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
         print(describe(report))
         failed = failed or not report.ok
     if failed:
-        parser.exit(1, "One or more stores did not import.\n")
+        parser.exit(1, "One or more stores failed to refresh.\n")
 
 
 def _cmd_search(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:

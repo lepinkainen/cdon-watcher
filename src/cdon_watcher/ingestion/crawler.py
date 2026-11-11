@@ -57,6 +57,8 @@ class Crawler:
         self.delay = delay
         self.sleep = sleep
         self.requested = False
+        # The run being written, kept so a caller can import what an aborted crawl saved.
+        self.run: ArchivedRun | None = None
 
     def _fetch(self, run: ArchivedRun, url: str, attempt: int) -> tuple[Snapshot, bytes | None]:
         if self.requested:
@@ -81,6 +83,7 @@ class Crawler:
 
     def crawl(self, adapter: StoreAdapter) -> ArchivedRun:
         with self.archive.start(adapter.key, adapter.scope) as run:
+            self.run = run
             pending = [adapter.start_url]
             visited: set[str] = set()
             signatures: set[tuple[str, ...]] = set()
