@@ -272,15 +272,13 @@ def test_corrected_or_rejected_match_moves_its_promoted_preferences(engine):
     client = FakeTmdb()
     for pid in ids.values():
         set_manual_match(engine, client, pid, 949)
-    apply(engine, ids["1"], "watch")
-    apply(engine, ids["2"], "ignore")  # replaces the watch on 949, origin product 2
-    apply(engine, ids["3"], "watch")  # replaces the ignore, origin product 3
-    assert prefs(engine) == {("watch", 949, None, ids["3"])}
-    apply(engine, ids["1"], "watch")  # already watched: keeps origin 3
+    apply(engine, ids["1"], "ignore")
+    apply(engine, ids["3"], "ignore")  # already ignored: keeps origin 1
+    assert prefs(engine) == {("ignore", 949, None, ids["1"])}
     # Correction moves only this product's promoted preference to the new movie.
-    set_manual_match(engine, client, ids["3"], 1091)
-    assert prefs(engine) == {("watch", 1091, None, ids["3"])}
+    set_manual_match(engine, client, ids["1"], 1091)
+    assert prefs(engine) == {("ignore", 1091, None, ids["1"])}
     apply(engine, ids["2"], "ignore")
     # Rejection restores the product-level preference; 949's ignore from product 2 stays.
-    set_manual_match(engine, None, ids["3"], None)
-    assert prefs(engine) == {("watch", None, ids["3"], ids["3"]), ("ignore", 949, None, ids["2"])}
+    set_manual_match(engine, None, ids["1"], None)
+    assert prefs(engine) == {("ignore", None, ids["1"], ids["1"]), ("ignore", 949, None, ids["2"])}

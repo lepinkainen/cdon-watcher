@@ -53,7 +53,8 @@ h3 {
   font-size: 1rem;
   margin: 0.75rem 0 0.25rem;
 }
-section.watchlist {
+section.wishlist,
+section.wish-entry {
   background: #fffbeb;
   border: 1px solid #fde68a;
   border-radius: 6px;
@@ -130,6 +131,22 @@ td.actions button:hover {
 .tag.muted {
   background: #f3f4f6;
   color: var(--muted);
+}
+.tag.deal {
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 600;
+}
+.tag.wish {
+  background: #fef3c7;
+  color: #92400e;
+}
+.tag.own {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+.warn {
+  color: var(--warn);
 }
 .fmt {
   font-size: 0.8rem;

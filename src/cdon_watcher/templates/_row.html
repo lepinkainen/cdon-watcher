@@ -4,6 +4,9 @@
     {% if row.title != row.raw_title %}<span class="raw">{{ row.raw_title }}</span>{% endif %}
     {% if row.is_collection %}<span class="tag">collection</span>{% endif %}
     {% if row.match_status not in ('auto', 'manual', 'not_applicable') %}<span class="tag muted">unmatched</span>{% endif %}
+    {% if row.deal %}<span class="tag deal">deal</span>{% endif %}
+    {% if row.wished and not wishlist_section %}<span class="tag wish">on wishlist</span>{% endif %}
+    {% if row.own_dvd %}<span class="tag own">own: DVD</span>{% endif %}
   </td>
   <td><span class="fmt fmt-{{ row.format }}">{{ row.format_label }}</span></td>
   <td>{{ row.condition }}</td>
@@ -13,11 +16,7 @@
     {% if row.regular_price_cents and row.regular_price_cents > row.price_cents %}<del>{{ row.regular_price_cents | euros }}</del>{% endif %}
   </td>
   <td class="actions">
-    {% if row.watched %}
-      <button data-action="unwatch" title="Remove from watchlist">★</button>
-    {% else %}
-      <button data-action="watch" title="Watch">☆</button>
-    {% endif %}
+    {% if row.can_wish %}<button data-action="wish" title="Add to the moviecatalog wishlist">＋</button>{% endif %}
     <button data-action="ignore" title="Ignore (hide everywhere)">✕</button>
     <a class="history" href="/products/{{ row.id }}" title="Price history">⋯</a>
   </td>

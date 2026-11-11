@@ -1,4 +1,4 @@
-// Row actions (watch / ignore / unwatch / unignore) and manual matching without reloads.
+// Row actions (wish / ignore / unignore) and manual matching without reloads.
 ;(function () {
   function post(url, body) {
     return fetch(url, {
@@ -36,27 +36,16 @@
       button.disabled = true
       post('/api/v2/products/' + id + '/' + action)
         .then(function () {
-          if (
-            action === 'ignore' ||
-            action === 'unignore' ||
-            action === 'unwatch'
-          ) {
-            if (
-              node.tagName === 'TR' &&
-              action === 'unwatch' &&
-              !node.closest('section.watchlist')
-            ) {
-              button.textContent = '☆'
-              button.setAttribute('data-action', 'watch')
-              button.disabled = false
-              return
-            }
-            fade(node)
+          if (action === 'wish') {
+            var tag = document.createElement('span')
+            tag.className = 'tag wish'
+            tag.textContent = 'on wishlist'
+            var title = node.querySelector('td.title')
+            if (title) title.appendChild(tag)
+            button.remove()
             return
           }
-          button.textContent = '★'
-          button.setAttribute('data-action', 'unwatch')
-          button.disabled = false
+          fade(node)
         })
         .catch(function (error) {
           button.disabled = false

@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+{% block title %}Wishlist{% endblock %}
+{% block content %}
+<h2>Wishlist</h2>
+<p class="meta">
+  Wishes come from moviecatalog{% if catalogue_url %} (<a href="{{ catalogue_url }}/#/wishlist">edit there</a>){% endif %}.
+  Offers are in stock and seen within the freshness limit, in any format; deals are in an accepted format within the price cap.
+</p>
+{% if entries %}
+{% for entry in entries %}
+<section class="wish-entry">
+  <h3>
+    {{ entry.wish.title }}{% if entry.wish.year %} ({{ entry.wish.year }}){% endif %}
+    <span class="meta">{{ entry.wish.formats | join(", ") }}{% if entry.wish.max_price_cents %} · ≤ {{ entry.wish.max_price_cents | euros }}{% endif %}</span>
+  </h3>
+  {% if entry.offers %}
+  <table><tbody>{% with wishlist_section = true %}{% for row in entry.offers %}{% include "_row.html" %}{% endfor %}{% endwith %}</tbody></table>
+  {% else %}<p class="empty">No in-stock offers</p>{% endif %}
+  <p class="meta">
+    {% for store_key, search in entry.searches %}
+      {{ store_key }}: {% if search.error %}<span class="warn">search failed {{ search.searched_at | when }}</span>{% else %}searched {{ search.searched_at | when }}, {{ search.hit_count }} hits{% endif %}{% if not loop.last %} · {% endif %}
+    {% else %}Not searched yet{% endfor %}
+  </p>
+</section>
+{% endfor %}
+{% else %}<p class="empty">No wishes synced from moviecatalog.</p>{% endif %}
+{% endblock %}

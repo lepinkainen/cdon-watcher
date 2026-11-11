@@ -18,5 +18,14 @@
   {% endfor %}
   </tbody>
 </table>
+<h3>Catalogue</h3>
+<p>
+  {% if not catalogue_url %}MOVIECATALOG_URL not set; owned filtering and wishlist use whatever was last synced.
+  {% else %}{{ catalogue_url }}{% endif %}
+</p>
+<p class="meta">
+  Last successful sync {{ catalogue.fetched_at | when }} · {{ catalogue.owned | length }} owned · {{ catalogue.wanted | length }} wanted
+  {% if catalogue.last_error %}<br><span class="warn">Last attempt {{ catalogue.last_attempt_at | when }} failed: {{ catalogue.last_error }}</span>{% endif %}
+</p>
 <p class="meta">Freshness limit {{ freshness_hours }} h · default limits Blu-ray {{ max_bd_cents | euros }}, 4K {{ max_4k_cents | euros }}</p>
 {% endblock %}

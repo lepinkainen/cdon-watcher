@@ -1,11 +1,11 @@
 {% extends "layout.html" %}
 {% block content %}
-{% if page.watchlist %}
-<section class="watchlist">
-  <h2>Watchlist in stock</h2>
+{% if page.wishlist %}
+<section class="wishlist">
+  <h2>Wishlist in stock</h2>
   <table>
     <tbody>
-    {% for row in page.watchlist %}{% include "_row.html" %}{% endfor %}
+    {% with wishlist_section = true %}{% for row in page.wishlist %}{% include "_row.html" %}{% endfor %}{% endwith %}
     </tbody>
   </table>
 </section>
@@ -46,6 +46,11 @@
   {% else %}
   <p class="empty">Nothing in stock within these limits.</p>
   {% endif %}
-  <p class="meta">{{ page.rows | length }} offers · last refresh {{ page.last_refresh | when }}</p>
+  <p class="meta">
+    {{ page.rows | length }} offers · last refresh {{ page.last_refresh | when }}
+    {% if page.hidden_owned %}· {{ page.hidden_owned }} owned on Blu-ray/UHD hidden{% endif %}
+    {% if page.catalogue.fetched_at %}· catalogue synced {{ page.catalogue.fetched_at | when }}{% else %}· catalogue never synced{% endif %}
+    {% if page.catalogue.last_error %}<span class="warn">· last sync failed</span>{% endif %}
+  </p>
 </section>
 {% endblock %}

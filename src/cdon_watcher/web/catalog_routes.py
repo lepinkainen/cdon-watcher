@@ -7,17 +7,26 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import Engine
+from sqlmodel import Session
 from starlette.responses import Response
 
 from ..catalog import preferences, queries
+from ..catalog.catalogue import (
+    CatalogueClient,
+    CatalogueError,
+    HttpCatalogueClient,
+    WantedMovie,
+    remember_want,
+)
 from ..catalog.db import open_catalog
 from ..catalog.matching import set_manual_match
+from ..catalog.models import MovieMetadata, StoreProduct
 from ..catalog.tmdb import HttpTmdbClient, TmdbClient, TmdbError
 from ..config import CONFIG
 
 router = APIRouter()
 
-ACTIONS = ("watch", "unwatch", "ignore", "unignore")
+ACTIONS = ("ignore", "unignore")
 FORMATS = ("bd", "4k")
 CONDITIONS = ("new", "used")
 
@@ -39,6 +48,18 @@ def _tmdb_client(request: Request) -> TmdbClient | None:
         return None
     client = HttpTmdbClient(key)
     request.app.state.tmdb_client = client
+    return client
+
+
+def _catalogue_client(request: Request) -> CatalogueClient | None:
+    client = getattr(request.app.state, "catalogue_client", None)
+    if client is not None:
+        return client  # type: ignore[no-any-return]
+    url = CONFIG.get("moviecatalog_url")
+    if not url:
+        return None
+    client = HttpCatalogueClient(url)
+    request.app.state.catalogue_client = client
     return client
 
 
@@ -108,9 +129,19 @@ def match_alias() -> Response:
     return RedirectResponse("/queue", status_code=307)
 
 
+@router.get("/wishlist")
+def wishlist(request: Request) -> Response:
+    return _render(
+        request,
+        "wishlist.html",
+        entries=queries.wishlist_page(_engine(request)),
+        catalogue_url=CONFIG.get("moviecatalog_url") or None,
+    )
+
+
 @router.get("/watchlist")
-def watchlist(request: Request) -> Response:
-    return _render(request, "watchlist.html", entries=queries.watchlist_page(_engine(request)))
+def watchlist_alias() -> Response:
+    return RedirectResponse("/wishlist", status_code=308)
 
 
 @router.get("/products/{store_product_id}")
@@ -128,6 +159,8 @@ def status(request: Request) -> Response:
         request,
         "status.html",
         stores=queries.status_page(_engine(request)),
+        catalogue=queries.catalogue_status(_engine(request)),
+        catalogue_url=CONFIG.get("moviecatalog_url") or None,
         freshness_hours=queries.FRESHNESS_HOURS,
         max_bd_cents=queries.MAX_BD_CENTS,
         max_4k_cents=queries.MAX_4K_CENTS,
@@ -147,6 +180,46 @@ async def product_match(request: Request, store_product_id: int) -> JSONResponse
     except TmdbError as error:
         raise HTTPException(502, str(error)) from error
     return JSONResponse({"status": state.status, "tmdb_id": state.tmdb_id})
+
+
+@router.post("/api/v2/products/{store_product_id}/wish")
+def product_wish(request: Request, store_product_id: int) -> JSONResponse:
+    """Add the product's movie to the catalogue's wishlist (both formats, no price cap)."""
+    client = _catalogue_client(request)
+    if client is None:
+        raise HTTPException(503, "MOVIECATALOG_URL is not configured")
+    engine = _engine(request)
+    with Session(engine) as session:
+        product = session.get(StoreProduct, store_product_id)
+        if product is None:
+            raise HTTPException(404, "No such product")
+        if product.tmdb_id is None or product.is_collection:
+            raise HTTPException(409, "Only products matched to a single movie can be wished for")
+        meta = session.get(MovieMetadata, product.tmdb_id)
+        want = WantedMovie(
+            tmdb_id=product.tmdb_id,
+            title=meta.title if meta else product.cleaned_title,
+            original_title=meta.original_title if meta else None,
+            year=meta.release_year if meta else None,
+            formats=["Blu-ray", "UHD"],
+        )
+        body = {
+            "title": {
+                "tmdb_id": want.tmdb_id,
+                "media_type": "movie",
+                "title": want.title,
+                "original_title": want.original_title,
+                "year": want.year,
+                "poster_path": meta.poster_path if meta else None,
+            }
+        }
+        try:
+            created = client.create_want(body)
+        except CatalogueError as error:
+            raise HTTPException(502, str(error)) from error
+        remember_want(session, want)
+        session.commit()
+    return JSONResponse({"tmdb_id": want.tmdb_id, "created": created})
 
 
 @router.post("/api/v2/products/{store_product_id}/{action}")

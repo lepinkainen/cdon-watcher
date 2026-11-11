@@ -7,6 +7,7 @@ from sqlalchemy import Engine, func
 from sqlmodel import Session, select
 
 from ..ingestion.contract import Availability
+from .catalogue import Catalogue, WantedMovie, load_catalogue
 from .models import (
     CrawlRun,
     MatchState,
@@ -14,8 +15,9 @@ from .models import (
     PriceObservation,
     Store,
     StoreProduct,
+    WishSearch,
 )
-from .preferences import preference_sets
+from .preferences import Ignored, ignored_sets
 
 MAX_BD_CENTS = 1000
 MAX_4K_CENTS = 2000
@@ -54,26 +56,39 @@ class Row:
     match_status: str
     stock_quantity: int | None
     last_seen_at: datetime
-    watched: bool = False
     ignored: bool = False
+    wished: bool = False
+    """The movie is on the catalogue's wishlist (in any format)."""
+    deal: bool = False
+    """Wished for in this format and at or under the wish's price cap."""
+    own_dvd: bool = False
+    """Owned on DVD only: an upgrade candidate."""
+
+    @property
+    def can_wish(self) -> bool:
+        return self.tmdb_id is not None and not self.is_collection and not self.wished
 
 
 @dataclass
 class MainPage:
-    watchlist: list[Row]
+    wishlist: list[Row]
     rows: list[Row]
     filters: Filters
     stores: list[Store]
     last_refresh: datetime | None
+    catalogue: Catalogue
+    hidden_owned: int = 0
 
 
 @dataclass
-class WatchlistEntry:
-    title: str
-    tmdb_id: int | None
-    store_product_id: int | None
-    unwatch_product_id: int
+class WishEntry:
+    wish: WantedMovie
     offers: list[Row] = field(default_factory=list)
+    searches: list[tuple[str, WishSearch]] = field(default_factory=list)
+
+    @property
+    def has_deal(self) -> bool:
+        return any(o.deal for o in self.offers)
 
 
 @dataclass
@@ -104,11 +119,12 @@ def _row(
     store: Store,
     meta: MovieMetadata | None,
     status: str | None,
-    watched: bool,
-    ignored: bool,
+    *,
+    ignored: bool = False,
+    catalogue: Catalogue | None = None,
 ) -> Row:
     assert product.id is not None
-    return Row(
+    row = Row(
         id=product.id,
         store_key=store.key,
         store_name=store.name,
@@ -127,9 +143,19 @@ def _row(
         match_status=status or ("not_applicable" if product.is_collection else "pending"),
         stock_quantity=product.current_stock_quantity,
         last_seen_at=product.last_seen_at,
-        watched=watched,
         ignored=ignored,
     )
+    if catalogue is not None and not product.is_collection and product.tmdb_id is not None:
+        wish = catalogue.wanted.get(product.tmdb_id)
+        row.wished = wish is not None
+        row.deal = (
+            wish is not None
+            and wish.accepts(product.format)
+            and wish.max_price_cents is not None
+            and product.current_price_cents <= wish.max_price_cents
+        )
+        row.own_dvd = catalogue.owns_dvd_only(product.tmdb_id)
+    return row
 
 
 def _shoppable(session: Session, now: datetime):  # type: ignore[no-untyped-def]
@@ -147,14 +173,41 @@ def _shoppable(session: Session, now: datetime):  # type: ignore[no-untyped-def]
     )
 
 
-def _rows(session: Session, query, prefs) -> list[Row]:  # type: ignore[no-untyped-def]
-    watched_movies, watched_products, ignored_movies, ignored_products = prefs
-    rows = []
-    for product, store, meta, state in session.exec(query).all():
-        watched = product.tmdb_id in watched_movies or product.id in watched_products
-        ignored = product.tmdb_id in ignored_movies or product.id in ignored_products
-        rows.append(_row(product, store, meta, state.status if state else None, watched, ignored))
-    return rows
+def _rows(  # type: ignore[no-untyped-def]
+    session: Session, query, ignored: Ignored, catalogue: Catalogue | None = None
+) -> list[Row]:
+    return [
+        _row(
+            product,
+            store,
+            meta,
+            state.status if state else None,
+            ignored=product in ignored,
+            catalogue=catalogue,
+        )
+        for product, store, meta, state in session.exec(query).all()
+    ]
+
+
+def _in_wishlist_section(row: Row, catalogue: Catalogue) -> bool:
+    wish = catalogue.wanted.get(row.tmdb_id) if row.tmdb_id is not None else None
+    return wish is not None and not row.is_collection and wish.accepts(row.format)
+
+
+def _passes(row: Row, filters: Filters) -> bool:
+    cap = filters.max_4k_cents if row.format == "4k" else filters.max_bd_cents
+    if row.price_cents > cap:
+        return False
+    if filters.format and row.format != filters.format:
+        return False
+    if filters.store and row.store_key != filters.store:
+        return False
+    if filters.condition and row.condition != filters.condition:
+        return False
+    if filters.q:
+        needle = filters.q.casefold()
+        return needle in row.title.casefold() or needle in row.raw_title.casefold()
+    return True
 
 
 def _price_sort(row: Row) -> tuple[int, str, str]:
@@ -162,54 +215,53 @@ def _price_sort(row: Row) -> tuple[int, str, str]:
 
 
 def main_page(engine: Engine, filters: Filters, *, now: datetime | None = None) -> MainPage:
+    """Wished-for offers first, regardless of limits; then browsing, minus what I own."""
     now = now or _now()
     with Session(engine) as session:
-        prefs = preference_sets(session)
-        rows = [r for r in _rows(session, _shoppable(session, now), prefs) if not r.ignored]
-        watchlist = sorted((r for r in rows if r.watched), key=_price_sort)
-        shown = {r.id for r in watchlist}
-        rest = []
+        catalogue = load_catalogue(session)
+        query = _shoppable(session, now)
+        rows = [r for r in _rows(session, query, ignored_sets(session), catalogue) if not r.ignored]
+        wishlist = sorted((r for r in rows if _in_wishlist_section(r, catalogue)), key=_price_sort)
+        shown = {r.id for r in wishlist}
+        rest, hidden_owned = [], 0
         for row in rows:
-            if row.id in shown:
+            if row.id in shown or not _passes(row, filters):
                 continue
-            cap = filters.max_4k_cents if row.format == "4k" else filters.max_bd_cents
-            if row.price_cents > cap:
+            if not row.wished and catalogue.owns_disc(row.tmdb_id):
+                hidden_owned += 1
                 continue
-            if filters.format and row.format != filters.format:
-                continue
-            if filters.store and row.store_key != filters.store:
-                continue
-            if filters.condition and row.condition != filters.condition:
-                continue
-            if filters.q:
-                needle = filters.q.casefold()
-                if needle not in row.title.casefold() and needle not in row.raw_title.casefold():
-                    continue
             rest.append(row)
         rest.sort(key=_price_sort)
         stores = session.exec(select(Store).order_by(Store.key)).all()
-        last = session.exec(select(func.max(CrawlRun.imported_at))).one()
+        last = session.exec(
+            select(func.max(CrawlRun.imported_at)).where(CrawlRun.scope == "category")
+        ).one()
         session.expunge_all()
     return MainPage(
-        watchlist=watchlist, rows=rest, filters=filters, stores=list(stores), last_refresh=last
+        wishlist=wishlist,
+        rows=rest,
+        filters=filters,
+        stores=list(stores),
+        last_refresh=last,
+        catalogue=catalogue,
+        hidden_owned=hidden_owned,
     )
 
 
 def ignored_page(engine: Engine) -> list[Row]:
     with Session(engine) as session:
-        prefs = preference_sets(session)
-        _, _, ignored_movies, ignored_products = prefs
+        ignored = ignored_sets(session)
         query = (
             select(StoreProduct, Store, MovieMetadata, MatchState)
             .join(Store, Store.id == StoreProduct.store_id)  # type: ignore[arg-type]
             .outerjoin(MovieMetadata, MovieMetadata.tmdb_id == StoreProduct.tmdb_id)  # type: ignore[arg-type]
             .outerjoin(MatchState, MatchState.store_product_id == StoreProduct.id)  # type: ignore[arg-type]
             .where(
-                (StoreProduct.tmdb_id.in_(ignored_movies))  # type: ignore[union-attr]
-                | (StoreProduct.id.in_(ignored_products))  # type: ignore[union-attr]
+                (StoreProduct.tmdb_id.in_(ignored.movies))  # type: ignore[union-attr]
+                | (StoreProduct.id.in_(ignored.products))  # type: ignore[union-attr]
             )
         )
-        rows = _rows(session, query, prefs)
+        rows = _rows(session, query, ignored)
         # One row per movie is enough on the ignored page; collections stay per product.
         seen: set[int] = set()
         unique = []
@@ -231,16 +283,16 @@ def match_queue(
 
     now = now or _now()
     with Session(engine) as session:
-        prefs = preference_sets(session)
+        ignored = ignored_sets(session)
         query = _shoppable(session, now).where(
             StoreProduct.is_collection == False,  # noqa: E712
             (MatchState.id.is_(None)) | (MatchState.status.in_(UNDECIDED_STATUSES)),  # type: ignore[attr-defined,union-attr]
         )
         items = []
         for product, store, meta, state in session.exec(query).all():
-            row = _row(product, store, meta, state.status if state else None, False, False)
-            if product.tmdb_id in prefs[2] or product.id in prefs[3]:
+            if product in ignored:
                 continue
+            row = _row(product, store, meta, state.status if state else None)
             candidates = (
                 json.loads(state.candidates_json) if state and state.candidates_json else []
             )
@@ -250,40 +302,32 @@ def match_queue(
     return items
 
 
-def watchlist_page(engine: Engine, *, now: datetime | None = None) -> list[WatchlistEntry]:
+def wishlist_page(engine: Engine, *, now: datetime | None = None) -> list[WishEntry]:
+    """Each wish with its in-stock offers here (any format) and its latest searches."""
     now = now or _now()
     with Session(engine) as session:
-        prefs = preference_sets(session)
-        watched_movies, watched_products, _, _ = prefs
-        offers = [r for r in _rows(session, _shoppable(session, now), prefs) if r.watched]
-        entries: list[WatchlistEntry] = []
-        for tmdb_id in sorted(watched_movies):
-            meta = session.get(MovieMetadata, tmdb_id)
-            any_product = session.exec(
-                select(StoreProduct).where(StoreProduct.tmdb_id == tmdb_id)
-            ).first()
-            title = (
-                meta.title
-                if meta
-                else (any_product.raw_title if any_product else f"TMDB {tmdb_id}")
+        catalogue = load_catalogue(session)
+        wanted = list(catalogue.wanted)
+        query = _shoppable(session, now).where(
+            StoreProduct.tmdb_id.in_(wanted),  # type: ignore[union-attr]
+            StoreProduct.is_collection == False,  # noqa: E712
+        )
+        offers = _rows(session, query, Ignored(frozenset(), frozenset()), catalogue)
+        searches = session.exec(
+            select(WishSearch, Store)
+            .join(Store, Store.id == WishSearch.store_id)  # type: ignore[arg-type]
+            .where(WishSearch.tmdb_id.in_(wanted))  # type: ignore[attr-defined]
+        ).all()
+        entries = []
+        for tmdb_id, wish in catalogue.wanted.items():
+            entry = WishEntry(
+                wish,
+                sorted((o for o in offers if o.tmdb_id == tmdb_id), key=_price_sort),
+                sorted((st.key, ws) for ws, st in searches if ws.tmdb_id == tmdb_id),
             )
-            movie_offers = sorted((o for o in offers if o.tmdb_id == tmdb_id), key=_price_sort)
-            unwatch_id = (
-                movie_offers[0].id if movie_offers else (any_product.id if any_product else None)
-            )
-            if unwatch_id is None:
-                continue
-            entries.append(WatchlistEntry(title, tmdb_id, None, unwatch_id, movie_offers))
-        for product_id in sorted(watched_products):
-            product = session.get(StoreProduct, product_id)
-            if product is None:
-                continue
-            product_offers = sorted((o for o in offers if o.id == product_id), key=_price_sort)
-            entries.append(
-                WatchlistEntry(product.raw_title, None, product_id, product_id, product_offers)
-            )
+            entries.append(entry)
         session.expunge_all()
-    entries.sort(key=lambda e: (not e.offers, e.title.casefold()))
+    entries.sort(key=lambda e: (not e.has_deal, not e.offers, e.wish.title.casefold()))
     return entries
 
 
@@ -300,10 +344,14 @@ def product_history(
         state = session.exec(
             select(MatchState).where(MatchState.store_product_id == product.id)
         ).first()
-        prefs = preference_sets(session)
-        watched = product.tmdb_id in prefs[0] or product.id in prefs[1]
-        ignored = product.tmdb_id in prefs[2] or product.id in prefs[3]
-        row = _row(product, store, meta, state.status if state else None, watched, ignored)
+        row = _row(
+            product,
+            store,
+            meta,
+            state.status if state else None,
+            ignored=product in ignored_sets(session),
+            catalogue=load_catalogue(session),
+        )
         history = session.exec(
             select(PriceObservation)
             .where(PriceObservation.store_product_id == product.id)
@@ -313,6 +361,11 @@ def product_history(
     return row, list(history)
 
 
+def catalogue_status(engine: Engine) -> Catalogue:
+    with Session(engine) as session:
+        return load_catalogue(session)
+
+
 def status_page(engine: Engine, *, now: datetime | None = None) -> list[StoreStatus]:
     now = now or _now()
     with Session(engine) as session:
@@ -320,7 +373,7 @@ def status_page(engine: Engine, *, now: datetime | None = None) -> list[StoreSta
         for store in session.exec(select(Store).order_by(Store.key)).all():
             last_run = session.exec(
                 select(CrawlRun)
-                .where(CrawlRun.store_id == store.id)
+                .where(CrawlRun.store_id == store.id, CrawlRun.scope == "category")
                 .order_by(CrawlRun.run_id.desc())  # type: ignore[attr-defined]
             ).first()
             total = session.exec(

@@ -6,11 +6,11 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
+from cdon_watcher.catalog.catalogue import CatalogueError, SyncPayload, sync_catalogue
 from cdon_watcher.catalog.db import open_catalog
 from cdon_watcher.catalog.importer import import_run
 from cdon_watcher.catalog.matching import set_manual_match
 from cdon_watcher.catalog.models import MovieMetadata, StoreProduct
-from cdon_watcher.catalog.preferences import apply
 from cdon_watcher.catalog.tmdb import Candidate, MovieDetails
 from cdon_watcher.config import CONFIG
 from cdon_watcher.ingestion.contract import (
@@ -31,7 +31,42 @@ class FakeTmdb:
         return [Candidate(949, "Heat", release_year=1995, popularity=50)]
 
     def movie_details(self, tmdb_id):
-        return MovieDetails(tmdb_id=tmdb_id, title="Heat", release_year=1995, imdb_id="tt0113277")
+        title = "Heat" if tmdb_id == 949 else f"Movie {tmdb_id}"
+        return MovieDetails(tmdb_id=tmdb_id, title=title, release_year=1995, poster_path="/p.jpg")
+
+
+class FakeCatalogue:
+    def __init__(self, owned=(), wanted=(), fail=None):
+        self.payload = {"owned": list(owned), "wanted": list(wanted)}
+        self.fail = fail
+        self.wants: list[dict] = []
+
+    def fetch_sync(self):
+        return SyncPayload.model_validate(self.payload)
+
+    def create_want(self, body):
+        if self.fail:
+            raise CatalogueError(self.fail)
+        self.wants.append(body)
+        return len(self.wants) == 1
+
+
+def wish(tmdb_id, formats=("Blu-ray", "UHD"), cap=None):
+    return {
+        "tmdb_id": tmdb_id,
+        "title": f"Movie {tmdb_id}",
+        "year": 1995,
+        "formats": list(formats),
+        "max_price_cents": cap,
+    }
+
+
+def matched(engine, mapping):
+    """Manually match products (by store product id string) to TMDB ids."""
+    product_ids = ids(engine)
+    for pid, tmdb_id in mapping.items():
+        set_manual_match(engine, FakeTmdb(), product_ids[pid], tmdb_id)
+    return product_ids
 
 
 def product(
@@ -128,7 +163,7 @@ def test_main_page_applies_default_caps_and_sorts_by_price(client, engine):
     )
     html = client.get("/").text
     assert titles(html) == ["Cheapest", "Cheap BD", "Cheap 4K"]
-    assert '<section class="watchlist">' not in html
+    assert '<section class="wishlist">' not in html
     assert ">unmatched<" in html
 
 
@@ -172,22 +207,86 @@ def test_invalid_price_limit_is_400(client):
     assert client.get("/?max_bd=abc").status_code == 400
 
 
-def test_watchlist_section_first_ignores_caps_and_is_not_duplicated(client, engine):
+def test_wishlist_section_first_ignores_caps_filters_and_is_not_duplicated(client, engine):
     seed(
         engine,
         [
-            product("1", "Watched dear", price=5000),
+            product("1", "Wished dear", price=5000),
             product("2", "Normal", price=900),
+            product("3", "Wished wrong format", price=900, fmt=Format.UHD),
         ],
     )
-    pid = ids(engine)["1"]
-    assert client.post(f"/api/v2/products/{pid}/watch").json()["store_product_id"] == pid
-    html = client.get("/?max_bd=1").text
-    assert titles(html, "watchlist") == ["Watched dear"]
-    assert titles(html) == ["Watched dear"]  # filter removed Normal, watched stays
+    matched(engine, {"1": 10, "2": 20, "3": 10})
+    sync_catalogue(engine, FakeCatalogue(wanted=[wish(10, ["Blu-ray"])]))
+    html = client.get("/?max_bd=1&max_4k=1").text
+    assert titles(html, "wishlist") == ["Movie 10"]
+    assert titles(html) == ["Movie 10"]  # caps removed the rest, the wish stays
     html = client.get("/").text
-    assert titles(html) == ["Watched dear", "Normal"]
-    assert html.index('<section class="watchlist">') < html.index('<form class="filters"')
+    assert titles(html, "wishlist") == ["Movie 10"]
+    # A wished movie in a format the wish does not accept browses normally, badged.
+    assert titles(html) == ["Movie 10", "Movie 10", "Movie 20"]
+    assert html.count(">on wishlist<") == 1
+    assert html.index('<section class="wishlist">') < html.index('<form class="filters"')
+
+
+def test_owned_movies_are_hidden_unless_dvd_only_or_wished(client, engine):
+    seed(
+        engine,
+        [
+            product("1", "Own BD", price=900),
+            product("2", "Own DVD", price=900),
+            product("3", "Own UHD but wished", price=900),
+            product("4", "Not owned", price=900),
+            product("5", "Unmatched", price=900),
+        ],
+    )
+    matched(engine, {"1": 1, "2": 2, "3": 3, "4": 4})
+    owned = [
+        {"tmdb_id": 1, "formats": ["Blu-ray"]},
+        {"tmdb_id": 2, "formats": ["DVD"]},
+        {"tmdb_id": 3, "formats": ["UHD"]},
+    ]
+    sync_catalogue(engine, FakeCatalogue(owned=owned, wanted=[wish(3, ["UHD"])]))
+    html = client.get("/").text
+    assert titles(html) == ["Movie 2", "Movie 3", "Movie 4", "Unmatched"]
+    assert ">own: DVD<" in html and ">on wishlist<" in html
+    assert "1 owned on Blu-ray/UHD hidden" in html
+
+
+def test_deal_is_marked_within_the_wish_cap(client, engine):
+    seed(engine, [product("1", "Cheap", price=1500), product("2", "Dear", price=2500)])
+    matched(engine, {"1": 10, "2": 10})
+    sync_catalogue(engine, FakeCatalogue(wanted=[wish(10, cap=2000)]))
+    html = client.get("/").text
+    assert titles(html, "wishlist") == ["Movie 10", "Movie 10"]
+    assert html.count(">deal<") == 1
+
+
+def test_wish_action_adds_to_catalogue(client, engine):
+    seed(engine, [product("1", "Heat", price=900), product("2", "Mystery", price=900)])
+    product_ids = matched(engine, {"1": 949})
+    assert client.post(f"/api/v2/products/{product_ids['1']}/wish").status_code == 503
+
+    catalogue = FakeCatalogue()
+    client.app.state.catalogue_client = catalogue
+    html = client.get("/").text
+    assert html.count('data-action="wish"') == 1  # unmatched products cannot be wished for
+    response = client.post(f"/api/v2/products/{product_ids['1']}/wish")
+    assert response.json() == {"tmdb_id": 949, "created": True}
+    assert catalogue.wants[0]["title"] == {
+        "tmdb_id": 949,
+        "media_type": "movie",
+        "title": "Heat",
+        "original_title": None,
+        "year": 1995,
+        "poster_path": "/p.jpg",
+    }
+    html = client.get("/").text
+    assert titles(html, "wishlist") == ["Heat"]  # remembered before the next sync
+    assert 'data-action="wish"' not in html
+    assert client.post(f"/api/v2/products/{product_ids['2']}/wish").status_code == 409
+    client.app.state.catalogue_client = FakeCatalogue(fail="down")
+    assert client.post(f"/api/v2/products/{product_ids['1']}/wish").status_code == 502
 
 
 def test_ignore_hides_everywhere_and_unignore_restores(client, engine):
@@ -216,14 +315,12 @@ def test_ignore_matched_movie_hides_every_edition_across_stores(client, engine):
     assert client.get("/ignored").text.count("Heat") == 1
 
 
-def test_watch_and_ignore_are_mutually_exclusive(client, engine):
+def test_watch_is_gone(client, engine):
     seed(engine, [product("1", "Flip", price=900)])
     pid = ids(engine)["1"]
-    client.post(f"/api/v2/products/{pid}/ignore")
-    client.post(f"/api/v2/products/{pid}/watch")
-    html = client.get("/").text
-    assert titles(html, "watchlist") == ["Flip"]
-    assert "Flip" not in client.get("/ignored").text
+    assert client.post(f"/api/v2/products/{pid}/watch").status_code == 404
+    response = client.get("/watchlist", follow_redirects=False)
+    assert response.status_code == 308 and response.headers["location"] == "/wishlist"
 
 
 def test_queue_lists_unmatched_in_stock_single_movies_and_manual_match(client, engine):
@@ -255,22 +352,21 @@ def test_tmdb_search_endpoint(client):
     assert data[0]["tmdb_id"] == 949
 
 
-def test_watchlist_page_shows_entries_without_offers(client, engine):
+def test_wishlist_page_lists_every_wish_with_offers_first(client, engine):
     seed(
         engine,
         [
-            product("1", "Sold out watched", price=900, avail=Availability.OUT_OF_STOCK),
-            product("2", "Available watched", price=900),
+            product("1", "Sold out", price=900, avail=Availability.OUT_OF_STOCK),
+            product("2", "Available", price=900),
         ],
     )
-    product_ids = ids(engine)
-    apply(engine, product_ids["1"], "watch")
-    apply(engine, product_ids["2"], "watch")
-    html = client.get("/watchlist").text
-    assert "Available watched" in html and "Sold out watched" in html
-    assert "No in-stock offers" in html
-    assert html.index("Available watched") < html.index("Sold out watched")
-    assert titles(client.get("/").text, "watchlist") == ["Available watched"]
+    matched(engine, {"1": 10, "2": 20})
+    sync_catalogue(engine, FakeCatalogue(wanted=[wish(10), wish(20, cap=1000), wish(30)]))
+    html = client.get("/wishlist").text
+    assert html.index("Movie 20") < html.index("Movie 10") < html.index("Movie 30")
+    assert html.count("No in-stock offers") == 2
+    assert html.count("Not searched yet") == 3
+    assert ">deal<" in html
 
 
 def test_stale_products_are_hidden(client, engine):
