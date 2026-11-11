@@ -139,6 +139,11 @@ def wishlist(request: Request) -> Response:
     )
 
 
+@router.get("/in-stock")
+def in_stock(request: Request) -> Response:
+    return _render(request, "in_stock.html", rows=queries.wishlist_in_stock(_engine(request)))
+
+
 @router.get("/watchlist")
 def watchlist_alias() -> Response:
     return RedirectResponse("/wishlist", status_code=308)

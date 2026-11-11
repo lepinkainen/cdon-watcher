@@ -1,0 +1,19 @@
+{% extends "layout.html" %}
+{% block title %}Wishlist in stock{% endblock %}
+{% block content %}
+<section class="wishlist">
+  <h2>Wishlist in stock</h2>
+  <p class="meta">Wished-for movies in an accepted format, at any price. Deals are within the wish's price cap.</p>
+  {% if rows %}
+  <table>
+    <thead><tr><th></th><th>Title</th><th>Format</th><th>Cond.</th><th>Store</th><th>Price</th><th></th></tr></thead>
+    <tbody>
+    {% with wishlist_section = true %}{% for row in rows %}{% include "_row.html" %}{% endfor %}{% endwith %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">Nothing on the wishlist is in stock.</p>
+  {% endif %}
+  <p class="meta">{{ rows | length }} offers</p>
+</section>
+{% endblock %}

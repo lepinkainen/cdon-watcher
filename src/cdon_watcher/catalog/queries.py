@@ -19,7 +19,7 @@ from .models import (
 )
 from .preferences import Ignored, ignored_sets
 
-MAX_BD_CENTS = 1000
+MAX_BD_CENTS = 1500
 MAX_4K_CENTS = 2000
 FRESHNESS_HOURS = 48
 UNDECIDED_STATUSES = ("pending", "ambiguous", "unmatched", "error")
@@ -74,7 +74,7 @@ class Row:
 
 @dataclass
 class MainPage:
-    wishlist: list[Row]
+    wishlist_count: int
     rows: list[Row]
     filters: Filters
     stores: list[Store]
@@ -220,18 +220,24 @@ def _price_sort(row: Row) -> tuple[int, str, str]:
     return (row.price_cents, row.title.casefold(), row.product_id)
 
 
+def _visible_rows(session: Session, now: datetime) -> tuple[Catalogue, list[Row]]:
+    catalogue = load_catalogue(session)
+    rows = _rows(session, _shoppable(session, now), ignored_sets(session), catalogue)
+    return catalogue, [r for r in rows if not r.ignored]
+
+
+def _wishlist_rows(rows: list[Row], catalogue: Catalogue) -> list[Row]:
+    return sorted((r for r in rows if _in_wishlist_section(r, catalogue)), key=_price_sort)
+
+
 def main_page(engine: Engine, filters: Filters, *, now: datetime | None = None) -> MainPage:
-    """Wished-for offers first, regardless of limits; then browsing, minus what I own."""
+    """Browsing under the caps, minus what I own; wished-for offers live on their own tab."""
     now = now or _now()
     with Session(engine) as session:
-        catalogue = load_catalogue(session)
-        query = _shoppable(session, now)
-        rows = [r for r in _rows(session, query, ignored_sets(session), catalogue) if not r.ignored]
-        wishlist = sorted((r for r in rows if _in_wishlist_section(r, catalogue)), key=_price_sort)
-        shown = {r.id for r in wishlist}
+        catalogue, rows = _visible_rows(session, now)
         rest, hidden_owned = [], 0
         for row in rows:
-            if row.id in shown or not _passes(row, filters):
+            if not _passes(row, filters):
                 continue
             if not row.wished and catalogue.owns_disc(row.tmdb_id):
                 hidden_owned += 1
@@ -244,7 +250,7 @@ def main_page(engine: Engine, filters: Filters, *, now: datetime | None = None) 
         ).one()
         session.expunge_all()
     return MainPage(
-        wishlist=wishlist,
+        wishlist_count=len(_wishlist_rows(rows, catalogue)),
         rows=rest,
         filters=filters,
         stores=list(stores),
@@ -252,6 +258,14 @@ def main_page(engine: Engine, filters: Filters, *, now: datetime | None = None) 
         catalogue=catalogue,
         hidden_owned=hidden_owned,
     )
+
+
+def wishlist_in_stock(engine: Engine, *, now: datetime | None = None) -> list[Row]:
+    """In-stock offers for wished-for movies in an accepted format, at any price."""
+    with Session(engine) as session:
+        catalogue, rows = _visible_rows(session, now or _now())
+        session.expunge_all()
+    return _wishlist_rows(rows, catalogue)
 
 
 def ignored_page(engine: Engine) -> list[Row]:

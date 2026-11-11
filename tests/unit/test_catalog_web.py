@@ -151,8 +151,8 @@ def test_main_page_applies_default_caps_and_sorts_by_price(client, engine):
     seed(
         engine,
         [
-            product("1", "Cheap BD", price=999),
-            product("2", "Too dear BD", price=1001),
+            product("1", "Cheap BD", price=1500),
+            product("2", "Too dear BD", price=1501),
             product("3", "Cheap 4K", price=2000, fmt=Format.UHD),
             product("4", "Too dear 4K", price=2001, fmt=Format.UHD),
             product("5", "Cheapest", price=500),
@@ -170,7 +170,7 @@ def test_main_page_applies_default_caps_and_sorts_by_price(client, engine):
 @pytest.mark.parametrize(
     "query,expected",
     [
-        ("", ["E used 5", "A bd 9", "B 4k 19"]),
+        ("", ["E used 5", "A bd 9", "C bd 15 ax", "D bd 15 cdon", "B 4k 19"]),
         ("max_bd=10&max_4k=10", ["E used 5", "A bd 9"]),
         ("format=4k", ["B 4k 19"]),
         ("format=bd&max_bd=15&store=ax", ["E used 5", "A bd 9", "C bd 15 ax"]),
@@ -207,7 +207,7 @@ def test_invalid_price_limit_is_400(client):
     assert client.get("/?max_bd=abc").status_code == 400
 
 
-def test_wishlist_section_first_ignores_caps_filters_and_is_not_duplicated(client, engine):
+def test_wishlist_tab_ignores_caps_and_main_page_badges_wishes(client, engine):
     seed(
         engine,
         [
@@ -218,15 +218,14 @@ def test_wishlist_section_first_ignores_caps_filters_and_is_not_duplicated(clien
     )
     matched(engine, {"1": 10, "2": 20, "3": 10})
     sync_catalogue(engine, FakeCatalogue(wanted=[wish(10, ["Blu-ray"])]))
-    html = client.get("/?max_bd=1&max_4k=1").text
-    assert titles(html, "wishlist") == ["Movie 10"]
-    assert titles(html) == ["Movie 10"]  # caps removed the rest, the wish stays
+    assert titles(client.get("/in-stock").text, "wishlist") == ["Movie 10"]
+    assert titles(client.get("/?max_bd=1&max_4k=1").text) == []
     html = client.get("/").text
-    assert titles(html, "wishlist") == ["Movie 10"]
-    # A wished movie in a format the wish does not accept browses normally, badged.
-    assert titles(html) == ["Movie 10", "Movie 10", "Movie 20"]
+    assert '<section class="wishlist">' not in html
+    assert "1 wishlist offer in stock" in html
+    # Wished movies browse normally under the caps, badged, in any format.
+    assert titles(html) == ["Movie 10", "Movie 20"]
     assert html.count(">on wishlist<") == 1
-    assert html.index('<section class="wishlist">') < html.index('<form class="filters"')
 
 
 def test_owned_movies_are_hidden_unless_dvd_only_or_wished(client, engine):
@@ -257,7 +256,7 @@ def test_deal_is_marked_within_the_wish_cap(client, engine):
     seed(engine, [product("1", "Cheap", price=1500), product("2", "Dear", price=2500)])
     matched(engine, {"1": 10, "2": 10})
     sync_catalogue(engine, FakeCatalogue(wanted=[wish(10, cap=2000)]))
-    html = client.get("/").text
+    html = client.get("/in-stock").text
     assert titles(html, "wishlist") == ["Movie 10", "Movie 10"]
     assert html.count(">deal<") == 1
 
@@ -281,7 +280,7 @@ def test_wish_action_adds_to_catalogue(client, engine):
         "year": 1995,
         "poster_path": "/p.jpg",
     }
-    html = client.get("/").text
+    html = client.get("/in-stock").text
     assert titles(html, "wishlist") == ["Heat"]  # remembered before the next sync
     assert 'data-action="wish"' not in html
     assert client.post(f"/api/v2/products/{product_ids['2']}/wish").status_code == 409

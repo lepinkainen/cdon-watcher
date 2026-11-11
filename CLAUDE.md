@@ -54,8 +54,8 @@ crawl-raw            parse-raw              import-run            match
                                                    │
                                           ┌────────▼────────┐
                                           │ web/catalog_routes + catalog.queries │
-                                          │ "/" wishlist first, then offers under │
-                                          │ caps (BD ≤ €10, 4K ≤ €20)             │
+                                          │ "/" offers under caps (BD ≤ €15,      │
+                                          │ 4K ≤ €20); "/in-stock" wishlist       │
                                           └─────────────────┘
 ```
 
@@ -85,7 +85,8 @@ Store facts that drive the design:
 
 ## Pages and endpoints
 
-- `/` main page: wishlist-in-stock section first (accepted formats, any price, deals marked), then in-stock offers under the hardcoded caps, minus movies owned on Blu-ray/UHD. Query params `max_bd`, `max_4k` (euros), `format=bd|4k`, `store=ax|cdon`, `condition=new|used`, `q`.
+- `/` main page: in-stock offers under the hardcoded caps (BD ≤ €15, 4K ≤ €20), minus movies owned on Blu-ray/UHD; wished movies are badged and a link counts wishlist offers. Query params `max_bd`, `max_4k` (euros), `format=bd|4k`, `store=ax|cdon`, `condition=new|used`, `q`.
+- `/in-stock`: wishlist offers in stock (accepted formats, any price, deals marked).
 - `/wishlist` (read-only, offers and searches per wish), `/queue` (manual TMDB matching), `/ignored`, `/products/<id>` (price history), `/status`. `/watchlist` redirects to `/wishlist`.
 - `POST /api/v2/products/<id>/{ignore|unignore}`; `POST /api/v2/products/<id>/wish` (forwards to moviecatalog `POST /api/wants`); `POST /api/v2/products/<id>/match` with `{"tmdb_id": int|null}`; `GET /api/v2/tmdb/search?q=`.
 - `GET /api/v2/offers?tmdb_id=…` (repeatable): read API for moviecatalog; shape fixed by its SPEC.md.

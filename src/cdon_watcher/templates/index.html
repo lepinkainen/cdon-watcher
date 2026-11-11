@@ -1,17 +1,9 @@
 {% extends "layout.html" %}
 {% block content %}
-{% if page.wishlist %}
-<section class="wishlist">
-  <h2>Wishlist in stock</h2>
-  <table>
-    <tbody>
-    {% with wishlist_section = true %}{% for row in page.wishlist %}{% include "_row.html" %}{% endfor %}{% endwith %}
-    </tbody>
-  </table>
-</section>
-{% endif %}
-
 <section>
+  {% if page.wishlist_count %}
+  <p class="meta"><a href="/in-stock">{{ page.wishlist_count }} wishlist offer{{ "s" if page.wishlist_count != 1 }} in stock →</a></p>
+  {% endif %}
   <form class="filters" method="get" action="/">
     <label>Blu-ray ≤ <input type="text" name="max_bd" inputmode="decimal" size="5" value="{{ max_bd_display }}"> €</label>
     <label>4K ≤ <input type="text" name="max_4k" inputmode="decimal" size="5" value="{{ max_4k_display }}"> €</label>

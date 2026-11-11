@@ -4,7 +4,7 @@ Single-user tracker of physical movie offers (Blu-ray, 4K UHD) at Levykauppa Äx
 and CDON. A daily refresh archives the store listings, parses them offline,
 imports price observations into SQLite, and matches titles against TMDB. The
 web UI shows wished-for movies in stock first, then every in-stock offer under
-Blu-ray ≤ €10 / 4K ≤ €20 that I don't already own, with one-click ignore and
+Blu-ray ≤ €15 / 4K ≤ €20 that I don't already own, with one-click ignore and
 add-to-wishlist. Owned movies and the wishlist come from **moviecatalog**
 (`MOVIECATALOG_URL`); each refresh also searches both stores for every wish.
 

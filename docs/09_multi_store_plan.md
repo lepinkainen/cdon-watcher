@@ -81,7 +81,7 @@ splits Jinja tags across lines.
   and products discovered there.
 - Include Blu-ray and 4K UHD, both new and used. Exclude DVD-only products.
   Keep steelbooks, combined 4K/Blu-ray releases, and multi-disc editions.
-- Front-page price limits are hardcoded constants in v1: Blu-ray at €10 or
+- Front-page price limits are hardcoded constants in v1: Blu-ray at €15 or
   less and 4K UHD at €20 or less, excluding shipping. Query parameters can
   override them for one view; there is no env or settings configuration.
   Apply the same limits to new and used products.
@@ -259,10 +259,10 @@ below its format's limit:
 
 | Format                                         | Default maximum item price |
 | ---------------------------------------------- | -------------------------- |
-| Blu-ray                                        | €10.00                     |
+| Blu-ray                                        | €15.00                     |
 | 4K UHD, including combined 4K/Blu-ray editions | €20.00                     |
 
-Compare integer cents with inclusive limits of 1000 and 2000. A product can
+Compare integer cents with inclusive limits of 1500 and 2000. A product can
 qualify on its first observation; no previous or regular price is required.
 Changing historical observations does not change current-price eligibility.
 Price history remains available in the database and the per-product history view.
@@ -302,7 +302,7 @@ page must answer questions of this shape directly:
 
 | Question                                     | Filters                        |
 | -------------------------------------------- | ------------------------------ |
-| Blu-ray at €10 or less and 4K at €20 or less | (no parameters, defaults)      |
+| Blu-ray at €15 or less and 4K at €20 or less | (no parameters, defaults)      |
 | All movies at €10 or less                    | `max_bd=10&max_4k=10`          |
 | Only 4K at €20 or less                       | `format=4k`                    |
 | Blu-ray at €15 or less, one store            | `format=bd&max_bd=15&store=ax` |
@@ -310,7 +310,7 @@ page must answer questions of this shape directly:
 Filters: `max_bd` and `max_4k` (euros, decimals allowed, converted to cents),
 `format` (`bd`, `4k`, any), `store`, `condition` (`new`, `used`, any), and a
 title search `q`. `max_dvd` is reserved for the same pattern but unused in v1.
-Omitted maximum price parameters use the hardcoded €10 / €20. Both format
+Omitted maximum price parameters use the hardcoded €15 / €20. Both format
 limits apply when viewing all formats. Changing a format filter retains the
 selected price limits. These query parameters affect section 2 only; section 1
 ignores price entirely.
@@ -524,6 +524,8 @@ wishlist rather than general browsing. Manual ignore stays in the watcher for
   from the catalogue's `wanted` list: every in-stock offer of a wished-for movie
   in an accepted format, regardless of the browsing price limits, cheapest first.
   Offers at or under the wish's own `max_price_cents` are marked as deals.
+  As built, it is its own tab (`/in-stock`) because it outgrew the top of the
+  page; the main page links to it with a count and badges wished movies.
 - Each offer on the main page gets an "Add to wishlist" action, which calls the
   catalogue's `POST /api/wants`, so a find while browsing becomes a tracked wish.
 - The watcher's own `watch` preference is replaced by the catalogue's wishlist.
