@@ -2,9 +2,9 @@
 # Dependencies come from uv.lock so the image matches what the tests ran against.
 # Playwright + Chromium are required for the CDON adapter.
 
-FROM python:3.13-slim-bookworm
+FROM python:3.15-slim-trixie
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /usr/local/bin/uv
 RUN useradd -m -u 1000 tracker
 
 WORKDIR /app
@@ -14,7 +14,8 @@ RUN uv sync --frozen --no-dev --no-editable
 ENV PATH="/app/.venv/bin:$PATH" \
     PLAYWRIGHT_BROWSERS_PATH=/app/playwright_browsers
 
-RUN apt-get update && playwright install --with-deps chromium && \
+RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 && \
+    playwright install --with-deps chromium && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
     mkdir -p /app/data && chown -R tracker:tracker /app
 
