@@ -3,7 +3,7 @@
 {% block content %}
 <h2>Status</h2>
 <table>
-  <thead><tr><th>Store</th><th>Last run</th><th>Imported</th><th>Complete</th><th>Products</th><th>In stock (fresh)</th><th>Errors</th></tr></thead>
+  <thead><tr><th>Store</th><th>Last run</th><th>Imported</th><th>Complete</th><th>Products</th><th>In stock (fresh)</th><th>Errors</th><th>Last wishlist search</th></tr></thead>
   <tbody>
   {% for s in stores %}
   <tr class="{{ 'ok' if s.fresh else 'stale' }}">
@@ -14,6 +14,7 @@
     <td>{{ s.product_count }}</td>
     <td>{{ s.in_stock_count }}</td>
     <td>{{ s.last_run.error_count if s.last_run else '' }}</td>
+    <td>{% if s.last_search %}{{ s.last_search.imported_at | when }} · {{ s.last_search.snapshot_count }} requests{% if not s.last_search.complete %} · <span class="warn">some failed</span>{% endif %}{% else %}never{% endif %}</td>
   </tr>
   {% endfor %}
   </tbody>

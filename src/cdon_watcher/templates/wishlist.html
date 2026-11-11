@@ -18,7 +18,7 @@
   {% else %}<p class="empty">No in-stock offers</p>{% endif %}
   <p class="meta">
     {% for store_key, search in entry.searches %}
-      {{ store_key }}: {% if search.error %}<span class="warn">search failed {{ search.searched_at | when }}</span>{% else %}searched {{ search.searched_at | when }}, {{ search.hit_count }} hits{% endif %}{% if not loop.last %} · {% endif %}
+      {{ store_key }}: {% if search.searched_at %}searched {{ search.searched_at | when }}, {{ search.hit_count }} results{% else %}never searched successfully{% endif %}{% if search.error %} <span class="warn">(failed {{ search.failed_at | when }}: {{ search.error }})</span>{% endif %}{% if not loop.last %} · {% endif %}
     {% else %}Not searched yet{% endfor %}
   </p>
 </section>

@@ -34,6 +34,9 @@ class Snapshot(BaseModel):
     """True when the body is browser-rendered HTML rather than the raw HTTP response."""
     error: str | None = None
     products: list[Discovery] = Field(default_factory=list)
+    search_tmdb_id: int | None = None
+    """Wishlist searches: the TMDB id of the wished-for movie this request searched for."""
+    search_query: str | None = None
 
 
 class RunManifest(BaseModel):
@@ -75,6 +78,8 @@ class ArchivedRun:
         attempt: int,
         rendered: bool = False,
         error: str | None = None,
+        search_tmdb_id: int | None = None,
+        search_query: str | None = None,
     ) -> Snapshot:
         snapshot_id = len(self.manifest.snapshots) + 1
         body_ref = f"{snapshot_id:06d}.html.gz" if body is not None else None
@@ -92,6 +97,8 @@ class ArchivedRun:
             attempt=attempt,
             rendered=rendered,
             error=error,
+            search_tmdb_id=search_tmdb_id,
+            search_query=search_query,
         )
         self.manifest.snapshots.append(snapshot)
         self.save()

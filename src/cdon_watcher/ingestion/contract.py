@@ -35,6 +35,9 @@ class Availability(StrEnum):
 
 ELIGIBLE_FORMATS = frozenset({Format.BLURAY, Format.UHD})
 
+SEARCH_SCOPE = "wish-search"
+"""Archive scope of wishlist search runs. Every other scope is a category crawl."""
+
 
 class ParsedProduct(BaseModel):
     """One store edition as observed in one saved response."""
@@ -79,6 +82,10 @@ class ParsedSnapshot(BaseModel):
     fetched_at: datetime
     products: list[ParsedProduct] = Field(default_factory=list)
     errors: list[ParseError] = Field(default_factory=list)
+    search_tmdb_id: int | None = None
+    search_query: str | None = None
+    search_failed: str | None = None
+    """Why a wishlist search produced no usable result; None when it succeeded."""
 
 
 class ParsedRun(BaseModel):
@@ -91,6 +98,8 @@ class ParsedRun(BaseModel):
     parsed_at: datetime
     expire_unseen: bool = True
     """Whether a complete run of this store means unseen products left the scope."""
+    scope: str = "category"
+    """"category" for listing crawls, SEARCH_SCOPE for wishlist searches."""
     snapshots: list[ParsedSnapshot] = Field(default_factory=list)
 
     @property

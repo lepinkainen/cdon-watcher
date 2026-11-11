@@ -417,7 +417,7 @@ def test_offers_api_follows_the_catalogue_contract(client, engine):
         )
         session.add(
             WishSearch(
-                store_id=store.id, tmdb_id=1551, query="x", run_id=2, searched_at=at, error="boom"
+                store_id=store.id, tmdb_id=1551, query="x", run_id=2, error="boom", failed_at=at
             )
         )
         session.commit()

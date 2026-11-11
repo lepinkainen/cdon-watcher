@@ -192,7 +192,11 @@ class CatalogueSync(CatalogModel, table=True):
 
 
 class WishSearch(CatalogModel, table=True):
-    """The latest targeted search for one wished-for movie at one store."""
+    """Targeted searches for one wished-for movie at one store.
+
+    searched_at is the last successful search; error and failed_at describe a
+    later failure, which keeps the previous hits and searched_at.
+    """
 
     __tablename__ = "wish_searches"
     __table_args__ = (UniqueConstraint("store_id", "tmdb_id", name="uq_wish_searches_store_tmdb"),)
@@ -202,9 +206,10 @@ class WishSearch(CatalogModel, table=True):
     tmdb_id: int = Field(index=True)
     query: str
     run_id: int
-    searched_at: NaiveDatetime
+    searched_at: NaiveDatetime | None = None
     hit_count: int = 0
     error: str | None = None
+    failed_at: NaiveDatetime | None = None
 
 
 class SearchHit(CatalogModel, table=True):

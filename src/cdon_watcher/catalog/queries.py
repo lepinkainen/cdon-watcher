@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import Engine, func
 from sqlmodel import Session, select
 
-from ..ingestion.contract import Availability
+from ..ingestion.contract import SEARCH_SCOPE, Availability
 from .catalogue import Catalogue, WantedMovie, load_catalogue
 from .models import (
     CrawlRun,
@@ -98,6 +98,7 @@ class StoreStatus:
     product_count: int
     in_stock_count: int
     fresh: bool
+    last_search: CrawlRun | None = None
 
 
 def _now() -> datetime:
@@ -419,7 +420,7 @@ def offers_for(
             select(WishSearch.tmdb_id, func.max(WishSearch.searched_at))
             .where(
                 WishSearch.tmdb_id.in_(wanted),  # type: ignore[attr-defined]
-                WishSearch.error.is_(None),  # type: ignore[union-attr]
+                WishSearch.searched_at.is_not(None),  # type: ignore[union-attr]
             )
             .group_by(WishSearch.tmdb_id)  # type: ignore[arg-type]
         ).all()
@@ -459,6 +460,13 @@ def status_page(engine: Engine, *, now: datetime | None = None) -> list[StoreSta
                 )
             ).one()
             fresh = last_run is not None and last_run.imported_at >= _fresh_after(now)
-            statuses.append(StoreStatus(store, last_run, int(total), int(in_stock), fresh))
+            last_search = session.exec(
+                select(CrawlRun)
+                .where(CrawlRun.store_id == store.id, CrawlRun.scope == SEARCH_SCOPE)
+                .order_by(CrawlRun.run_id.desc())  # type: ignore[attr-defined]
+            ).first()
+            statuses.append(
+                StoreStatus(store, last_run, int(total), int(in_stock), fresh, last_search)
+            )
         session.expunge_all()
     return statuses

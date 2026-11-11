@@ -12,6 +12,7 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
 )
 CHALLENGE_TITLE = "just a moment"
+SEARCH_RESULT_PATH = "/search/v2/result"
 COOKIE_BANNER_JS = """
 () => {
   const sel = document.querySelector('#didomi-notice-agree-button, button.didomi-button-highlight');
@@ -63,6 +64,24 @@ class BrowserFetcher:
     def __call__(self, url: str) -> Response:
         try:
             return self._fetch(url)
+        except PlaywrightError as error:
+            raise FetchError(str(error)) from error
+
+    def search(self, url: str) -> Response:
+        """Load a CDON search page and return the result JSON its own script fetched.
+
+        The /s?q= page renders no products server-side; its script POSTs the query
+        to CDON's search service. This waits for that response instead of
+        scraping the rendered DOM. Nothing is requested beyond the normal page load.
+        """
+        try:
+            with self._page.expect_response(
+                lambda r: SEARCH_RESULT_PATH in r.url and r.request.method == "POST",
+                timeout=self.content_timeout_ms + self.challenge_timeout * 1000 + 45000,
+            ) as info:
+                page = self._fetch(url)
+            result = info.value
+            return Response(page.final_url, result.status, result.body(), rendered=True)
         except PlaywrightError as error:
             raise FetchError(str(error)) from error
 

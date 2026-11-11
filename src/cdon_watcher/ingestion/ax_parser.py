@@ -54,6 +54,17 @@ class AxParser:
         rows = soup.select("ul.list-products > li.hproduct")
         if not rows:
             return [], [ParseError(product_id=None, reason="No offer rows in page")]
+        return self._rows(rows)
+
+    def parse_search(self, body: bytes) -> tuple[list[ParsedProduct], list[ParseError]]:
+        """A /v2/search/ results page: offer-style rows, possibly none, mixed with music."""
+        soup = BeautifulSoup(body, "html.parser")
+        heading = soup.select_one("h1")
+        if heading is None or heading.get_text(" ", strip=True) != "Haku":
+            return [], [ParseError(product_id=None, reason="Not a search results page")]
+        return self._rows(soup.select("ul.list-products > li.hproduct"))
+
+    def _rows(self, rows: list[Tag]) -> tuple[list[ParsedProduct], list[ParseError]]:
         products: list[ParsedProduct] = []
         errors: list[ParseError] = []
         for row in rows:

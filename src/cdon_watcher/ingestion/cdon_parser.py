@@ -1,5 +1,6 @@
 """Offline parser for saved CDON category listing pages (rendered HTML)."""
 
+import json
 import re
 from typing import Any
 from urllib.parse import urljoin
@@ -47,6 +48,22 @@ class CdonParser:
             articles = cdon_articles(body)
         except ValueError as error:
             return [], [ParseError(product_id=None, reason=str(error))]
+        return self._articles(articles)
+
+    def parse_search(self, body: bytes) -> tuple[list[ParsedProduct], list[ParseError]]:
+        """The search result JSON the /s?q= page fetched: category-shaped articles."""
+        try:
+            data = json.loads(body)
+        except (ValueError, UnicodeDecodeError) as error:
+            return [], [ParseError(product_id=None, reason=f"Malformed search result: {error}")]
+        articles = data.get("articles") if isinstance(data, dict) else None
+        if not isinstance(articles, list):
+            return [], [ParseError(product_id=None, reason="Search result has no articles")]
+        return self._articles([a for a in articles if isinstance(a, dict)])
+
+    def _articles(
+        self, articles: list[dict[str, Any]]
+    ) -> tuple[list[ParsedProduct], list[ParseError]]:
         products: list[ParsedProduct] = []
         errors: list[ParseError] = []
         for article in articles:

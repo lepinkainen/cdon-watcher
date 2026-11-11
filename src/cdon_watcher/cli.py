@@ -95,6 +95,7 @@ def _cmd_refresh(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
         db_path=args.db,
         max_pages=args.max_pages,
         skip_crawl=args.skip_crawl,
+        searches=not args.no_search,
     )
     failed = False
     for report in reports:
@@ -102,6 +103,21 @@ def _cmd_refresh(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
         failed = failed or not report.ok
     if failed:
         parser.exit(1, "One or more stores did not import.\n")
+
+
+def _cmd_search(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    from .refresh import refresh_store
+
+    report = refresh_store(
+        args.store,
+        raw_dir=args.raw_dir,
+        db_path=args.db,
+        categories=False,
+        search_cap=args.cap,
+    )
+    print(describe(report))
+    if report.search_imported is None:
+        parser.exit(1, "No search was imported (no wishes, cap reached, or search failed).\n")
 
 
 def _cmd_sync(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
@@ -135,6 +151,7 @@ COMMANDS = {
     "import-run": _cmd_import_run,
     "match": _cmd_match,
     "refresh": _cmd_refresh,
+    "search": _cmd_search,
     "sync": _cmd_sync,
     "web": _cmd_web,
 }
@@ -182,6 +199,16 @@ def build_parser() -> argparse.ArgumentParser:
     refresh.add_argument("--db", type=Path, default=None)
     refresh.add_argument("--max-pages", type=int, default=None, help="CDON only")
     refresh.add_argument("--skip-crawl", action="store_true", help="Reprocess the latest run")
+    refresh.add_argument("--no-search", action="store_true", help="Skip wishlist searches")
+
+    search = sub.add_parser(
+        "search", help="Search one store for every wished-for movie, then import and match"
+    )
+    _add_common(search, store_required=True)
+    search.add_argument("--db", type=Path, default=None)
+    search.add_argument(
+        "--cap", type=int, default=None, help="Daily search cap (default: SEARCH_DAILY_CAP)"
+    )
 
     sync = sub.add_parser("sync", help="Pull owned and wanted movies from moviecatalog")
     sync.add_argument("--db", type=Path, default=None)

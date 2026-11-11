@@ -14,7 +14,8 @@ from difflib import SequenceMatcher
 from sqlalchemy import Engine
 from sqlmodel import Session, select
 
-from .models import MatchState, MovieMetadata, StoreProduct
+from .catalogue import Catalogue, load_catalogue
+from .models import MatchState, MovieMetadata, SearchHit, StoreProduct
 from .preferences import demote_movie_preferences, transfer_product_preferences
 from .tmdb import Candidate, MovieDetails, TmdbClient, TmdbError
 
@@ -26,6 +27,8 @@ ACCEPT_MARGIN = 0.08
 """Minimum lead over the runner-up for an automatic match."""
 SOLE_CANDIDATE_SCORE = 0.85
 """A lone candidate needs this much to be accepted without a runner-up."""
+TARGET_REVIEW_SCORE = 0.6
+"""A search hit scoring at least this against the wished movie goes to the review queue."""
 RETRY_STATUSES = ("pending", "error")
 DECIDED_STATUSES = ("auto", "manual")
 
@@ -37,6 +40,12 @@ _NOISE = re.compile(
 )
 _DISC = re.compile(r"\(?\b\d+\s*(disc|levy[äa]?)\b\)?", re.IGNORECASE)
 _PUNCT = re.compile(r"[:\-–—/|]+")
+_MARKETPLACE_NOISE = re.compile(
+    r"\b(brand\s+new|new|uusi|k[äa]ytetty|used|region\s*[a-c0-9]|region\s+free|"
+    r"importti?|saksalainen|eu|bd|blu\s*ray)\b",
+    re.IGNORECASE,
+)
+_TITLE_SEPARATOR = re.compile(r"\s+/\s+")
 _SPACE = re.compile(r"\s+")
 
 
@@ -80,6 +89,27 @@ def score_candidate(query: str, year: int | None, candidate: Candidate) -> float
     return round(max(0.0, min(score, 1.0)), 4)
 
 
+def score_target(cleaned_title: str, year: int | None, target: Candidate) -> float:
+    """Score a search hit against the movie the search was for.
+
+    CDON lists 'Finnish title / Original title' and marketplace sellers append
+    noise, so each side of a slash is scored on its own after removing that
+    noise. A title containing every word of the wished title is at least
+    worth a review.
+    """
+    best = 0.0
+    parts = [cleaned_title, *_TITLE_SEPARATOR.split(cleaned_title)]
+    for part in parts:
+        query, title_year = search_query(_MARKETPLACE_NOISE.sub(" ", part))
+        if query:
+            best = max(best, score_candidate(query, year or title_year, target))
+    words = set(_normalize(cleaned_title).split())
+    wanted = [set(_normalize(t).split()) for t in (target.title, target.original_title) if t]
+    if any(w and w <= words for w in wanted):
+        best = max(best, TARGET_REVIEW_SCORE)
+    return best
+
+
 @dataclass
 class MatchResult:
     considered: int = 0
@@ -89,6 +119,8 @@ class MatchResult:
     unmatched: int = 0
     not_applicable: int = 0
     errors: int = 0
+    searched: int = 0
+    """Accepted as the wished-for movie a search was looking for."""
 
 
 def _candidates_json(scored: list[tuple[float, Candidate]]) -> str:
@@ -164,6 +196,72 @@ def _find_reusable(
     return None
 
 
+def _search_targets(
+    session: Session, product: StoreProduct, catalogue: Catalogue
+) -> list[Candidate]:
+    """The wished-for movies whose searches found this product."""
+    targets = []
+    for tmdb_id in session.exec(
+        select(SearchHit.tmdb_id).where(SearchHit.store_product_id == product.id)
+    ).all():
+        wish = catalogue.wanted.get(tmdb_id)
+        if wish is not None:
+            targets.append(Candidate(tmdb_id, wish.title, wish.original_title, wish.year))
+            continue
+        meta = session.get(MovieMetadata, tmdb_id)
+        if meta is not None:
+            targets.append(Candidate(tmdb_id, meta.title, meta.original_title, meta.release_year))
+    return targets
+
+
+def _accept(
+    session: Session,
+    client: TmdbClient,
+    product: StoreProduct,
+    state: MatchState,
+    candidate: Candidate,
+    now: datetime,
+    *,
+    decided_by: str,
+) -> None:
+    _ensure_metadata(session, client, candidate.tmdb_id, now)
+    state.status, state.tmdb_id = "auto", candidate.tmdb_id
+    state.note = f"Accepted {candidate.title!r} ({candidate.release_year})"
+    state.decided_at, state.decided_by = now, decided_by
+    product.tmdb_id = candidate.tmdb_id
+    transfer_product_preferences(session, product)
+
+
+def _decide_against_targets(
+    session: Session,
+    client: TmdbClient,
+    product: StoreProduct,
+    state: MatchState,
+    targets: list[Candidate],
+    year: int | None,
+    now: datetime,
+    result: MatchResult,
+) -> bool:
+    """Check a search hit against the wished movie. False: leave it to open matching."""
+    scored = sorted(
+        ((score_target(product.cleaned_title, year, t), t) for t in targets), key=lambda x: -x[0]
+    )
+    best_score, best = scored[0]
+    if best_score >= ACCEPT_SCORE:
+        state.confidence = best_score
+        _accept(session, client, product, state, best, now, decided_by="search")
+        result.searched += 1
+        return True
+    if best_score >= TARGET_REVIEW_SCORE:
+        state.confidence = best_score
+        state.candidates_json = _candidates_json(scored)
+        state.status = "ambiguous"
+        state.note = f"Search hit for {best.title!r} scored {best_score}; needs review"
+        result.ambiguous += 1
+        return True
+    return False
+
+
 def _decide(
     session: Session,
     client: TmdbClient,
@@ -171,10 +269,16 @@ def _decide(
     state: MatchState,
     now: datetime,
     result: MatchResult,
+    catalogue: Catalogue,
 ) -> None:
     query, title_year = search_query(product.cleaned_title)
     year = title_year or product.release_year
     state.query, state.query_year = query, year
+    targets = _search_targets(session, product, catalogue)
+    if targets and _decide_against_targets(
+        session, client, product, state, targets, year, now, result
+    ):
+        return
     if not query:
         state.status, state.note = "unmatched", "Empty search query after cleanup"
         result.unmatched += 1
@@ -212,12 +316,7 @@ def _decide(
         state.note = f"Best {best.title!r} scored {best_score}, runner-up {runner_up}"
         result.ambiguous += 1
         return
-    _ensure_metadata(session, client, best.tmdb_id, now)
-    state.status, state.tmdb_id = "auto", best.tmdb_id
-    state.note = f"Accepted {best.title!r} ({best.release_year})"
-    state.decided_at, state.decided_by = now, "auto"
-    product.tmdb_id = best.tmdb_id
-    transfer_product_preferences(session, product)
+    _accept(session, client, product, state, best, now, decided_by="auto")
     result.auto += 1
 
 
@@ -248,6 +347,7 @@ def match_pending(
         if limit is not None:
             query = query.limit(limit)
         products = session.exec(query).all()
+        catalogue = load_catalogue(session)
 
         for product in products:
             result.considered += 1
@@ -261,7 +361,7 @@ def match_pending(
                 session.commit()
                 continue
             try:
-                _decide(session, client, product, state, now, result)
+                _decide(session, client, product, state, now, result, catalogue)
             except TmdbError as error:
                 session.rollback()
                 state = _state_for(session, product)

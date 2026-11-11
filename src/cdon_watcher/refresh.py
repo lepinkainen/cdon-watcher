@@ -2,24 +2,30 @@
 
 import fcntl
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from .catalog.catalogue import CatalogueClient, HttpCatalogueClient, sync_catalogue
+from sqlalchemy import Engine, func
+from sqlmodel import Session, select
+
+from .catalog.catalogue import CatalogueClient, HttpCatalogueClient, load_catalogue, sync_catalogue
 from .catalog.db import open_catalog
 from .catalog.importer import ImportResult, import_run
 from .catalog.matching import MatchResult, match_pending
+from .catalog.models import CrawlRun, Store, WishSearch
 from .catalog.tmdb import HttpTmdbClient
 from .config import CONFIG
 from .ingestion.archive import RawArchive, RunManifest, StoreBusyError
 from .ingestion.ax_parser import AxParser
 from .ingestion.cdon_parser import CdonParser
-from .ingestion.contract import ParsedRun
-from .ingestion.crawler import Crawler, HttpFetcher
+from .ingestion.contract import SEARCH_SCOPE, ParsedRun
+from .ingestion.crawler import Crawler, HttpFetcher, Response
 from .ingestion.parse import parse_run
+from .ingestion.search import Searcher, SearchTask, make_search_adapter
 from .ingestion.stores import AxAdapter, CdonAdapter
 
 logger = logging.getLogger(__name__)
@@ -37,12 +43,14 @@ class RefreshReport:
     crawl: RunManifest | None = None
     parsed: ParsedRun | None = None
     imported: ImportResult | None = None
+    searched: RunManifest | None = None
+    search_imported: ImportResult | None = None
     matched: MatchResult | None = None
     notes: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
-        return self.imported is not None
+        return self.imported is not None or self.search_imported is not None
 
 
 def make_parser(store: str) -> Any:
@@ -79,6 +87,146 @@ def refresh_lock(raw_dir: Path, store: str) -> Iterator[None]:
             fcntl.flock(lock, fcntl.LOCK_UN)
 
 
+def search_fetch(store: str, fetcher: Any) -> Callable[[str], Response]:
+    """CDON searches read the result JSON the search page loads; Äx is a plain GET."""
+    return fetcher.search if store == "cdon" else fetcher  # type: ignore[no-any-return]
+
+
+def search_tasks(
+    engine: Engine, store: str, cap: int, *, now: datetime | None = None
+) -> list[SearchTask]:
+    """Wishes to search now: least recently searched first, within the daily cap.
+
+    The cap counts search requests (fallbacks and retries included) archived
+    for this store in the last 24 hours.
+    """
+    now = now or datetime.now(UTC).replace(tzinfo=None)
+    with Session(engine) as session:
+        wanted = load_catalogue(session).wanted
+        store_row = session.exec(select(Store).where(Store.key == store)).first()
+        used = 0
+        last: dict[int, datetime] = {}
+        if store_row is not None:
+            used = session.exec(
+                select(func.coalesce(func.sum(CrawlRun.snapshot_count), 0)).where(
+                    CrawlRun.store_id == store_row.id,
+                    CrawlRun.scope == SEARCH_SCOPE,
+                    CrawlRun.imported_at >= now - timedelta(hours=24),
+                )
+            ).one()
+            for search in session.exec(
+                select(WishSearch).where(WishSearch.store_id == store_row.id)
+            ).all():
+                attempted = max(t for t in (search.searched_at, search.failed_at) if t)
+                last[search.tmdb_id] = attempted
+    ordered = sorted(wanted.values(), key=lambda w: (last.get(w.tmdb_id, datetime.min), w.tmdb_id))
+    tasks = [SearchTask(w.tmdb_id, w.title, w.original_title) for w in ordered]
+    return tasks[: max(cap - int(used), 0)]
+
+
+class _LazyFetcher:
+    """One fetcher (one browser for CDON) per refresh, opened on first use."""
+
+    def __init__(self, store: str) -> None:
+        self.store = store
+        self.fetcher: Any = None
+
+    def get(self) -> Any:
+        if self.fetcher is None:
+            self.fetcher = make_fetcher(self.store)
+        return self.fetcher
+
+    def close(self) -> None:
+        if self.fetcher is not None:
+            self.fetcher.close()
+
+
+@dataclass
+class _Settings:
+    raw_dir: Path
+    max_pages: int
+    delay: float
+    attempts: int
+    search_cap: int
+
+
+def _crawl_stage(
+    store: str, fetcher: _LazyFetcher, cfg: _Settings, report: RefreshReport
+) -> int | None:
+    try:
+        crawler = Crawler(
+            RawArchive(cfg.raw_dir), fetcher.get(), attempts=cfg.attempts, delay=cfg.delay
+        )
+        run = crawler.crawl(make_adapter(store, cfg.max_pages))
+    except StoreBusyError:
+        raise
+    except Exception as error:  # noqa: BLE001 - stage boundary, reported not raised
+        logger.exception("Crawl failed for %s", store)
+        report.notes.append(f"Crawl failed: {error}")
+        return None
+    report.crawl = run.manifest
+    if not run.manifest.complete:
+        report.notes.append(f"Crawl incomplete: {len(run.manifest.failures)} failures")
+    return run.manifest.run_id
+
+
+def _search_stage(
+    store: str, engine: Engine, fetcher: _LazyFetcher, cfg: _Settings, report: RefreshReport
+) -> int | None:
+    tasks = search_tasks(engine, store, cfg.search_cap)
+    if not tasks:
+        return None
+    try:
+        searcher = Searcher(
+            RawArchive(cfg.raw_dir),
+            search_fetch(store, fetcher.get()),
+            make_search_adapter(store),
+            attempts=cfg.attempts,
+            delay=cfg.delay,
+        )
+        run = searcher.search(tasks)
+    except StoreBusyError:
+        raise
+    except Exception as error:  # noqa: BLE001 - stage boundary, reported not raised
+        logger.exception("Wishlist search failed for %s", store)
+        report.notes.append(f"Search failed: {error}")
+        return None
+    report.searched = run.manifest
+    if run.manifest.failures:
+        report.notes.append(f"{len(run.manifest.failures)} searches failed")
+    return run.manifest.run_id
+
+
+def _import(
+    engine: Engine, cfg: _Settings, store: str, run_id: int | None, *, search: bool
+) -> ImportResult | None:
+    try:
+        parsed = parse_run(cfg.raw_dir, make_parser(store), run_id, search=search)
+    except FileNotFoundError:
+        return None
+    return import_run(engine, parsed)
+
+
+def _category_stages(
+    store: str,
+    engine: Engine,
+    fetcher: _LazyFetcher,
+    cfg: _Settings,
+    report: RefreshReport,
+    *,
+    skip_crawl: bool,
+) -> None:
+    run_id = None if skip_crawl else _crawl_stage(store, fetcher, cfg, report)
+    try:
+        report.parsed = parse_run(cfg.raw_dir, make_parser(store), run_id, search=False)
+    except FileNotFoundError as error:
+        report.notes.append(f"Nothing to parse: {error}")
+        return
+    if report.parsed.errors:
+        report.notes.append(f"{len(report.parsed.errors)} row parse errors")
+    report.imported = import_run(engine, report.parsed)
+
+
 def refresh_store(
     store: str,
     *,
@@ -89,55 +237,49 @@ def refresh_store(
     attempts: int | None = None,
     tmdb_api_key: str | None = None,
     skip_crawl: bool = False,
+    categories: bool = True,
+    searches: bool = True,
+    search_cap: int | None = None,
 ) -> RefreshReport:
     """Run every stage for one store. Stage failures are reported, not raised.
 
-    A failed crawl still parses and imports whatever was saved. A missing TMDB
-    key skips matching. The web app keeps serving committed data throughout.
+    Category crawl, parse, import; then one search per wished-for movie, parse,
+    import; then matching. A failed crawl still parses and imports whatever was
+    saved. skip_crawl reprocesses the latest saved runs without fetching. A
+    missing TMDB key skips matching. The web app keeps serving committed data.
     """
     if store not in STORES:
         raise ValueError(f"Unknown store {store!r}")
-    raw_dir = raw_dir or CONFIG["raw_dir"]
-    db_path = db_path or CONFIG["db_path"]
-    max_pages = max_pages or CONFIG["max_pages"]
-    delay = delay or CONFIG["crawl_delay"]
-    attempts = attempts or CONFIG["crawl_attempts"]
+    cfg = _Settings(
+        raw_dir=raw_dir or CONFIG["raw_dir"],
+        max_pages=max_pages or CONFIG["max_pages"],
+        delay=delay or CONFIG["crawl_delay"],
+        attempts=attempts or CONFIG["crawl_attempts"],
+        search_cap=CONFIG["search_daily_cap"] if search_cap is None else search_cap,
+    )
     tmdb_api_key = CONFIG["tmdb_api_key"] if tmdb_api_key is None else tmdb_api_key
+    engine = open_catalog(db_path or CONFIG["db_path"])
     report = RefreshReport(store=store)
 
-    with refresh_lock(raw_dir, store):
-        run_id: int | None = None
-        if not skip_crawl:
-            fetcher = None
-            try:
-                fetcher = make_fetcher(store)
-                crawler = Crawler(RawArchive(raw_dir), fetcher, attempts=attempts, delay=delay)
-                run = crawler.crawl(make_adapter(store, max_pages))
-                report.crawl = run.manifest
-                run_id = run.manifest.run_id
-                if not run.manifest.complete:
-                    report.notes.append(f"Crawl incomplete: {len(run.manifest.failures)} failures")
-            except StoreBusyError as error:
-                report.notes.append(str(error))
-                return report
-            except Exception as error:  # noqa: BLE001 - stage boundary, reported not raised
-                logger.exception("Crawl failed for %s", store)
-                report.notes.append(f"Crawl failed: {error}")
-            finally:
-                if fetcher is not None:
-                    fetcher.close()
-
+    with refresh_lock(cfg.raw_dir, store):
+        fetcher = _LazyFetcher(store)
         try:
-            report.parsed = parse_run(raw_dir, make_parser(store), run_id)
-        except FileNotFoundError as error:
-            report.notes.append(f"Nothing to parse: {error}")
+            if categories:
+                _category_stages(store, engine, fetcher, cfg, report, skip_crawl=skip_crawl)
+            if searches:
+                search_run = (
+                    None if skip_crawl else _search_stage(store, engine, fetcher, cfg, report)
+                )
+                if search_run is not None or skip_crawl:
+                    report.search_imported = _import(engine, cfg, store, search_run, search=True)
+        except StoreBusyError as error:
+            report.notes.append(str(error))
             return report
-        if report.parsed.errors:
-            report.notes.append(f"{len(report.parsed.errors)} row parse errors")
+        finally:
+            fetcher.close()
 
-        engine = open_catalog(db_path)
-        report.imported = import_run(engine, report.parsed)
-
+        if not report.ok:
+            return report
         if not tmdb_api_key:
             report.notes.append("TMDB_API_KEY not set; matching skipped")
             return report
@@ -196,11 +338,17 @@ def describe(report: RefreshReport) -> str:
             f"imported {i.products_seen} ({i.products_created} new), "
             f"{i.observations_created} observations, {i.expired} expired"
         )
+    if report.search_imported is not None:
+        s = report.search_imported
+        parts.append(
+            f"searched {s.searches} wishes ({s.searches_failed} failed): {s.search_hits} results, "
+            f"{s.hits_dropped} no longer found"
+        )
     if report.matched is not None:
         m = report.matched
         parts.append(
-            f"matched {m.auto} auto + {m.reused} reused, {m.ambiguous} ambiguous, "
-            f"{m.unmatched} unmatched, {m.errors} errors"
+            f"matched {m.auto} auto + {m.reused} reused + {m.searched} wished, "
+            f"{m.ambiguous} ambiguous, {m.unmatched} unmatched, {m.errors} errors"
         )
     parts.extend(report.notes)
     return f"[{report.store}] " + "; ".join(parts)
