@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block title %}{{ row.title }}{% endblock %}
+{% block content %}
+<h2>{{ row.title }}</h2>
+<p class="meta">{{ row.raw_title }} · {{ row.store_name }} · {{ row.format_label }} · {{ row.condition }} · <a href="{{ row.edition_url }}" target="_blank" rel="noopener">store page</a> · match: {{ row.match_status }}</p>
+{% if row.image_url %}<img class="cover" src="{{ row.image_url }}" alt="">{% endif %}
+<table>
+  <thead><tr><th>Observed</th><th>Run</th><th>Price</th><th>Regular</th><th>Availability</th><th>Qty</th></tr></thead>
+  <tbody>
+  {% for o in history %}
+  <tr><td>{{ o.observed_at | when }}</td><td>{{ o.run_id }}</td><td>{{ o.price_cents | euros }}</td><td>{{ o.regular_price_cents | euros }}</td><td>{{ o.availability }}</td><td>{{ o.stock_quantity if o.stock_quantity is not none else '' }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

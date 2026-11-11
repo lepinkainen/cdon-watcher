@@ -1,23 +1,23 @@
-"""FastAPI web application setup."""
+"""FastAPI application: catalog UI plus the optional in-process scheduler."""
 
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from ..database.connection import init_db
+from ..catalog.db import open_catalog
+from ..config import CONFIG
 from ..scheduler import start_scheduler
-from .routes import router
+from .catalog_routes import router
+from .filters import register_filters
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Application lifespan manager."""
-    await init_db()
+    app.state.catalog_engine = open_catalog(CONFIG["db_path"])
     scheduler_task = start_scheduler()
     try:
         yield
@@ -31,39 +31,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    """Create and configure FastAPI application."""
-    app = FastAPI(
-        title="CDON Watcher API",
-        description="API for CDON Blu-ray price tracking",
-        version="1.0.0",
-        lifespan=lifespan,
-    )
-
-    # Add CORS middleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    # Get absolute paths for static and template folders
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    static_folder = os.path.join(os.path.dirname(current_dir), "static")
-    templates_folder = os.path.join(os.path.dirname(current_dir), "templates")
-
-    # Mount static files
+    app = FastAPI(title="Movie offers", version="1.0.0", lifespan=lifespan)
+    package_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    static_folder = os.path.join(package_dir, "static")
+    templates_folder = os.path.join(package_dir, "templates")
     if os.path.exists(static_folder):
         app.mount("/static", StaticFiles(directory=static_folder), name="static")
-
-    # Set up Jinja2 templates
     templates = Jinja2Templates(directory=templates_folder)
-
-    # Pass templates to routes (we'll add this to the router)
+    register_filters(templates)
     app.state.templates = templates
-
-    # Include routers
     app.include_router(router)
-
     return app

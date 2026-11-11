@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% block title %}Status{% endblock %}
+{% block content %}
+<h2>Status</h2>
+<table>
+  <thead><tr><th>Store</th><th>Last run</th><th>Imported</th><th>Complete</th><th>Products</th><th>In stock (fresh)</th><th>Errors</th></tr></thead>
+  <tbody>
+  {% for s in stores %}
+  <tr class="{{ 'ok' if s.fresh else 'stale' }}">
+    <td>{{ s.store.name }}</td>
+    <td>{{ s.last_run.run_id if s.last_run else '—' }}</td>
+    <td>{{ (s.last_run.imported_at if s.last_run else none) | when }}</td>
+    <td>{{ 'yes' if s.last_run and s.last_run.complete else 'no' }}</td>
+    <td>{{ s.product_count }}</td>
+    <td>{{ s.in_stock_count }}</td>
+    <td>{{ s.last_run.error_count if s.last_run else '' }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="meta">Freshness limit {{ freshness_hours }} h · default limits Blu-ray {{ max_bd_cents | euros }}, 4K {{ max_4k_cents | euros }}</p>
+{% endblock %}

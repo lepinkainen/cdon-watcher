@@ -1,88 +1,21 @@
-# docker-compose.yml
+# One container: web UI on :8080 and the daily refresh in-process.
+# To schedule from host cron instead, set RUN_SCHEDULER=false and run:
+#   docker compose exec app python -m cdon_watcher refresh
 
 services:
-  # Web dashboard service
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile.base
-    container_name: cdon-web
+  app:
+    build: .
+    container_name: movie-offers
     ports:
       - '8080:8080'
     volumes:
-      - ./data:/app/data
-      - ./config:/app/config
+      - data:/app/data
     environment:
-      - SERVICE_MODE=web
-      - DB_PATH=/app/data/cdon_movies.db
-      - POSTER_DIR=/app/data/posters
       - TMDB_API_KEY=${TMDB_API_KEY:-}
-      - TZ=Europe/Helsinki
-      - PYTHONPATH=/app
-    command: python -m cdon_watcher web
-    restart: unless-stopped
-    networks:
-      - cdon-net
-
-  # Price monitor service (runs periodically)
-  monitor:
-    build:
-      context: .
-      dockerfile: Dockerfile.base
-    container_name: cdon-monitor
-    volumes:
-      - ./data:/app/data
-      - ./config:/app/config
-    environment:
-      - SERVICE_MODE=monitor
-      - DB_PATH=/app/data/cdon_movies.db
-      - POSTER_DIR=/app/data/posters
-      - TMDB_API_KEY=${TMDB_API_KEY:-}
-      - CHECK_INTERVAL_HOURS=6
-      - TZ=Europe/Helsinki
-      - PYTHONPATH=/app
-      # Email configuration (optional)
-      - EMAIL_ENABLED=false
-      - EMAIL_FROM=${EMAIL_FROM:-}
-      - EMAIL_TO=${EMAIL_TO:-}
-      - EMAIL_PASSWORD=${EMAIL_PASSWORD:-}
-      - SMTP_SERVER=${SMTP_SERVER:-smtp.gmail.com}
-      - SMTP_PORT=${SMTP_PORT:-587}
-      # Discord webhook (optional)
-      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK:-}
-    command: python -m cdon_watcher monitor
-    restart: unless-stopped
-    depends_on:
-      - web
-    networks:
-      - cdon-net
-
-  # One-time crawler (use for initial setup or manual runs)
-  crawler:
-    build:
-      context: .
-      dockerfile: Dockerfile.crawler
-    container_name: cdon-crawler
-    volumes:
-      - ./data:/app/data
-      - ./config:/app/config
-    environment:
-      - SERVICE_MODE=crawl
-      - DB_PATH=/app/data/cdon_movies.db
-      - POSTER_DIR=/app/data/posters
-      - TMDB_API_KEY=${TMDB_API_KEY:-}
+      - RUN_SCHEDULER=${RUN_SCHEDULER:-true}
       - MAX_PAGES_PER_CATEGORY=${MAX_PAGES_PER_CATEGORY:-10}
-      - TZ=Europe/Helsinki
-      - PYTHONPATH=/app
-      - PLAYWRIGHT_BROWSERS_PATH=/app/playwright_browsers
-    command: python -m cdon_watcher crawl
-    networks:
-      - cdon-net
-
-networks:
-  cdon-net:
-    driver: bridge
+      - STORES=${STORES:-ax,cdon}
+    restart: unless-stopped
 
 volumes:
   data:
-    driver: local

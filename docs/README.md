@@ -1,3 +1,7 @@
+> **Note (2026-10-12):** documents 01–08 describe the proof of concept and are
+> stale. The current application is specified in `09_multi_store_plan.md`;
+> operational guidance is in the top-level `CLAUDE.md` and `README.md`.
+
 # CDON Watcher Documentation
 
 Welcome to the comprehensive documentation for CDON Watcher, a price tracking system for Blu-ray and 4K Blu-ray movies on CDON.fi.
