@@ -426,16 +426,16 @@ python scripts/import_watchlist.py watchlist.json
 import requests
 
 # Get dashboard stats
-response = requests.get('http://localhost:8080/api/stats')
+response = requests.get("http://localhost:8080/api/stats")
 stats = response.json()
 
 # Search movies
-response = requests.get('http://localhost:8080/api/search?q=Inception')
+response = requests.get("http://localhost:8080/api/search?q=Inception")
 movies = response.json()
 
 # Add to watchlist
-data = {'product_id': 'MOVIE_ID', 'target_price': 19.99}
-response = requests.post('http://localhost:8080/api/watchlist', json=data)
+data = {"product_id": "MOVIE_ID", "target_price": 19.99}
+response = requests.post("http://localhost:8080/api/watchlist", json=data)
 ```
 
 #### Third-party Integrations

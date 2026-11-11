@@ -241,10 +241,12 @@ Some settings can be changed at runtime:
 ```python
 # Update configuration (requires restart for some settings)
 import os
-os.environ['CHECK_INTERVAL_HOURS'] = '2'
+
+os.environ["CHECK_INTERVAL_HOURS"] = "2"
 
 # Reload configuration
 from cdon_watcher.config import load_config
+
 CONFIG = load_config()
 ```
 
@@ -363,7 +365,9 @@ def validate_config(config: dict) -> list[str]:
     """Validate configuration and return list of errors."""
     errors = []
 
-    if config['discord_webhook'] and not config['discord_webhook'].startswith('https://discord.com/api/webhooks/'):
+    if config["discord_webhook"] and not config["discord_webhook"].startswith(
+        "https://discord.com/api/webhooks/"
+    ):
         errors.append("DISCORD_WEBHOOK must be a valid Discord webhook URL")
 
     return errors

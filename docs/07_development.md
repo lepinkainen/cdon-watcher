@@ -195,14 +195,19 @@ movies = []  # Create empty list for movies
 ```python
 class CDONWatcherError(Exception):
     """Base exception for CDON Watcher."""
+
     pass
+
 
 class ScrapingError(CDONWatcherError):
     """Raised when scraping fails."""
+
     pass
+
 
 class DatabaseError(CDONWatcherError):
     """Raised when database operations fail."""
+
     pass
 ```
 
@@ -249,6 +254,7 @@ from unittest.mock import Mock, AsyncMock
 
 from cdon_watcher.cdon_scraper import CDONScraper
 from cdon_watcher.models import Movie
+
 
 class TestCDONScraper:
     """Test CDON scraper functionality."""
@@ -299,6 +305,7 @@ from sqlalchemy.orm import sessionmaker
 from cdon_watcher.database.connection import init_db
 from cdon_watcher.models import SQLModel
 
+
 @pytest.fixture
 async def db_session():
     """Create in-memory database session for testing."""
@@ -318,6 +325,7 @@ async def db_session():
         await session.close()
         await engine.dispose()
 
+
 @pytest.fixture
 def sample_movie():
     """Create sample movie data."""
@@ -326,7 +334,7 @@ def sample_movie():
         "title": "Inception",
         "format": "Blu-ray",
         "url": "https://cdon.fi/movie/inception",
-        "price": 24.99
+        "price": 24.99,
     }
 ```
 
@@ -340,6 +348,7 @@ import pytest
 from unittest.mock import patch
 
 from cdon_watcher.cdon_scraper import CDONScraper
+
 
 class TestCDONScraperIntegration:
     """Integration tests for CDON scraper."""
@@ -365,8 +374,7 @@ class TestCDONScraperIntegration:
         scraper = CDONScraper()
 
         movies = await scraper.crawl_category(
-            "https://cdon.fi/elokuvat/?facets=property_preset_media_format%3Ablu-ray",
-            max_pages=1
+            "https://cdon.fi/elokuvat/?facets=property_preset_media_format%3Ablu-ray", max_pages=1
         )
 
         assert isinstance(movies, list)
@@ -575,8 +583,8 @@ class NotificationFactory:
     @staticmethod
     def create_notification_service(config: dict) -> NotificationService:
         """Create appropriate notification service."""
-        if config.get('discord_webhook'):
-            return DiscordNotificationService(config['discord_webhook'])
+        if config.get("discord_webhook"):
+            return DiscordNotificationService(config["discord_webhook"])
         else:
             return NullNotificationService()
 ```
@@ -645,6 +653,7 @@ async def update_prices(movie_ids: list[int]):
     results = await asyncio.gather(*tasks, return_exceptions=True)
     return results
 
+
 # Bad: Sequential operations
 async def update_prices(movie_ids: list[int]):
     results = []
@@ -659,11 +668,7 @@ async def update_prices(movie_ids: list[int]):
 ```python
 # Configure connection pool
 engine = create_async_engine(
-    DATABASE_URL,
-    pool_size=10,
-    max_overflow=20,
-    pool_timeout=30,
-    pool_recycle=3600
+    DATABASE_URL, pool_size=10, max_overflow=20, pool_timeout=30, pool_recycle=3600
 )
 ```
 
@@ -699,15 +704,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class Config:
-    database_url = os.getenv('DATABASE_URL')
-    secret_key = os.getenv('SECRET_KEY')
-    api_key = os.getenv('API_KEY')
+    database_url = os.getenv("DATABASE_URL")
+    secret_key = os.getenv("SECRET_KEY")
+    api_key = os.getenv("API_KEY")
 
     @classmethod
     def validate_secrets(cls):
         """Validate that all required secrets are present."""
-        required = ['database_url', 'secret_key']
+        required = ["database_url", "secret_key"]
         missing = [key for key in required if not getattr(cls, key)]
         if missing:
             raise ValueError(f"Missing required secrets: {missing}")
@@ -734,40 +740,30 @@ import logging
 from logging.config import dictConfig
 
 LOGGING_CONFIG = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'standard': {
-            'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "standard": {"format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"},
+        "detailed": {
+            "format": "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s"
         },
-        'detailed': {
-            'format': '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s'
-        }
     },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'standard',
-            'level': 'INFO'
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "standard", "level": "INFO"},
+        "file": {
+            "class": "logging.FileHandler",
+            "filename": "cdon_watcher.log",
+            "formatter": "detailed",
+            "level": "DEBUG",
         },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': 'cdon_watcher.log',
-            'formatter': 'detailed',
-            'level': 'DEBUG'
-        }
     },
-    'loggers': {
-        'cdon_watcher': {
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG',
-            'propagate': False
-        }
-    }
+    "loggers": {
+        "cdon_watcher": {"handlers": ["console", "file"], "level": "DEBUG", "propagate": False}
+    },
 }
 
 dictConfig(LOGGING_CONFIG)
-logger = logging.getLogger('cdon_watcher')
+logger = logging.getLogger("cdon_watcher")
 ```
 
 ### Debug Tools
@@ -776,16 +772,21 @@ logger = logging.getLogger('cdon_watcher')
 
 ```python
 # Add breakpoint
-import pdb; pdb.set_trace()
+import pdb
+
+pdb.set_trace()
 
 # Or use ipdb for better interface
-import ipdb; ipdb.set_trace()
+import ipdb
+
+ipdb.set_trace()
 ```
 
 #### Memory Profiling
 
 ```python
 from memory_profiler import profile
+
 
 @profile
 def expensive_function():
@@ -799,16 +800,19 @@ def expensive_function():
 import cProfile
 import pstats
 
+
 def profile_function(func):
     def wrapper(*args, **kwargs):
         profiler = cProfile.Profile()
         profiler.enable()
         result = func(*args, **kwargs)
         profiler.disable()
-        stats = pstats.Stats(profiler).sort_stats('cumulative')
+        stats = pstats.Stats(profiler).sort_stats("cumulative")
         stats.print_stats(20)  # Top 20 functions
         return result
+
     return wrapper
+
 
 @profile_function
 def my_function():

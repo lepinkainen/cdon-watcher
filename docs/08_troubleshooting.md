@@ -637,6 +637,7 @@ ssl.SSLCertVerificationError
 
    ```python
    import ssl
+
    ssl._create_default_https_context = ssl._create_unverified_context
    ```
 
@@ -717,7 +718,7 @@ ssl.SSLCertVerificationError
 
    ```python
    def validate_config():
-       required = ['DB_PATH', 'API_HOST', 'API_PORT']
+       required = ["DB_PATH", "API_HOST", "API_PORT"]
        for key in required:
            if not CONFIG.get(key):
                raise ValueError(f"Required config {key} is missing")
@@ -817,6 +818,7 @@ p.sort_stats('cumulative').print_stats(20)
 ```python
 # Check for memory leaks
 import tracemalloc
+
 tracemalloc.start()
 
 # Your code here

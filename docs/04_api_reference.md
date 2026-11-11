@@ -536,6 +536,7 @@ The API includes CORS (Cross-Origin Resource Sharing) support:
 ```python
 import requests
 
+
 class CDONWatcherAPI:
     def __init__(self, base_url="http://localhost:8080"):
         self.base_url = base_url
@@ -557,6 +558,7 @@ class CDONWatcherAPI:
     def get_watchlist(self):
         response = requests.get(f"{self.base_url}/api/watchlist")
         return response.json()
+
 
 # Usage
 api = CDONWatcherAPI()

@@ -488,7 +488,9 @@ class DatabaseRepository:
         """Update movie data."""
 
     # Price operations
-    async def add_price_history(self, movie_id: int, price: float, availability: str | None = None) -> PriceHistory:
+    async def add_price_history(
+        self, movie_id: int, price: float, availability: str | None = None
+    ) -> PriceHistory:
         """Add price history entry."""
 
     async def get_price_history(self, movie_id: int, limit: int = 50) -> list[PriceHistory]:
@@ -505,7 +507,9 @@ class DatabaseRepository:
         """Get all watchlist items with pricing."""
 
     # Alert operations
-    async def create_price_alert(self, movie_id: int, old_price: float, new_price: float, alert_type: str) -> PriceAlert:
+    async def create_price_alert(
+        self, movie_id: int, old_price: float, new_price: float, alert_type: str
+    ) -> PriceAlert:
         """Create price alert."""
 
     async def get_price_alerts(self, limit: int = 10) -> list[PriceAlertWithTitle]:
@@ -606,7 +610,7 @@ CREATE INDEX idx_watchlist_target_price ON watchlist(target_price);
 ```python
 # Example validation in SQLModel
 price: float = Field(gt=0, le=1000)  # Price between 0 and 1000
-target_price: float = Field(gt=0)     # Positive target price
+target_price: float = Field(gt=0)  # Positive target price
 product_id: str = Field(min_length=1, max_length=100)  # Valid product ID
 ```
 
@@ -693,15 +697,19 @@ async def migrate_add_tmdb_id():
     """Add TMDB ID column to movies table."""
 
     # Add column if it doesn't exist
-    await session.execute(text("""
+    await session.execute(
+        text("""
         ALTER TABLE movies
         ADD COLUMN tmdb_id INTEGER;
-    """))
+    """)
+    )
 
     # Create index
-    await session.execute(text("""
+    await session.execute(
+        text("""
         CREATE INDEX idx_movies_tmdb_id ON movies(tmdb_id);
-    """))
+    """)
+    )
 
     await session.commit()
 ```
@@ -738,17 +746,15 @@ async def check_database_health():
     movie_count = result.scalar()
 
     # Check recent activity
-    result = await session.execute(text("""
+    result = await session.execute(
+        text("""
         SELECT COUNT(*) FROM price_history
         WHERE checked_at >= datetime('now', '-1 hour')
-    """))
+    """)
+    )
     recent_checks = result.scalar()
 
-    return {
-        "status": "healthy",
-        "movie_count": movie_count,
-        "recent_activity": recent_checks
-    }
+    return {"status": "healthy", "movie_count": movie_count, "recent_activity": recent_checks}
 ```
 
 ### Performance Monitoring
