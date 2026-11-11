@@ -361,6 +361,73 @@ def product_history(
     return row, list(history)
 
 
+def _iso_utc(value: datetime | None) -> str | None:
+    """Naive UTC from the database as ISO 8601 with a Z, as the catalogue expects."""
+    return value.strftime("%Y-%m-%dT%H:%M:%SZ") if value is not None else None
+
+
+def offers_for(
+    engine: Engine, tmdb_ids: list[int], *, now: datetime | None = None
+) -> dict[str, dict[str, object]]:
+    """The read API for moviecatalog: current offers and last search per movie.
+
+    Every requested id is a key. Items are active, single-movie bd/4k listings
+    within the freshness limit, in every availability, cheapest first then by id.
+    searched_at is the newest successful search for the movie at any store.
+    """
+    now = now or _now()
+    wanted = sorted(set(tmdb_ids))
+    result: dict[str, dict[str, object]] = {
+        str(t): {"searched_at": None, "items": []} for t in wanted
+    }
+    if not wanted:
+        return result
+    with Session(engine) as session:
+        rows = session.exec(
+            select(StoreProduct, Store)
+            .join(Store, Store.id == StoreProduct.store_id)  # type: ignore[arg-type]
+            .where(
+                StoreProduct.tmdb_id.in_(wanted),  # type: ignore[union-attr]
+                StoreProduct.active == True,  # noqa: E712
+                StoreProduct.is_collection == False,  # noqa: E712
+                StoreProduct.format.in_(("bd", "4k")),  # type: ignore[attr-defined]
+                StoreProduct.last_seen_at >= _fresh_after(now),
+            )
+            .order_by(StoreProduct.current_price_cents, StoreProduct.id)  # type: ignore[arg-type]
+        ).all()
+        for product, store in rows:
+            items = result[str(product.tmdb_id)]["items"]
+            assert isinstance(items, list)
+            items.append(
+                {
+                    "id": product.id,
+                    "store_key": store.key,
+                    "store": store.name,
+                    "title": product.raw_title,
+                    "format": product.format,
+                    "condition": product.condition,
+                    "price_cents": product.current_price_cents,
+                    "regular_price_cents": product.current_regular_price_cents,
+                    "currency": product.currency,
+                    "availability": product.current_availability,
+                    "url": product.edition_url,
+                    "image_url": product.image_url,
+                    "last_seen_at": _iso_utc(product.last_seen_at),
+                }
+            )
+        searched = session.exec(
+            select(WishSearch.tmdb_id, func.max(WishSearch.searched_at))
+            .where(
+                WishSearch.tmdb_id.in_(wanted),  # type: ignore[attr-defined]
+                WishSearch.error.is_(None),  # type: ignore[union-attr]
+            )
+            .group_by(WishSearch.tmdb_id)  # type: ignore[arg-type]
+        ).all()
+        for tmdb_id, searched_at in searched:
+            result[str(tmdb_id)]["searched_at"] = _iso_utc(searched_at)
+    return result
+
+
 def catalogue_status(engine: Engine) -> Catalogue:
     with Session(engine) as session:
         return load_catalogue(session)

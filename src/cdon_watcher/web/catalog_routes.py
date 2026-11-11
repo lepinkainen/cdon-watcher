@@ -233,6 +233,12 @@ def product_action(request: Request, store_product_id: int, action: str) -> JSON
     return JSONResponse(result)
 
 
+@router.get("/api/v2/offers")
+def offers(request: Request, tmdb_id: list[int] = Query(default=[])) -> JSONResponse:
+    """Read-only offers for moviecatalog's wishlist (contract in its SPEC.md)."""
+    return JSONResponse({"offers": queries.offers_for(_engine(request), tmdb_id)})
+
+
 @router.get("/api/v2/tmdb/search")
 def tmdb_search(request: Request, q: str, year: int | None = None) -> JSONResponse:
     client = _tmdb_client(request)

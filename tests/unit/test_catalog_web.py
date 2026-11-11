@@ -390,3 +390,64 @@ def test_product_history_and_404(client, engine):
 def test_regular_price_is_shown_struck_through(client, engine):
     seed(engine, [product("1", "Deal", price=900, regular=1500)])
     assert "<del>15,00 €</del>" in client.get("/").text
+
+
+def test_offers_api_follows_the_catalogue_contract(client, engine):
+    from cdon_watcher.catalog.models import Store, WishSearch
+
+    seed(
+        engine,
+        [
+            product("1", "Heat (4K)", price=2299, fmt=Format.UHD, regular=3599),
+            product("2", "Heat BD", price=999),
+            product("3", "Heat sold out", price=500, avail=Availability.OUT_OF_STOCK),
+            product("5", "Heat box", price=100, collection=True),
+        ],
+    )
+    seed(
+        engine, [product("9", "Heat stale", price=50)], run_id=0, fetched=NOW - timedelta(hours=49)
+    )
+    product_ids = matched(engine, {"1": 949, "2": 949, "3": 949, "9": 949})
+    with Session(engine) as session:
+        session.get(StoreProduct, product_ids["5"]).tmdb_id = 949
+        store = session.exec(select(Store)).one()
+        at = datetime(2026, 11, 11, 6, 0, 0)
+        session.add(
+            WishSearch(store_id=store.id, tmdb_id=949, query="Heat", run_id=2, searched_at=at)
+        )
+        session.add(
+            WishSearch(
+                store_id=store.id, tmdb_id=1551, query="x", run_id=2, searched_at=at, error="boom"
+            )
+        )
+        session.commit()
+
+    body = client.get("/api/v2/offers?tmdb_id=949&tmdb_id=1551").json()
+    assert set(body["offers"]) == {"949", "1551"}
+    assert body["offers"]["1551"] == {"searched_at": None, "items": []}
+    heat = body["offers"]["949"]
+    assert heat["searched_at"] == "2026-11-11T06:00:00Z"
+    assert [i["title"] for i in heat["items"]] == ["Heat sold out", "Heat BD", "Heat (4K)"]
+    first = heat["items"][2]
+    assert first["id"] == product_ids["1"]
+    assert set(first) == {
+        "id",
+        "store_key",
+        "store",
+        "title",
+        "format",
+        "condition",
+        "price_cents",
+        "regular_price_cents",
+        "currency",
+        "availability",
+        "url",
+        "image_url",
+        "last_seen_at",
+    }
+    assert first["format"] == "4k" and first["regular_price_cents"] == 3599
+    assert first["store_key"] == "ax" and first["store"] == "Levykauppa Äx"
+    assert first["last_seen_at"].endswith("Z") and "T" in first["last_seen_at"]
+    assert heat["items"][0]["availability"] == "out_of_stock"
+    assert client.get("/api/v2/offers").json() == {"offers": {}}
+    assert client.get("/api/v2/offers?tmdb_id=abc").status_code == 422
