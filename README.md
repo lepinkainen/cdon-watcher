@@ -71,6 +71,7 @@ The ones you are likely to set:
 
 ```bash
 uv run python -m cdon_watcher refresh [--store ax|cdon]   # sync, crawl, import, match
+uv run python -m cdon_watcher refresh --search-only        # sync + wishlist searches, no crawl
 uv run python -m cdon_watcher sync                        # pull lists from moviecatalog
 uv run python -m cdon_watcher search --store cdon         # wishlist searches only
 uv run python -m cdon_watcher match                       # TMDB matching only

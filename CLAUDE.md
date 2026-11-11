@@ -14,6 +14,7 @@ task lint-fix                # ruff + prettier auto-fix
 
 uv run python -m cdon_watcher web                      # Web app at :8080
 uv run python -m cdon_watcher refresh [--store ax|cdon] # crawl → parse → import → match (-v: per-page progress)
+uv run python -m cdon_watcher refresh --search-only   # sync + wishlist searches only, no category crawl
 uv run python -m cdon_watcher crawl-raw --store ax     # Stage 1 only: archive listing pages
 uv run python -m cdon_watcher parse-raw --store ax     # Stage 2 only: parsed.json from latest run
 uv run python -m cdon_watcher import-run --store ax    # Stage 3 only: import parsed.json
@@ -109,8 +110,8 @@ Store facts that drive the design:
 See `.env.example`. Key ones: `TMDB_API_KEY` (matching skipped without it),
 `MOVIECATALOG_URL` (sync, wish action; unset = no owned filtering or searches),
 `SEARCH_DAILY_CAP` (search requests per store per 24 h),
-`DB_PATH` (`./data/catalog.db`), `RAW_DIR`, `STORES`, `MAX_PAGES_PER_CATEGORY`,
 `SEARCH_MIN_INTERVAL_HOURS` (re-search gap per wish and store, default 24),
+`DB_PATH` (`./data/catalog.db`), `RAW_DIR`, `STORES`, `MAX_PAGES_PER_CATEGORY`,
 `RUN_SCHEDULER` (in-process daily refresh; leave off when host cron runs
 `refresh`), `SCHEDULER_INTERVAL_HOURS`.
 

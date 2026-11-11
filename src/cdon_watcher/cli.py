@@ -95,6 +95,7 @@ def _cmd_refresh(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
         db_path=args.db,
         max_pages=args.max_pages,
         skip_crawl=args.skip_crawl,
+        categories=not args.search_only,
         searches=not args.no_search,
     )
     failed = False
@@ -198,8 +199,14 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(refresh, store_required=False)
     refresh.add_argument("--db", type=Path, default=None)
     refresh.add_argument("--max-pages", type=int, default=None, help="CDON only")
-    refresh.add_argument("--skip-crawl", action="store_true", help="Reprocess the latest run")
-    refresh.add_argument("--no-search", action="store_true", help="Skip wishlist searches")
+    mode = refresh.add_mutually_exclusive_group()
+    mode.add_argument("--skip-crawl", action="store_true", help="Reprocess the latest run")
+    mode.add_argument("--no-search", action="store_true", help="Skip wishlist searches")
+    mode.add_argument(
+        "--search-only",
+        action="store_true",
+        help="Sync, then run only the wishlist searches (no category crawl)",
+    )
 
     search = sub.add_parser(
         "search", help="Search one store for every wished-for movie, then import and match"

@@ -195,6 +195,25 @@ def test_cli_refresh_reports(tmp_path, monkeypatch, capsys):
     assert "[ax] crawl run 1 complete" in out and "imported 66 (66 new)" in out
 
 
+def test_cli_refresh_search_only_skips_categories(monkeypatch, capsys):
+    from cdon_watcher import cli
+
+    calls = []
+    monkeypatch.setattr(cli, "refresh_all", lambda stores, **kw: calls.append((stores, kw)) or [])
+    monkeypatch.setattr("sys.argv", ["x", "refresh", "--search-only"])
+    cli.main()
+    assert calls[0][0] is None
+    assert calls[0][1]["categories"] is False and calls[0][1]["searches"] is True
+
+
+def test_cli_refresh_search_only_conflicts_with_no_search(monkeypatch):
+    from cdon_watcher import cli
+
+    monkeypatch.setattr("sys.argv", ["x", "refresh", "--search-only", "--no-search"])
+    with pytest.raises(SystemExit):
+        cli.main()
+
+
 def test_adapters_and_parsers_by_store():
     assert isinstance(refresh.make_adapter("ax", 5), AxAdapter)
     assert isinstance(refresh.make_adapter("cdon", 5), CdonAdapter)
