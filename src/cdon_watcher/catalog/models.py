@@ -4,8 +4,7 @@ Table names are distinct from the proof-of-concept tables so both can live in
 one SQLite file until the old pipeline is removed.
 """
 
-from datetime import datetime
-
+from pydantic import NaiveDatetime
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.orm import registry
 from sqlmodel import Field, SQLModel
@@ -19,7 +18,7 @@ class SchemaVersion(CatalogModel, table=True):
     __tablename__ = "schema_version"
 
     version: int = Field(primary_key=True)
-    applied_at: datetime
+    applied_at: NaiveDatetime
 
 
 class Store(CatalogModel, table=True):
@@ -41,8 +40,8 @@ class CrawlRun(CatalogModel, table=True):
     run_id: int
     complete: bool
     parser_version: str
-    parsed_at: datetime
-    imported_at: datetime
+    parsed_at: NaiveDatetime
+    imported_at: NaiveDatetime
     snapshot_count: int
     product_count: int
     error_count: int
@@ -82,11 +81,11 @@ class StoreProduct(CatalogModel, table=True):
     current_availability_raw: str | None = None
     current_stock_quantity: int | None = None
 
-    first_seen_at: datetime
-    last_seen_at: datetime
+    first_seen_at: NaiveDatetime
+    last_seen_at: NaiveDatetime
     last_seen_run_id: int
     active: bool = Field(default=True, index=True)
-    inactive_since: datetime | None = None
+    inactive_since: NaiveDatetime | None = None
 
 
 class PriceObservation(CatalogModel, table=True):
@@ -101,7 +100,7 @@ class PriceObservation(CatalogModel, table=True):
     store_product_id: int = Field(foreign_key="store_products.id", index=True)
     run_id: int = Field(index=True)
     snapshot_id: int
-    observed_at: datetime = Field(index=True)
+    observed_at: NaiveDatetime = Field(index=True)
     price_cents: int
     regular_price_cents: int | None = None
     currency: str = "EUR"
@@ -125,7 +124,7 @@ class MovieMetadata(CatalogModel, table=True):
     overview: str | None = None
     director: str | None = None
     cast: str | None = None
-    fetched_at: datetime
+    fetched_at: NaiveDatetime
 
 
 class MatchState(CatalogModel, table=True):
@@ -146,9 +145,9 @@ class MatchState(CatalogModel, table=True):
     query: str | None = None
     query_year: int | None = None
     attempts: int = 0
-    last_attempt_at: datetime | None = None
+    last_attempt_at: NaiveDatetime | None = None
     last_error: str | None = None
-    decided_at: datetime | None = None
+    decided_at: NaiveDatetime | None = None
     decided_by: str | None = None
     note: str | None = None
 
@@ -172,4 +171,4 @@ class UserPreference(CatalogModel, table=True):
     tmdb_id: int | None = Field(default=None, index=True)
     store_product_id: int | None = Field(default=None, foreign_key="store_products.id", index=True)
     origin_store_product_id: int | None = None
-    created_at: datetime
+    created_at: NaiveDatetime
