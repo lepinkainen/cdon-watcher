@@ -4,8 +4,12 @@
 <h2>Match queue</h2>
 {% if not has_tmdb %}<p class="warn">TMDB_API_KEY is not set; searching and confirming matches will fail.</p>{% endif %}
 {% if items %}
+<form class="filters queue-filter" role="search" onsubmit="return false">
+  <input type="search" id="queue-filter" placeholder="Filter by title" aria-label="Filter by title" autocomplete="off">
+  <span class="meta" id="queue-count">{{ items | length }} items</span>
+</form>
 {% for row, candidates in items %}
-<section class="queue-item" data-product-id="{{ row.id }}">
+<section class="queue-item" id="product-{{ row.id }}" data-product-id="{{ row.id }}" data-filter="{{ row.raw_title }} {{ row.title }} {{ row.store_name }}">
   {% if row.cover_url %}<img class="queue-cover" src="{{ row.cover_url }}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% endif %}
   <h3>{{ row.raw_title }} <span class="tag muted">{{ row.match_status }}</span></h3>
   <p class="meta">{{ row.store_name }} · {{ row.format_label }} · {{ row.price_cents | euros }} · <a href="{{ row.edition_url }}" target="_blank" rel="noopener">store page</a></p>

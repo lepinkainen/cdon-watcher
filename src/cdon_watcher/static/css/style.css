@@ -248,6 +248,20 @@ img.queue-cover {
 }
 section.queue-item {
   overflow: hidden;
+  scroll-margin-top: 1rem;
+}
+section.queue-item:target {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+a.tag {
+  text-decoration: none;
+}
+a.tag:hover {
+  text-decoration: underline;
+}
+form.queue-filter input {
+  min-width: 16rem;
 }
 tr.product.gone {
   opacity: 0.35;

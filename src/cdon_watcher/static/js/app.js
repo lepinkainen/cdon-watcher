@@ -20,6 +20,7 @@
     node.classList.add('gone')
     setTimeout(function () {
       node.remove()
+      applyQueueFilter()
     }, 300)
   }
 
@@ -117,7 +118,40 @@
       })
   })
 
-  var filters = document.querySelector('form.filters')
+  var queueFilter = document.getElementById('queue-filter')
+  var queueCount = document.getElementById('queue-count')
+
+  function applyQueueFilter() {
+    if (!queueFilter) return
+    var words = queueFilter.value.toLowerCase().split(/\s+/).filter(Boolean)
+    var items = document.querySelectorAll('section.queue-item')
+    var shown = 0
+    items.forEach(function (item) {
+      var text = (item.getAttribute('data-filter') || '').toLowerCase()
+      var match = words.every(function (w) {
+        return text.indexOf(w) !== -1
+      })
+      item.hidden = !match
+      if (match) shown++
+    })
+    if (queueCount) {
+      queueCount.textContent = words.length
+        ? shown + ' of ' + items.length + ' items'
+        : items.length + ' items'
+    }
+  }
+
+  if (queueFilter) {
+    queueFilter.addEventListener('input', applyQueueFilter)
+    queueFilter.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        queueFilter.value = ''
+        applyQueueFilter()
+      }
+    })
+  }
+
+  var filters = document.querySelector('form.filters:not(.queue-filter)')
   if (filters) {
     filters.querySelectorAll('select').forEach(function (select) {
       select.addEventListener('change', function () {

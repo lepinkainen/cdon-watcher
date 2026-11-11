@@ -4,7 +4,7 @@
     <a href="{{ row.edition_url }}" target="_blank" rel="noopener">{{ row.title }}</a>
     {% if row.title != row.raw_title %}<span class="raw">{{ row.raw_title }}</span>{% endif %}
     {% if row.is_collection %}<span class="tag">collection</span>{% endif %}
-    {% if row.match_status not in ('auto', 'manual', 'not_applicable') %}<span class="tag muted">unmatched</span>{% endif %}
+    {% if row.match_status not in ('auto', 'manual', 'not_applicable') %}{% if row.is_collection %}<span class="tag muted">unmatched</span>{% else %}<a class="tag muted" href="/queue#product-{{ row.id }}" title="Match in the queue">unmatched</a>{% endif %}{% endif %}
     {% if row.deal %}<span class="tag deal">deal</span>{% endif %}
     {% if row.wished and not wishlist_section %}<span class="tag wish">on wishlist</span>{% endif %}
     {% if row.own_dvd %}<span class="tag own">own: DVD</span>{% endif %}

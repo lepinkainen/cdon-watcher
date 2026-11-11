@@ -322,6 +322,17 @@ def test_watch_is_gone(client, engine):
     assert response.status_code == 308 and response.headers["location"] == "/wishlist"
 
 
+def test_unmatched_tag_links_to_its_queue_entry(client, engine):
+    seed(engine, [product("1", "Heat", price=900), product("2", "Box", price=900, collection=True)])
+    product_ids = ids(engine)
+    heat, box = product_ids["1"], product_ids["2"]
+    assert f'href="/queue#product-{heat}"' in client.get("/").text
+    assert f'href="/queue#product-{box}"' not in client.get("/").text  # never queued
+    html = client.get("/queue").text
+    assert f'id="product-{heat}"' in html
+    assert 'id="queue-filter"' in html
+
+
 def test_queue_lists_unmatched_in_stock_single_movies_and_manual_match(client, engine):
     seed(
         engine,
