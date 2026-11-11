@@ -432,7 +432,31 @@ Finish each implementation increment with appropriate tests, `task lint`, and
 
 ## Phase 2: catalogue integration and wishlist searches
 
-Status: agreed 2026-11-11, not started.
+Status: agreed and built 2026-11-11. Product-level watches are dropped: the
+catalogue's wishlist covers targeted buys, browsing covers impulse buys, and an
+unmatched product can be matched in `/queue` and then wished for.
+
+As built:
+
+- `MOVIECATALOG_URL` enables the sync and the wish action. `sync` and every
+  `refresh` store the last good `/api/sync` response in `catalogue_sync`.
+- Search URLs: Äx `https://www.levykauppax.fi/v2/search/?q=` (plain HTTP);
+  CDON `https://cdon.fi/s?q=` in the browser, keeping the result JSON the page
+  loads from `search-bff.cdon.se/search/v2/result`. Fixtures in
+  `tests/fixtures/<store>/search-*`.
+- `SEARCH_DAILY_CAP` (default 100) counts search requests per store over the
+  last 24 hours, least recently searched wishes first. A wish whose title finds
+  nothing is searched again by its original title.
+- Search hits are checked against the wish with `score_target`: at least 0.80
+  is accepted (`decided_by = search`), at least 0.60 or containing every word
+  of the wished title goes to `/queue` with the wish as candidate, anything
+  lower gets an open TMDB search.
+- The read API is `GET /api/v2/offers`, in the shape moviecatalog's SPEC.md
+  fixes. `searched_at` is the newest successful search at any store; a failed
+  search keeps the previous hits.
+- Known gaps for the matching work that follows: CDON marketplace titles,
+  remakes sharing a title when the listing has no movie year, and
+  `unknown` availability on some Äx search rows.
 
 The watcher is paired with **moviecatalog**, a separate app that catalogues the
 discs I own and holds my wishlist. The catalogue owns everything about _me_

@@ -18,6 +18,8 @@ uv run python -m cdon_watcher crawl-raw --store ax     # Stage 1 only: archive l
 uv run python -m cdon_watcher parse-raw --store ax     # Stage 2 only: parsed.json from latest run
 uv run python -m cdon_watcher import-run --store ax    # Stage 3 only: import parsed.json
 uv run python -m cdon_watcher match                    # Stage 4 only: TMDB matching
+uv run python -m cdon_watcher sync                     # Pull owned + wanted from moviecatalog
+uv run python -m cdon_watcher search --store cdon      # Wishlist searches only (+ import, match)
 
 # Run one test
 PYTHONPATH=./src uv run pytest tests/unit/test_file.py -k "test_name"
@@ -31,7 +33,13 @@ against a running server, not part of the pytest suite (`testpaths = ["tests"]`)
 Single-user tracker of physical movie offers (Blu-ray, 4K UHD) at two stores:
 Levykauppa Äx (`/leffat/offer/`) and CDON (`/elokuvat/`). Daily refresh,
 read-mostly web UI, SQLite. No auth; runs locally or on a VPS behind Tailscale,
-in one Docker container. Spec: `docs/09_multi_store_plan.md`.
+in one Docker container. Spec: `docs/09_multi_store_plan.md` (phase 2 is the
+moviecatalog integration).
+
+Paired with **moviecatalog** (`../moviecatalog`, Go), which owns what I own and
+want. The watcher keeps no state about me except ignores. Contract in both
+directions: moviecatalog's `SPEC.md`, "Connecting to the watcher". Change it
+there first; its `internal/offers` decodes `/api/v2/offers`.
 
 ## Architecture
 
@@ -46,29 +54,41 @@ crawl-raw            parse-raw              import-run            match
                                                    │
                                           ┌────────▼────────┐
                                           │ web/catalog_routes + catalog.queries │
-                                          │ "/" watchlist first, then offers under│
+                                          │ "/" wishlist first, then offers under │
                                           │ caps (BD ≤ €10, 4K ≤ €20)             │
                                           └─────────────────┘
 ```
 
-| Layer     | Files                                                                                                                                                                         |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Ingestion | `ingestion/stores.py` (adapters), `crawler.py`, `browser.py` (Playwright for CDON), `archive.py`, `ax_parser.py`, `cdon_parser.py`, `parse.py`, `contract.py`, `normalize.py` |
-| Catalog   | `catalog/models.py`, `db.py` (versioned migrations), `importer.py`, `matching.py`, `tmdb.py`, `preferences.py`, `queries.py`                                                  |
-| Web       | `web/app.py`, `web/catalog_routes.py`, `web/filters.py`, `templates/`, `static/`                                                                                              |
-| Ops       | `refresh.py` (stage orchestration + per-store lock), `scheduler.py` (in-process daily), `cli.py`, `config.py`                                                                 |
+| Layer     | Files                                                                                                                                                                                                          |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ingestion | `ingestion/stores.py` (adapters), `crawler.py`, `browser.py` (Playwright for CDON), `archive.py`, `ax_parser.py`, `cdon_parser.py`, `parse.py`, `contract.py`, `normalize.py`, `search.py` (wishlist searches) |
+| Catalog   | `catalog/models.py`, `db.py` (versioned migrations), `importer.py`, `matching.py`, `tmdb.py`, `preferences.py`, `queries.py`, `catalogue.py` (moviecatalog)                                                    |
+| Web       | `web/app.py`, `web/catalog_routes.py`, `web/filters.py`, `templates/`, `static/`                                                                                                                               |
+| Ops       | `refresh.py` (stage orchestration + per-store lock), `scheduler.py` (in-process daily), `cli.py`, `config.py`                                                                                                  |
+
+Refresh order: `sync` (GET moviecatalog `/api/sync`, stored in `catalogue_sync`;
+failure keeps the stored lists) → per store: category crawl/parse/import →
+wishlist searches (`ingestion/search.py`, archive scope `wish-search`) →
+parse/import → match. Search runs share the store lock, delay and browser.
+
+Discovery source: `store_products.category_member` (seen by the newest category
+crawl) and `search_hits` (found by the latest search for a wished movie). A
+product stays active while either holds. Matching checks search hits against
+the wished movie first (`score_target`), then falls back to open TMDB search.
 
 Store facts that drive the design:
 
 - Äx: plain HTTP, listing rows carry everything (price, `<del>` regular price, stock text, format, edition id in URL fragment). Offer category membership defines scope; a complete run expires unseen products.
 - CDON: Cloudflare challenge blocks plain HTTP, so `BrowserFetcher` renders listings in headless Chromium. Products come from `__NEXT_DATA__` articles (price, stock count, condition, `preset_media_format`). First N pages only; no product pages; no membership expiry, freshness (48 h) hides stale rows.
 - Collections (multi-movie boxes, TV seasons) are shown as-is under the store title and never matched.
+- Search: Äx `/v2/search/?q=` returns offer-style rows mixed with music. CDON `/s?q=` renders no products; its script POSTs to `search-bff.cdon.se/search/v2/result`, and `BrowserFetcher.search` keeps that response from the page load. Never call that API directly. Most CDON hits are marketplace listings without `preset_media_format`, and CDON never returns an empty result.
 
 ## Pages and endpoints
 
-- `/` main page: watchlist-in-stock section first, then in-stock offers under the hardcoded caps. Query params `max_bd`, `max_4k` (euros), `format=bd|4k`, `store=ax|cdon`, `condition=new|used`, `q`.
-- `/watchlist`, `/queue` (manual TMDB matching), `/ignored`, `/products/<id>` (price history), `/status`.
-- `POST /api/v2/products/<id>/{watch|unwatch|ignore|unignore}`; `POST /api/v2/products/<id>/match` with `{"tmdb_id": int|null}`; `GET /api/v2/tmdb/search?q=`.
+- `/` main page: wishlist-in-stock section first (accepted formats, any price, deals marked), then in-stock offers under the hardcoded caps, minus movies owned on Blu-ray/UHD. Query params `max_bd`, `max_4k` (euros), `format=bd|4k`, `store=ax|cdon`, `condition=new|used`, `q`.
+- `/wishlist` (read-only, offers and searches per wish), `/queue` (manual TMDB matching), `/ignored`, `/products/<id>` (price history), `/status`. `/watchlist` redirects to `/wishlist`.
+- `POST /api/v2/products/<id>/{ignore|unignore}`; `POST /api/v2/products/<id>/wish` (forwards to moviecatalog `POST /api/wants`); `POST /api/v2/products/<id>/match` with `{"tmdb_id": int|null}`; `GET /api/v2/tmdb/search?q=`.
+- `GET /api/v2/offers?tmdb_id=…` (repeatable): read API for moviecatalog; shape fixed by its SPEC.md.
 
 ## Project Patterns
 
@@ -86,6 +106,8 @@ Store facts that drive the design:
 ## Environment Variables
 
 See `.env.example`. Key ones: `TMDB_API_KEY` (matching skipped without it),
+`MOVIECATALOG_URL` (sync, wish action; unset = no owned filtering or searches),
+`SEARCH_DAILY_CAP` (search requests per store per 24 h),
 `DB_PATH` (`./data/catalog.db`), `RAW_DIR`, `STORES`, `MAX_PAGES_PER_CATEGORY`,
 `RUN_SCHEDULER` (in-process daily refresh; leave off when host cron runs
 `refresh`), `SCHEDULER_INTERVAL_HOURS`.

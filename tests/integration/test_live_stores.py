@@ -11,6 +11,7 @@ import requests
 from cdon_watcher.ingestion.ax_parser import AxParser
 from cdon_watcher.ingestion.cdon_parser import CdonParser
 from cdon_watcher.ingestion.crawler import HttpFetcher
+from cdon_watcher.ingestion.search import AxSearchAdapter, CdonSearchAdapter
 from cdon_watcher.ingestion.stores import AxAdapter, CdonAdapter
 
 
@@ -58,3 +59,38 @@ def test_cdon_first_listing_page_shape():
     assert len(products) >= 30
     assert errors == []
     assert any(p.format.value == "4k" for p in products)
+
+
+@pytest.mark.timeout(60)
+def test_ax_search_page_shape():
+    adapter = AxSearchAdapter()
+    url = adapter.search_url("Oldboy")
+    _reachable(url)
+    fetcher = HttpFetcher()
+    try:
+        response = fetcher(url)
+    finally:
+        fetcher.close()
+    assert response.status == 200
+    assert adapter.result_count(response.body, response.final_url) >= 3
+    products, errors = AxParser().parse_search(response.body)
+    assert errors == []
+    assert any(p.eligible and "oldboy" in p.raw_title.lower() for p in products)
+
+
+@pytest.mark.timeout(180)
+def test_cdon_search_page_shape():
+    _reachable("https://cdon.fi/")
+    from cdon_watcher.ingestion.browser import BrowserFetcher
+
+    adapter = CdonSearchAdapter()
+    fetcher = BrowserFetcher()
+    try:
+        response = fetcher.search(adapter.search_url("Oldboy"))
+    finally:
+        fetcher.close()
+    assert response.status == 200, "Search result request did not complete"
+    assert adapter.result_count(response.body, response.final_url) >= 5
+    products, errors = CdonParser().parse_search(response.body)
+    assert errors == []
+    assert any(p.eligible and "oldboy" in p.raw_title.lower() for p in products)
