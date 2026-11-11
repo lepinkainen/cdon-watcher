@@ -11,20 +11,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7.1.0
         with:
-          python-version: '3.13'
+          python-version-file: '.python-version'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v2
+        uses: astral-sh/setup-uv@v10.3.3
         with:
-          version: 'latest'
+          version: '0.13.7'
 
       - name: Install Task
-        uses: go-task/setup-task@v2
+        uses: go-task/setup-task@v2.2.0
         with:
           version: 3.x
 
@@ -44,9 +44,9 @@ jobs:
         run: PYTHONPATH=./src uv run pytest tests/unit/ --cov=src --cov-report=xml --cov-report=term
 
       - name: Upload coverage reports
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v7.1.1
         if: success()
         with:
-          file: ./coverage.xml
+          files: ./coverage.xml
           flags: unittests
           name: codecov-umbrella
