@@ -23,6 +23,7 @@ MAX_BD_CENTS = 1000
 MAX_4K_CENTS = 2000
 FRESHNESS_HOURS = 48
 UNDECIDED_STATUSES = ("pending", "ambiguous", "unmatched", "error")
+TMDB_POSTER_URL = "https://image.tmdb.org/t/p/w154{path}"
 FORMAT_LABELS = {"bd": "Blu-ray", "4k": "4K UHD", "dvd": "DVD", "unknown": "?"}
 
 
@@ -51,6 +52,8 @@ class Row:
     regular_price_cents: int | None
     edition_url: str
     image_url: str | None
+    cover_url: str | None
+    """The store's edition cover, else the matched movie's TMDB poster."""
     is_collection: bool
     tmdb_id: int | None
     match_status: str
@@ -139,6 +142,8 @@ def _row(
         regular_price_cents=product.current_regular_price_cents,
         edition_url=product.edition_url,
         image_url=product.image_url,
+        cover_url=product.image_url
+        or (TMDB_POSTER_URL.format(path=meta.poster_path) if meta and meta.poster_path else None),
         is_collection=product.is_collection,
         tmdb_id=product.tmdb_id,
         match_status=status or ("not_applicable" if product.is_collection else "pending"),

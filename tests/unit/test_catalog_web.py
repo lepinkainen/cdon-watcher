@@ -451,3 +451,19 @@ def test_offers_api_follows_the_catalogue_contract(client, engine):
     assert heat["items"][0]["availability"] == "out_of_stock"
     assert client.get("/api/v2/offers").json() == {"offers": {}}
     assert client.get("/api/v2/offers?tmdb_id=abc").status_code == 422
+
+
+def test_rows_show_store_cover_else_tmdb_poster(client, engine):
+    seed(engine, [product("1", "No cover", price=900), product("2", "Has cover", price=950)])
+    with Session(engine) as session:
+        session.exec(
+            select(StoreProduct).where(StoreProduct.product_id == "2")
+        ).one().image_url = "https://store.test/cover.jpg"
+        session.commit()
+    html = client.get("/").text
+    assert html.count('<td class="thumb"><a') == 1
+    assert 'src="https://store.test/cover.jpg"' in html
+    matched(engine, {"1": 949})
+    html = client.get("/").text
+    assert 'src="https://image.tmdb.org/t/p/w154/p.jpg"' in html
+    assert 'class="queue-cover" src="https://store.test/cover.jpg"' in client.get("/queue").text

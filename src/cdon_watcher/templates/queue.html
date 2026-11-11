@@ -6,6 +6,7 @@
 {% if items %}
 {% for row, candidates in items %}
 <section class="queue-item" data-product-id="{{ row.id }}">
+  {% if row.cover_url %}<img class="queue-cover" src="{{ row.cover_url }}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% endif %}
   <h3>{{ row.raw_title }} <span class="tag muted">{{ row.match_status }}</span></h3>
   <p class="meta">{{ row.store_name }} · {{ row.format_label }} · {{ row.price_cents | euros }} · <a href="{{ row.edition_url }}" target="_blank" rel="noopener">store page</a></p>
   <ul class="candidates">

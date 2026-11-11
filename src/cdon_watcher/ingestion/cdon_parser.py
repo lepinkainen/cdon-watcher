@@ -10,8 +10,11 @@ from .contract import Availability, Condition, ParsedProduct, ParseError
 from .normalize import amount_to_cents, clean_title
 from .stores import cdon_article_format, cdon_article_media, cdon_articles
 
-PARSER_VERSION = "cdon-1"
+PARSER_VERSION = "cdon-2"
 BASE_URL = "https://cdon.fi/"
+IMAGE_URL = "https://images.cdon.com/images/f_auto/t_600x600/{image}/{name}"
+"""CDON's own image CDN, as its pages use it: a 600 px WebP instead of the original."""
+_IMAGE_ID = re.compile(r"[\w-]+/[0-9a-f]+/[0-9a-f]+")
 
 
 def _condition(article: dict[str, Any]) -> tuple[Condition, str | None]:
@@ -25,6 +28,16 @@ def _condition(article: dict[str, Any]) -> tuple[Condition, str | None]:
                 return Condition.USED, raw
             return Condition.UNKNOWN, raw
     return Condition.UNKNOWN, None
+
+
+def _image_url(article: dict[str, Any], slug: str) -> str | None:
+    images = article.get("images") or []
+    first = images[0] if images and isinstance(images[0], dict) else {}
+    image_id = str(first.get("imageValue") or "")
+    if _IMAGE_ID.fullmatch(image_id):
+        name = re.sub(r"-[0-9a-f]{16}$", "", slug) or "cover"
+        return IMAGE_URL.format(image=image_id, name=name)
+    return str(first["url"]) if first.get("url") else None
 
 
 def _availability(article: dict[str, Any]) -> tuple[Availability, str | None]:
@@ -92,10 +105,7 @@ class CdonParser:
         condition, condition_raw = _condition(article)
         availability, availability_raw = _availability(article)
         stock = article.get("stock")
-        images = article.get("images") or []
-        image_url = None
-        if images and isinstance(images[0], dict) and images[0].get("url"):
-            image_url = str(images[0]["url"])
+        image_url = _image_url(article, slug)
         return ParsedProduct(
             store=self.store,
             product_id=product_id,

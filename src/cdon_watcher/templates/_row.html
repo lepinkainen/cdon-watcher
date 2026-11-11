@@ -1,4 +1,5 @@
 <tr class="product" data-product-id="{{ row.id }}" data-tmdb-id="{{ row.tmdb_id or '' }}">
+  <td class="thumb">{% if row.cover_url %}<a href="{{ row.edition_url }}" target="_blank" rel="noopener" tabindex="-1"><img src="{{ row.cover_url }}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></a>{% endif %}</td>
   <td class="title">
     <a href="{{ row.edition_url }}" target="_blank" rel="noopener">{{ row.title }}</a>
     {% if row.title != row.raw_title %}<span class="raw">{{ row.raw_title }}</span>{% endif %}

@@ -195,8 +195,7 @@ p.empty {
 p.warn {
   color: var(--warn);
 }
-section.queue-item,
-section.watch-entry {
+section.queue-item {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -227,6 +226,28 @@ img.cover {
   max-width: 160px;
   float: right;
   margin: 0 0 1rem 1rem;
+}
+td.thumb {
+  width: 48px;
+  padding-right: 0;
+}
+td.thumb img {
+  display: block;
+  width: 48px;
+  height: 64px;
+  object-fit: contain;
+  background: #f3f4f6;
+  border-radius: 3px;
+}
+img.queue-cover {
+  float: left;
+  width: 72px;
+  max-height: 100px;
+  object-fit: contain;
+  margin: 0.25rem 0.75rem 0.25rem 0;
+}
+section.queue-item {
+  overflow: hidden;
 }
 tr.product.gone {
   opacity: 0.35;

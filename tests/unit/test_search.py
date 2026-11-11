@@ -1,6 +1,7 @@
 """Wishlist searches: adapters, parsers, archive, import, matching, refresh. No network."""
 
 import gzip
+import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import Mock
@@ -501,3 +502,13 @@ def test_search_command_path_searches_imports_and_respects_the_cap(tmp_path, mon
     assert [t.tmdb_id for t in second][0] != [t.tmdb_id for t in second][1]
     searched = report.searched.snapshots[0].search_tmdb_id
     assert second[-1].tmdb_id == searched  # least recently searched goes first
+
+
+def test_cdon_covers_use_the_resized_cdn_image_when_cdon_hosts_it():
+    products, _ = CdonParser().parse_search(fixture("cdon/search-oldboy.json.gz"))
+    urls = [p.image_url for p in products if p.image_url]
+    cdn = [u for u in urls if u.startswith("https://images.cdon.com/images/f_auto/t_600x600/")]
+    assert len(cdn) == 14
+    assert not any(re.search(r"-[0-9a-f]{16}$", u) for u in cdn)  # slug id dropped
+    # A seller image that CDON does not host stays as the seller's URL.
+    assert any(u.startswith("https://mediatronixs.com/") for u in urls)
