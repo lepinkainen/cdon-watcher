@@ -5,18 +5,18 @@ from datetime import UTC, datetime
 import pytest
 from sqlmodel import Session, select
 
-from cdon_watcher.catalog.db import open_catalog
-from cdon_watcher.catalog.importer import import_run
-from cdon_watcher.catalog.matching import (
+from shelfwatch.catalog.db import open_catalog
+from shelfwatch.catalog.importer import import_run
+from shelfwatch.catalog.matching import (
     match_pending,
     score_candidate,
     search_query,
     set_manual_match,
 )
-from cdon_watcher.catalog.models import MatchState, MovieMetadata, StoreProduct, UserPreference
-from cdon_watcher.catalog.preferences import apply
-from cdon_watcher.catalog.tmdb import Candidate, MovieDetails, TmdbError
-from cdon_watcher.ingestion.contract import (
+from shelfwatch.catalog.models import MatchState, MovieMetadata, StoreProduct, UserPreference
+from shelfwatch.catalog.preferences import apply
+from shelfwatch.catalog.tmdb import Candidate, MovieDetails, TmdbError
+from shelfwatch.ingestion.contract import (
     Availability,
     Condition,
     Format,
@@ -249,11 +249,11 @@ def test_store_filter_and_limit(engine):
 
 
 def test_match_cli_requires_api_key(tmp_path, monkeypatch):
-    from cdon_watcher.cli import main
-    from cdon_watcher.config import CONFIG
+    from shelfwatch.cli import main
+    from shelfwatch.config import CONFIG
 
     monkeypatch.setitem(CONFIG, "tmdb_api_key", "")
-    monkeypatch.setattr("sys.argv", ["cdon-watcher", "match", "--db", str(tmp_path / "c.db")])
+    monkeypatch.setattr("sys.argv", ["shelfwatch", "match", "--db", str(tmp_path / "c.db")])
     with pytest.raises(SystemExit) as error:
         main()
     assert error.value.code == 2

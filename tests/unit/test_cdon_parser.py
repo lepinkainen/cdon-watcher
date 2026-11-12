@@ -8,13 +8,13 @@ from unittest.mock import Mock
 import pytest
 from bs4 import BeautifulSoup
 
-from cdon_watcher.ingestion.archive import RawArchive
-from cdon_watcher.ingestion.cdon_parser import CdonParser
-from cdon_watcher.ingestion.contract import Availability, Condition, Format
-from cdon_watcher.ingestion.crawler import Crawler, Response
-from cdon_watcher.ingestion.normalize import clean_title
-from cdon_watcher.ingestion.parse import parse_run
-from cdon_watcher.ingestion.stores import CdonAdapter
+from shelfwatch.ingestion.archive import RawArchive
+from shelfwatch.ingestion.cdon_parser import CdonParser
+from shelfwatch.ingestion.contract import Availability, Condition, Format
+from shelfwatch.ingestion.crawler import Crawler, Response
+from shelfwatch.ingestion.normalize import clean_title
+from shelfwatch.ingestion.parse import parse_run
+from shelfwatch.ingestion.stores import CdonAdapter
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "cdon"
 URL = CdonAdapter.start_url

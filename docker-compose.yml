@@ -1,6 +1,6 @@
 # One container: web UI on :8080 and the daily refresh in-process.
 # To schedule from host cron instead, set RUN_SCHEDULER=false and run:
-#   docker compose exec app python -m cdon_watcher refresh
+#   docker compose exec app python -m shelfwatch refresh
 
 services:
   app:

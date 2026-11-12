@@ -10,10 +10,10 @@ import requests
 from bs4 import BeautifulSoup
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
-from cdon_watcher.ingestion.archive import RawArchive, RunManifest, StoreBusyError
-from cdon_watcher.ingestion.browser import BrowserFetcher
-from cdon_watcher.ingestion.crawler import Crawler, FetchError, HttpFetcher, Response
-from cdon_watcher.ingestion.stores import AxAdapter
+from shelfwatch.ingestion.archive import RawArchive, RunManifest, StoreBusyError
+from shelfwatch.ingestion.browser import BrowserFetcher
+from shelfwatch.ingestion.crawler import Crawler, FetchError, HttpFetcher, Response
+from shelfwatch.ingestion.stores import AxAdapter
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "ax"
 URL = AxAdapter.start_url
@@ -188,13 +188,13 @@ def test_store_lock_and_interrupted_run(tmp_path):
 
 
 def test_raw_cli_does_not_start_legacy_crawl(tmp_path, monkeypatch, capsys):
-    from cdon_watcher.cli import main
+    from shelfwatch.cli import main
 
     monkeypatch.setattr(
-        "sys.argv", ["cdon-watcher", "crawl-raw", "--store", "ax", "--raw-dir", str(tmp_path)]
+        "sys.argv", ["shelfwatch", "crawl-raw", "--store", "ax", "--raw-dir", str(tmp_path)]
     )
     monkeypatch.setattr(
-        "cdon_watcher.ingestion.crawler.HttpFetcher.__call__",
+        "shelfwatch.ingestion.crawler.HttpFetcher.__call__",
         lambda self, url: Response(url, 200, small_page()),
     )
     main()
@@ -220,12 +220,12 @@ def test_invalid_request_settings(tmp_path, attempts, delay):
 
 
 def test_raw_cli_incomplete_exit_preserves_archive(tmp_path, monkeypatch):
-    from cdon_watcher.cli import main
+    from shelfwatch.cli import main
 
     monkeypatch.setattr(
         "sys.argv",
         [
-            "cdon-watcher",
+            "shelfwatch",
             "crawl-raw",
             "--store",
             "ax",
@@ -236,7 +236,7 @@ def test_raw_cli_incomplete_exit_preserves_archive(tmp_path, monkeypatch):
         ],
     )
     monkeypatch.setattr(
-        "cdon_watcher.ingestion.crawler.HttpFetcher.__call__",
+        "shelfwatch.ingestion.crawler.HttpFetcher.__call__",
         lambda self, url: Response(url, 503, b"unavailable"),
     )
     with pytest.raises(SystemExit) as error:
@@ -265,7 +265,7 @@ def browser(page):
 
 
 def test_browser_resolved_challenge_returns_final_page_as_ok(monkeypatch):
-    monkeypatch.setattr("cdon_watcher.ingestion.browser.time.sleep", Mock())
+    monkeypatch.setattr("shelfwatch.ingestion.browser.time.sleep", Mock())
     page = Mock(url=URL)
     page.goto.return_value = Mock(status=403)
     page.title.side_effect = ["Just a moment...", "Elokuvat"]
@@ -288,7 +288,7 @@ def test_debug_log_per_page_and_failed_attempt(tmp_path, caplog):
             Response(URL + "?p2=2", 200, small_page(2, 2, "222")),
         ]
     )
-    with caplog.at_level("DEBUG", logger="cdon_watcher.ingestion.crawler"):
+    with caplog.at_level("DEBUG", logger="shelfwatch.ingestion.crawler"):
         crawler(tmp_path, fetch).crawl(AxAdapter())
     assert caplog.messages == [
         f"ax attempt 1/3 failed: HTTP 503 ({URL})",
@@ -301,16 +301,16 @@ def test_debug_log_per_page_and_failed_attempt(tmp_path, caplog):
 def test_verbose_flag_enables_debug_for_project_loggers(tmp_path, monkeypatch, flag, level):
     import logging
 
-    from cdon_watcher.cli import main
+    from shelfwatch.cli import main
 
-    project = logging.getLogger("cdon_watcher")
+    project = logging.getLogger("shelfwatch")
     monkeypatch.setattr(project, "level", logging.NOTSET)
     monkeypatch.setattr(
         "sys.argv",
-        ["cdon-watcher", "crawl-raw", "--store", "ax", "--raw-dir", str(tmp_path), *flag],
+        ["shelfwatch", "crawl-raw", "--store", "ax", "--raw-dir", str(tmp_path), *flag],
     )
     monkeypatch.setattr(
-        "cdon_watcher.ingestion.crawler.HttpFetcher.__call__",
+        "shelfwatch.ingestion.crawler.HttpFetcher.__call__",
         lambda self, url: Response(url, 200, small_page()),
     )
     main()

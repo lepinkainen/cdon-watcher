@@ -6,14 +6,14 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from cdon_watcher.catalog.catalogue import CatalogueError, SyncPayload, sync_catalogue
-from cdon_watcher.catalog.db import open_catalog
-from cdon_watcher.catalog.importer import import_run
-from cdon_watcher.catalog.matching import set_manual_match
-from cdon_watcher.catalog.models import MovieMetadata, StoreProduct
-from cdon_watcher.catalog.tmdb import Candidate, MovieDetails
-from cdon_watcher.config import CONFIG
-from cdon_watcher.ingestion.contract import (
+from shelfwatch.catalog.catalogue import CatalogueError, SyncPayload, sync_catalogue
+from shelfwatch.catalog.db import open_catalog
+from shelfwatch.catalog.importer import import_run
+from shelfwatch.catalog.matching import set_manual_match
+from shelfwatch.catalog.models import MovieMetadata, StoreProduct
+from shelfwatch.catalog.tmdb import Candidate, MovieDetails
+from shelfwatch.config import CONFIG
+from shelfwatch.ingestion.contract import (
     Availability,
     Condition,
     Format,
@@ -21,7 +21,7 @@ from cdon_watcher.ingestion.contract import (
     ParsedRun,
     ParsedSnapshot,
 )
-from cdon_watcher.web.app import create_app
+from shelfwatch.web.app import create_app
 
 NOW = datetime.now(UTC)
 
@@ -403,7 +403,7 @@ def test_regular_price_is_shown_struck_through(client, engine):
 
 
 def test_offers_api_follows_the_catalogue_contract(client, engine):
-    from cdon_watcher.catalog.models import Store, WishSearch
+    from shelfwatch.catalog.models import Store, WishSearch
 
     seed(
         engine,

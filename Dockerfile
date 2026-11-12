@@ -34,4 +34,4 @@ ENV PYTHONUNBUFFERED=1 \
 EXPOSE 8080
 VOLUME ["/app/data"]
 
-CMD ["python", "-m", "cdon_watcher", "web"]
+CMD ["python", "-m", "shelfwatch", "web"]

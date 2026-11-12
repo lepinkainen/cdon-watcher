@@ -1,7 +1,7 @@
 """In-process daily refresh. Runs inside the web app when RUN_SCHEDULER=true.
 
 One scheduling mechanism per deployment: either this, or host cron calling
-`python -m cdon_watcher refresh` with RUN_SCHEDULER unset.
+`python -m shelfwatch refresh` with RUN_SCHEDULER unset.
 """
 
 from __future__ import annotations
@@ -52,5 +52,5 @@ def start_scheduler() -> asyncio.Task[None] | None:
         "Starting scheduler (interval=%.1fh, initial_delay=%.0fs)", interval_hours, initial_delay
     )
     return asyncio.create_task(
-        _scheduler_loop(interval_hours * 3600.0, initial_delay), name="cdon-watcher-scheduler"
+        _scheduler_loop(interval_hours * 3600.0, initial_delay), name="shelfwatch-scheduler"
     )

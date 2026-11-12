@@ -28,7 +28,7 @@ class FetchError(Exception):
 class HttpFetcher:
     def __init__(self) -> None:
         self.session = requests.Session()
-        self.session.headers["User-Agent"] = "cdon-watcher/0.1 (private movie offer archive)"
+        self.session.headers["User-Agent"] = "shelfwatch/0.1 (private movie offer archive)"
 
     def __call__(self, url: str) -> Response:
         # Archive redirects as failures instead of silently fetching outside the scope.

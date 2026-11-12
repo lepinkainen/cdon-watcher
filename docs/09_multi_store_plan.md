@@ -6,7 +6,7 @@ day; this is the v1 spec. All seven implementation steps are done as of
 removed. Remaining v1 work is operational: run it, tune thresholds, fix
 whatever the live tests catch.
 
-The standalone command `uv run python -m cdon_watcher crawl-raw --store ax`
+The standalone command `uv run python -m shelfwatch crawl-raw --store ax`
 saves offer listing responses under `data/raw/ax/<run>/`, without database
 imports or TMDB calls. Use `--raw-dir` to select another archive directory.
 Requests default to a two-second delay and three attempts per page; `--delay`
@@ -15,14 +15,14 @@ and return exit code 1. A concurrent crawl for the same store returns exit code 
 The manifest records discovery counts, edition links, failures, and response
 provenance. Saved fixtures and offline tests cover the first and last offer pages.
 
-`uv run python -m cdon_watcher parse-raw --store ax [--run N] [--all-formats]`
+`uv run python -m shelfwatch parse-raw --store ax [--run N] [--all-formats]`
 parses an archived run offline into `data/raw/ax/<run>/parsed.json` using the
 shared contract in `ingestion/contract.py` (`ParsedProduct`, integer cents,
 normalized format/condition/availability with raw text kept). Latest run by
 default; DVD and unknown formats are dropped unless `--all-formats`. Row-level
 parse errors are recorded, never fatal. Reparsing overwrites `parsed.json` only.
 
-`uv run python -m cdon_watcher import-run --store ax|cdon [--run N] [--db PATH]`
+`uv run python -m shelfwatch import-run --store ax|cdon [--run N] [--db PATH]`
 imports `parsed.json` into the catalog tables (`stores`, `crawl_runs`,
 `store_products`, `price_observations`, versioned through `schema_version`).
 `crawl-raw --store cdon --max-pages N` crawls CDON through headless Chromium.
@@ -33,7 +33,7 @@ The rendered category listing embeds `__NEXT_DATA__` with price, stock count,
 condition, format property and URL for every article, which covers v1. CDON is
 therefore listing-only through Playwright; no product pages are fetched.
 
-`uv run python -m cdon_watcher match [--store ax|cdon] [--limit N]` runs TMDB
+`uv run python -m shelfwatch match [--store ax|cdon] [--limit N]` runs TMDB
 matching (schema v2: `movie_metadata`, `match_states`). One search request per
 product, details fetched only for accepted matches. Status values: `pending`,
 `auto`, `manual`, `rejected`, `ambiguous`, `unmatched`, `not_applicable`

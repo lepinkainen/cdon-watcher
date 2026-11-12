@@ -12,15 +12,15 @@ task test-live               # Live store shape tests (network; Chromium for CDO
 task lint                    # ruff check + ruff format --check + mypy src + npx prettier --check
 task lint-fix                # ruff + prettier auto-fix
 
-uv run python -m cdon_watcher web                      # Web app at :8080
-uv run python -m cdon_watcher refresh [--store ax|cdon|mymovies] # crawl → parse → import → match (-v: per-page progress)
-uv run python -m cdon_watcher refresh --search-only   # sync + wishlist searches only, no category crawl
-uv run python -m cdon_watcher crawl-raw --store ax     # Stage 1 only: archive listing pages
-uv run python -m cdon_watcher parse-raw --store ax     # Stage 2 only: parsed.json from latest run
-uv run python -m cdon_watcher import-run --store ax    # Stage 3 only: import parsed.json
-uv run python -m cdon_watcher match                    # Stage 4 only: TMDB matching
-uv run python -m cdon_watcher sync                     # Pull owned + wanted from moviecatalog
-uv run python -m cdon_watcher search --store cdon      # Wishlist searches only (+ import, match)
+uv run python -m shelfwatch web                      # Web app at :8080
+uv run python -m shelfwatch refresh [--store ax|cdon|mymovies] # crawl → parse → import → match (-v: per-page progress)
+uv run python -m shelfwatch refresh --search-only   # sync + wishlist searches only, no category crawl
+uv run python -m shelfwatch crawl-raw --store ax     # Stage 1 only: archive listing pages
+uv run python -m shelfwatch parse-raw --store ax     # Stage 2 only: parsed.json from latest run
+uv run python -m shelfwatch import-run --store ax    # Stage 3 only: import parsed.json
+uv run python -m shelfwatch match                    # Stage 4 only: TMDB matching
+uv run python -m shelfwatch sync                     # Pull owned + wanted from moviecatalog
+uv run python -m shelfwatch search --store cdon      # Wishlist searches only (+ import, match)
 
 # Run one test
 PYTHONPATH=./src uv run pytest tests/unit/test_file.py -k "test_name"

@@ -1,4 +1,4 @@
-"""Entry point for running cdon_watcher as a module."""
+"""Entry point for running shelfwatch as a module."""
 
 from .cli import main
 

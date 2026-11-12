@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-This guide provides solutions to common issues encountered when using CDON Watcher, including setup problems, runtime errors, and performance issues.
+This guide provides solutions to common issues encountered when using Shelfwatch, including setup problems, runtime errors, and performance issues.
 
 ## Quick Diagnosis
 
@@ -22,7 +22,7 @@ curl -s http://localhost:8080/api/stats | jq .
 sqlite3 data/cdon_movies.db "SELECT COUNT(*) FROM movies;"
 
 # Test scraping
-uv run python -c "from cdon_watcher.cdon_scraper import CDONScraper; print('Import OK')"
+uv run python -c "from shelfwatch.cdon_scraper import CDONScraper; print('Import OK')"
 ```
 
 ## Installation Issues
@@ -320,7 +320,7 @@ podman-compose up -d
 
    ```bash
    uv run python -c "
-   from cdon_watcher.product_parser import ProductParser
+   from shelfwatch.product_parser import ProductParser
    parser = ProductParser()
    # Test with known product URL
    "
@@ -700,7 +700,7 @@ ssl.SSLCertVerificationError
 
    ```python
    python -c "
-   from cdon_watcher.config import CONFIG
+   from shelfwatch.config import CONFIG
    print('Configuration loaded successfully')
    for key, value in CONFIG.items():
        print(f'{key}: {value}')
@@ -955,4 +955,4 @@ if [ $DISK_USAGE -gt 90 ]; then
 fi
 ```
 
-This comprehensive troubleshooting guide should help resolve most common issues with CDON Watcher. If you encounter problems not covered here, please check the GitHub repository for similar issues or create a new issue with detailed information.
+This comprehensive troubleshooting guide should help resolve most common issues with Shelfwatch. If you encounter problems not covered here, please check the GitHub repository for similar issues or create a new issue with detailed information.

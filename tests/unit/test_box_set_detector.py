@@ -2,7 +2,7 @@
 
 import pytest
 
-from cdon_watcher.box_set_detector import is_box_set
+from shelfwatch.box_set_detector import is_box_set
 
 
 class TestIsBoxSet:

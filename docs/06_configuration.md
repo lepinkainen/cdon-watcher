@@ -1,10 +1,10 @@
 # Configuration Guide
 
-This document provides comprehensive documentation of all configuration options available in CDON Watcher, including environment variables, configuration files, and runtime settings.
+This document provides comprehensive documentation of all configuration options available in Shelfwatch, including environment variables, configuration files, and runtime settings.
 
 ## Configuration Overview
 
-CDON Watcher uses **environment variables** as the primary configuration mechanism. Configuration is loaded from:
+Shelfwatch uses **environment variables** as the primary configuration mechanism. Configuration is loaded from:
 
 1. **Environment variables** (highest priority)
 2. **`.env` file** in the project root
@@ -226,7 +226,7 @@ Configuration values are loaded in this order (last wins):
 ### Runtime Configuration
 
 ```python
-from cdon_watcher.config import CONFIG
+from shelfwatch.config import CONFIG
 
 # Access configuration values
 db_path = CONFIG["db_path"]
@@ -245,7 +245,7 @@ import os
 os.environ["CHECK_INTERVAL_HOURS"] = "2"
 
 # Reload configuration
-from cdon_watcher.config import load_config
+from shelfwatch.config import load_config
 
 CONFIG = load_config()
 ```
@@ -271,7 +271,7 @@ DISCORD_WEBHOOK=https://discord.com/api/webhooks/123456789012345678/AbCdEfGhIjKl
 # Test webhook manually
 curl -X POST $DISCORD_WEBHOOK \
   -H "Content-Type: application/json" \
-  -d '{"content": "Test notification from CDON Watcher"}'
+  -d '{"content": "Test notification from Shelfwatch"}'
 ```
 
 ## TMDB Integration Setup
@@ -282,7 +282,7 @@ curl -X POST $DISCORD_WEBHOOK \
 2. **Request API Key**: Settings → API → Request API Key
 3. **Fill Application Form**:
    - Type of use: Personal
-   - Application name: CDON Watcher
+   - Application name: Shelfwatch
    - Application URL: Your local URL or repository
 
 ### Configuration
@@ -293,7 +293,7 @@ TMDB_API_KEY=your-actual-api-key-here
 
 ### TMDB Features
 
-When configured, CDON Watcher will:
+When configured, Shelfwatch will:
 
 - **Fetch movie metadata** from TMDB
 - **Download poster images** for better UI
@@ -306,7 +306,7 @@ When configured, CDON Watcher will:
 
 ```env
 # Custom database path
-DB_PATH=/var/lib/cdon-watcher/movies.db
+DB_PATH=/var/lib/shelfwatch/movies.db
 
 # Network database (requires SQLite network driver)
 DB_PATH=sqlite:////path/to/database.db
@@ -467,14 +467,14 @@ echo $DISCORD_WEBHOOK | grep -E "https://discord.com/api/webhooks/[0-9]+/[a-zA-Z
 
 ```bash
 # Show current configuration
-python -c "from cdon_watcher.config import CONFIG; import json; print(json.dumps(CONFIG, indent=2))"
+python -c "from shelfwatch.config import CONFIG; import json; print(json.dumps(CONFIG, indent=2))"
 
 # Test configuration loading
-python -c "from cdon_watcher.config import load_config; print(load_config())"
+python -c "from shelfwatch.config import load_config; print(load_config())"
 
 # Validate configuration
 python -c "
-from cdon_watcher.config import CONFIG
+from shelfwatch.config import CONFIG
 errors = []
 if CONFIG['discord_webhook'] and not CONFIG['discord_webhook'].startswith('https://discord.com/'):
     errors.append('Invalid DISCORD_WEBHOOK')

@@ -6,16 +6,16 @@ from pathlib import Path
 import pytest
 from bs4 import BeautifulSoup
 
-from cdon_watcher.ingestion.archive import RawArchive
-from cdon_watcher.ingestion.ax_parser import (
+from shelfwatch.ingestion.archive import RawArchive
+from shelfwatch.ingestion.ax_parser import (
     AxParser,
     clean_title,
     parse_availability,
     parse_format,
     parse_price_cents,
 )
-from cdon_watcher.ingestion.contract import Availability, Condition, Format, ParsedRun
-from cdon_watcher.ingestion.parse import load_parsed, parse_run
+from shelfwatch.ingestion.contract import Availability, Condition, Format, ParsedRun
+from shelfwatch.ingestion.parse import load_parsed, parse_run
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "ax"
 
@@ -270,11 +270,11 @@ def test_parse_run_without_runs_raises(tmp_path):
 
 
 def test_parse_raw_cli(tmp_path, monkeypatch, capsys):
-    from cdon_watcher.cli import main
+    from shelfwatch.cli import main
 
     archived_run(tmp_path, {"https://www.levykauppax.fi/leffat/offer/": fixture()})
     monkeypatch.setattr(
-        "sys.argv", ["cdon-watcher", "parse-raw", "--store", "ax", "--raw-dir", str(tmp_path)]
+        "sys.argv", ["shelfwatch", "parse-raw", "--store", "ax", "--raw-dir", str(tmp_path)]
     )
     main()
     out = capsys.readouterr().out

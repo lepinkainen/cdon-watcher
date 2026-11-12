@@ -8,13 +8,13 @@ from unittest.mock import Mock
 import pytest
 from sqlmodel import Session, select
 
-from cdon_watcher.catalog.db import open_catalog
-from cdon_watcher.catalog.importer import import_run
-from cdon_watcher.catalog.models import StoreProduct
-from cdon_watcher.ingestion.archive import RawArchive
-from cdon_watcher.ingestion.contract import Availability, Condition, Format
-from cdon_watcher.ingestion.crawler import Crawler, Response
-from cdon_watcher.ingestion.mymovies import (
+from shelfwatch.catalog.db import open_catalog
+from shelfwatch.catalog.importer import import_run
+from shelfwatch.catalog.models import StoreProduct
+from shelfwatch.ingestion.archive import RawArchive
+from shelfwatch.ingestion.contract import Availability, Condition, Format
+from shelfwatch.ingestion.crawler import Crawler, Response
+from shelfwatch.ingestion.mymovies import (
     AJAX_URL,
     USER_AGENT,
     MyMoviesAdapter,
@@ -23,9 +23,9 @@ from cdon_watcher.ingestion.mymovies import (
     page_url,
     parse_url,
 )
-from cdon_watcher.ingestion.mymovies_parser import MyMoviesParser
-from cdon_watcher.ingestion.parse import parse_run
-from cdon_watcher.ingestion.search import MyMoviesSearchAdapter, make_search_adapter
+from shelfwatch.ingestion.mymovies_parser import MyMoviesParser
+from shelfwatch.ingestion.parse import parse_run
+from shelfwatch.ingestion.search import MyMoviesSearchAdapter, make_search_adapter
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "mymovies"
 START = MyMoviesAdapter.start_url

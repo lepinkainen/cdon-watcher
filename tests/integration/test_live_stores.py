@@ -8,17 +8,17 @@ parser that returns only errors, or a challenge page that never resolves.
 import pytest
 import requests
 
-from cdon_watcher.ingestion.ax_parser import AxParser
-from cdon_watcher.ingestion.cdon_parser import CdonParser
-from cdon_watcher.ingestion.crawler import HttpFetcher
-from cdon_watcher.ingestion.mymovies import MyMoviesAdapter, MyMoviesFetcher
-from cdon_watcher.ingestion.mymovies_parser import MyMoviesParser
-from cdon_watcher.ingestion.search import (
+from shelfwatch.ingestion.ax_parser import AxParser
+from shelfwatch.ingestion.cdon_parser import CdonParser
+from shelfwatch.ingestion.crawler import HttpFetcher
+from shelfwatch.ingestion.mymovies import MyMoviesAdapter, MyMoviesFetcher
+from shelfwatch.ingestion.mymovies_parser import MyMoviesParser
+from shelfwatch.ingestion.search import (
     AxSearchAdapter,
     CdonSearchAdapter,
     MyMoviesSearchAdapter,
 )
-from cdon_watcher.ingestion.stores import AxAdapter, CdonAdapter
+from shelfwatch.ingestion.stores import AxAdapter, CdonAdapter
 
 
 def _reachable(url: str) -> None:
@@ -49,7 +49,7 @@ def test_ax_first_offer_page_shape():
 @pytest.mark.timeout(180)
 def test_cdon_first_listing_page_shape():
     _reachable("https://cdon.fi/")
-    from cdon_watcher.ingestion.browser import BrowserFetcher
+    from shelfwatch.ingestion.browser import BrowserFetcher
 
     fetcher = BrowserFetcher()
     try:
@@ -87,7 +87,7 @@ def test_ax_search_page_shape():
 @pytest.mark.timeout(180)
 def test_cdon_search_page_shape():
     _reachable("https://cdon.fi/")
-    from cdon_watcher.ingestion.browser import BrowserFetcher
+    from shelfwatch.ingestion.browser import BrowserFetcher
 
     adapter = CdonSearchAdapter()
     fetcher = BrowserFetcher()

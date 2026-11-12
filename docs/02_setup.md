@@ -1,6 +1,6 @@
 # Setup and Installation Guide
 
-This guide covers the installation and setup of CDON Watcher for both development and production environments.
+This guide covers the installation and setup of Shelfwatch for both development and production environments.
 
 ## Prerequisites
 
@@ -28,8 +28,8 @@ This guide covers the installation and setup of CDON Watcher for both developmen
 brew install podman podman-compose
 
 # 2. Clone repository
-git clone https://github.com/lepinkainen/cdon-watcher.git
-cd cdon-watcher
+git clone https://github.com/lepinkainen/shelfwatch.git
+cd shelfwatch
 
 # 3. Copy environment configuration
 cp .env.example .env
@@ -49,8 +49,8 @@ curl -fsSL https://get.docker.com | sh
 sudo systemctl start docker
 
 # 2. Clone repository
-git clone https://github.com/lepinkainen/cdon-watcher.git
-cd cdon-watcher
+git clone https://github.com/lepinkainen/shelfwatch.git
+cd shelfwatch
 
 # 3. Copy environment configuration
 cp .env.example .env
@@ -68,8 +68,8 @@ cp .env.example .env
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 2. Clone repository
-git clone https://github.com/lepinkainen/cdon-watcher.git
-cd cdon-watcher
+git clone https://github.com/lepinkainen/shelfwatch.git
+cd shelfwatch
 
 # 3. Install dependencies
 uv sync --extra test --extra dev
@@ -81,7 +81,7 @@ uv run playwright install chromium
 cp .env.example .env
 
 # 6. Run the application
-uv run python -m cdon_watcher web
+uv run python -m shelfwatch web
 ```
 
 #### Using pip/venv (Traditional)
@@ -92,8 +92,8 @@ python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # 2. Clone repository
-git clone https://github.com/lepinkainen/cdon-watcher.git
-cd cdon-watcher
+git clone https://github.com/lepinkainen/shelfwatch.git
+cd shelfwatch
 
 # 3. Install dependencies
 pip install -e .[test,dev]
@@ -105,7 +105,7 @@ playwright install chromium
 cp .env.example .env
 
 # 6. Run the application
-python -m cdon_watcher web
+python -m shelfwatch web
 ```
 
 ## Environment Configuration
@@ -178,7 +178,7 @@ Populate your database with movie data:
 podman-compose run --rm crawler
 
 # Or locally
-uv run python -m cdon_watcher crawl --max-pages 5
+uv run python -m shelfwatch crawl --max-pages 5
 ```
 
 ### 3. Access Web Dashboard
@@ -224,7 +224,7 @@ uv sync --extra test
 uv run pytest
 
 # Run with coverage
-uv run pytest --cov=cdon_watcher
+uv run pytest --cov=shelfwatch
 
 # Run integration tests
 uv run pytest tests/integration/
@@ -292,13 +292,13 @@ server {
 
     # Static files
     location /static/ {
-        alias /path/to/cdon-watcher/src/cdon_watcher/static/;
+        alias /path/to/shelfwatch/src/shelfwatch/static/;
         expires 1y;
     }
 
     # Posters
     location /posters/ {
-        alias /path/to/cdon-watcher/data/posters/;
+        alias /path/to/shelfwatch/data/posters/;
         expires 30d;
     }
 }

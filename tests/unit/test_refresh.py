@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from cdon_watcher import refresh
-from cdon_watcher.catalog.db import open_catalog
-from cdon_watcher.catalog.models import StoreProduct
-from cdon_watcher.ingestion.crawler import Response
-from cdon_watcher.ingestion.stores import AxAdapter, CdonAdapter
+from shelfwatch import refresh
+from shelfwatch.catalog.db import open_catalog
+from shelfwatch.catalog.models import StoreProduct
+from shelfwatch.ingestion.crawler import Response
+from shelfwatch.ingestion.stores import AxAdapter, CdonAdapter
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
 
@@ -170,7 +170,7 @@ def test_unknown_store_rejected(tmp_path):
 
 
 def test_cli_refresh_reports(tmp_path, monkeypatch, capsys):
-    from cdon_watcher.cli import main
+    from shelfwatch.cli import main
 
     monkeypatch.setattr(
         refresh, "make_fetcher", lambda store: FakeFetcher(lambda url: one_row_ax())
@@ -196,7 +196,7 @@ def test_cli_refresh_reports(tmp_path, monkeypatch, capsys):
 
 
 def test_cli_refresh_search_only_skips_categories(monkeypatch, capsys):
-    from cdon_watcher import cli
+    from shelfwatch import cli
 
     calls = []
     monkeypatch.setattr(cli, "refresh_all", lambda stores, **kw: calls.append((stores, kw)) or [])
@@ -207,7 +207,7 @@ def test_cli_refresh_search_only_skips_categories(monkeypatch, capsys):
 
 
 def test_cli_refresh_search_only_conflicts_with_no_search(monkeypatch):
-    from cdon_watcher import cli
+    from shelfwatch import cli
 
     monkeypatch.setattr("sys.argv", ["x", "refresh", "--search-only", "--no-search"])
     with pytest.raises(SystemExit):

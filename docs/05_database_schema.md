@@ -1,10 +1,10 @@
 # Database Schema Documentation
 
-This document provides comprehensive documentation of the CDON Watcher database schema, including all tables, relationships, indexes, and data models.
+This document provides comprehensive documentation of the Shelfwatch database schema, including all tables, relationships, indexes, and data models.
 
 ## Overview
 
-CDON Watcher uses **SQLite** as its database backend with **SQLModel** (SQLAlchemy + Pydantic) for type-safe database operations. The database file is typically located at `./data/cdon_movies.db`.
+Shelfwatch uses **SQLite** as its database backend with **SQLModel** (SQLAlchemy + Pydantic) for type-safe database operations. The database file is typically located at `./data/cdon_movies.db`.
 
 ## Database Configuration
 

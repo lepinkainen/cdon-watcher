@@ -10,18 +10,18 @@ import pytest
 import requests
 from sqlmodel import Session, select
 
-from cdon_watcher import refresh
-from cdon_watcher.catalog.catalogue import SyncPayload, sync_catalogue
-from cdon_watcher.catalog.db import open_catalog
-from cdon_watcher.catalog.importer import import_run
-from cdon_watcher.catalog.matching import match_pending, score_target
-from cdon_watcher.catalog.models import MatchState, SearchHit, StoreProduct, WishSearch
-from cdon_watcher.catalog.tmdb import Candidate, MovieDetails
-from cdon_watcher.ingestion.archive import RawArchive
-from cdon_watcher.ingestion.ax_parser import AxParser
-from cdon_watcher.ingestion.browser import BrowserFetcher
-from cdon_watcher.ingestion.cdon_parser import CdonParser
-from cdon_watcher.ingestion.contract import (
+from shelfwatch import refresh
+from shelfwatch.catalog.catalogue import SyncPayload, sync_catalogue
+from shelfwatch.catalog.db import open_catalog
+from shelfwatch.catalog.importer import import_run
+from shelfwatch.catalog.matching import match_pending, score_target
+from shelfwatch.catalog.models import MatchState, SearchHit, StoreProduct, WishSearch
+from shelfwatch.catalog.tmdb import Candidate, MovieDetails
+from shelfwatch.ingestion.archive import RawArchive
+from shelfwatch.ingestion.ax_parser import AxParser
+from shelfwatch.ingestion.browser import BrowserFetcher
+from shelfwatch.ingestion.cdon_parser import CdonParser
+from shelfwatch.ingestion.contract import (
     SEARCH_SCOPE,
     Availability,
     Condition,
@@ -30,10 +30,10 @@ from cdon_watcher.ingestion.contract import (
     ParsedRun,
     ParsedSnapshot,
 )
-from cdon_watcher.ingestion.crawler import FetchError, Response
-from cdon_watcher.ingestion.normalize import clean_title
-from cdon_watcher.ingestion.parse import latest_run_id, parse_run
-from cdon_watcher.ingestion.search import (
+from shelfwatch.ingestion.crawler import FetchError, Response
+from shelfwatch.ingestion.normalize import clean_title
+from shelfwatch.ingestion.parse import latest_run_id, parse_run
+from shelfwatch.ingestion.search import (
     AxSearchAdapter,
     CdonSearchAdapter,
     Searcher,

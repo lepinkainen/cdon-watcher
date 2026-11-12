@@ -1,8 +1,8 @@
-# CDON Watcher - Project Overview
+# Shelfwatch - Project Overview
 
-## What is CDON Watcher?
+## What is Shelfwatch?
 
-CDON Watcher is a comprehensive price tracking system specifically designed for Blu-ray and 4K Blu-ray movies available on CDON.fi (Finland's largest online retailer). The system combines web scraping technology with a modern web dashboard to help users track movie prices and get notified about price drops.
+Shelfwatch is a comprehensive price tracking system specifically designed for Blu-ray and 4K Blu-ray movies available on CDON.fi (Finland's largest online retailer). The system combines web scraping technology with a modern web dashboard to help users track movie prices and get notified about price drops.
 
 ## Key Features
 
@@ -51,7 +51,7 @@ CDON Watcher is a comprehensive price tracking system specifically designed for 
 
 ### Hybrid Scraping Architecture
 
-CDON Watcher uses a sophisticated **hybrid scraping approach** that combines the best of both worlds:
+Shelfwatch uses a sophisticated **hybrid scraping approach** that combines the best of both worlds:
 
 #### **Listing Crawler (Playwright)**
 

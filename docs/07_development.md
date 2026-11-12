@@ -1,6 +1,6 @@
 # Development Guide
 
-This document provides comprehensive guidelines for developing CDON Watcher, including coding standards, testing practices, contribution workflows, and development environment setup.
+This document provides comprehensive guidelines for developing Shelfwatch, including coding standards, testing practices, contribution workflows, and development environment setup.
 
 ## Development Environment Setup
 
@@ -15,8 +15,8 @@ This document provides comprehensive guidelines for developing CDON Watcher, inc
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/lepinkainen/cdon-watcher.git
-cd cdon-watcher
+git clone https://github.com/lepinkainen/shelfwatch.git
+cd shelfwatch
 
 # 2. Install dependencies with uv
 uv sync --extra test --extra dev
@@ -193,19 +193,19 @@ movies = []  # Create empty list for movies
 #### Custom Exceptions
 
 ```python
-class CDONWatcherError(Exception):
-    """Base exception for CDON Watcher."""
+class ShelfwatchError(Exception):
+    """Base exception for Shelfwatch."""
 
     pass
 
 
-class ScrapingError(CDONWatcherError):
+class ScrapingError(ShelfwatchError):
     """Raised when scraping fails."""
 
     pass
 
 
-class DatabaseError(CDONWatcherError):
+class DatabaseError(ShelfwatchError):
     """Raised when database operations fail."""
 
     pass
@@ -252,8 +252,8 @@ tests/
 import pytest
 from unittest.mock import Mock, AsyncMock
 
-from cdon_watcher.cdon_scraper import CDONScraper
-from cdon_watcher.models import Movie
+from shelfwatch.cdon_scraper import CDONScraper
+from shelfwatch.models import Movie
 
 
 class TestCDONScraper:
@@ -302,8 +302,8 @@ import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
-from cdon_watcher.database.connection import init_db
-from cdon_watcher.models import SQLModel
+from shelfwatch.database.connection import init_db
+from shelfwatch.models import SQLModel
 
 
 @pytest.fixture
@@ -347,7 +347,7 @@ def sample_movie():
 import pytest
 from unittest.mock import patch
 
-from cdon_watcher.cdon_scraper import CDONScraper
+from shelfwatch.cdon_scraper import CDONScraper
 
 
 class TestCDONScraperIntegration:
@@ -402,7 +402,7 @@ uv run pytest tests/unit/
 uv run pytest tests/integration/
 
 # Run with coverage
-uv run pytest --cov=cdon_watcher --cov-report=html
+uv run pytest --cov=shelfwatch --cov-report=html
 
 # Run specific test
 uv run pytest tests/unit/test_scraper.py::TestCDONScraper::test_scrape_movie_success
@@ -518,7 +518,7 @@ Brief description of changes
 ### Project Structure
 
 ```
-src/cdon_watcher/
+src/shelfwatch/
 ├── __init__.py          # Package initialization
 ├── __main__.py          # Module entry point
 ├── add_test_case.py    # Helper script to add new test cases
@@ -752,18 +752,18 @@ LOGGING_CONFIG = {
         "console": {"class": "logging.StreamHandler", "formatter": "standard", "level": "INFO"},
         "file": {
             "class": "logging.FileHandler",
-            "filename": "cdon_watcher.log",
+            "filename": "shelfwatch.log",
             "formatter": "detailed",
             "level": "DEBUG",
         },
     },
     "loggers": {
-        "cdon_watcher": {"handlers": ["console", "file"], "level": "DEBUG", "propagate": False}
+        "shelfwatch": {"handlers": ["console", "file"], "level": "DEBUG", "propagate": False}
     },
 }
 
 dictConfig(LOGGING_CONFIG)
-logger = logging.getLogger("cdon_watcher")
+logger = logging.getLogger("shelfwatch")
 ```
 
 ### Debug Tools
@@ -854,7 +854,7 @@ jobs:
         run: uv sync --extra test --extra dev
 
       - name: Run tests
-        run: uv run pytest --cov=cdon_watcher --cov-report=xml
+        run: uv run pytest --cov=shelfwatch --cov-report=xml
 
       - name: Upload coverage
         uses: codecov/codecov-action@v3
@@ -890,7 +890,7 @@ jobs:
 ```python
 # pyproject.toml
 [project]
-name = "cdon-watcher"
+name = "shelfwatch"
 version = "1.0.0"
 ```
 

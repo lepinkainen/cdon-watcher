@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-from cdon_watcher.config import load_config
+from shelfwatch.config import load_config
 
 
 def test_defaults():

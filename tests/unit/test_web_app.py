@@ -2,8 +2,8 @@
 
 from fastapi.testclient import TestClient
 
-from cdon_watcher.config import CONFIG
-from cdon_watcher.web.app import create_app
+from shelfwatch.config import CONFIG
+from shelfwatch.web.app import create_app
 
 
 def test_routes_and_static(tmp_path, monkeypatch):

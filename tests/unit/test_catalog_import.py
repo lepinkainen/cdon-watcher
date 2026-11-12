@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlmodel import Session, select
 
-from cdon_watcher.catalog.db import (
+from shelfwatch.catalog.db import (
     CURRENT_VERSION,
     SchemaError,
     create_catalog_engine,
@@ -13,15 +13,15 @@ from cdon_watcher.catalog.db import (
     migrate,
     open_catalog,
 )
-from cdon_watcher.catalog.importer import import_run
-from cdon_watcher.catalog.models import (
+from shelfwatch.catalog.importer import import_run
+from shelfwatch.catalog.models import (
     CrawlRun,
     PriceObservation,
     SchemaVersion,
     Store,
     StoreProduct,
 )
-from cdon_watcher.ingestion.contract import (
+from shelfwatch.ingestion.contract import (
     Availability,
     Condition,
     Format,
@@ -214,7 +214,7 @@ def test_ineligible_products_are_skipped(engine):
 
 
 def test_import_cli(tmp_path, monkeypatch, capsys):
-    from cdon_watcher.cli import main
+    from shelfwatch.cli import main
 
     raw = tmp_path / "raw" / "ax" / "3"
     raw.mkdir(parents=True)
@@ -223,7 +223,7 @@ def test_import_cli(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(
         "sys.argv",
         [
-            "cdon-watcher",
+            "shelfwatch",
             "import-run",
             "--store",
             "ax",
@@ -239,12 +239,12 @@ def test_import_cli(tmp_path, monkeypatch, capsys):
 
 
 def test_import_cli_without_parsed_run_exits_2(tmp_path, monkeypatch):
-    from cdon_watcher.cli import main
+    from shelfwatch.cli import main
 
     (tmp_path / "raw" / "ax" / "1").mkdir(parents=True)
     monkeypatch.setattr(
         "sys.argv",
-        ["cdon-watcher", "import-run", "--store", "ax", "--raw-dir", str(tmp_path / "raw")],
+        ["shelfwatch", "import-run", "--store", "ax", "--raw-dir", str(tmp_path / "raw")],
     )
     with pytest.raises(SystemExit) as error:
         main()

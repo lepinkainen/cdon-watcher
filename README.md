@@ -1,4 +1,4 @@
-# cdon-watcher
+# shelfwatch
 
 Tracks Blu-ray and 4K UHD offers at three Finnish stores, [Levykauppa Äx](https://www.levykauppax.fi/),
 [CDON](https://cdon.fi/) and [MyMovies](https://www.mymovies.fi/), and shows the cheap ones in a small web app. Once a
@@ -35,8 +35,8 @@ Needs [uv](https://docs.astral.sh/uv/) and [Task](https://taskfile.dev/).
 ```bash
 task install                             # dependencies + Playwright Chromium
 cp .env.example .env                     # set TMDB_API_KEY, optionally MOVIECATALOG_URL
-uv run python -m cdon_watcher refresh    # first crawl
-uv run python -m cdon_watcher web        # http://localhost:8080
+uv run python -m shelfwatch refresh    # first crawl
+uv run python -m shelfwatch web        # http://localhost:8080
 ```
 
 CDON blocks plain HTTP, so its listings are fetched with headless Chromium.
@@ -53,7 +53,7 @@ docker compose up -d --build
 One container serves the web app on port 8080 and runs the refresh once a day.
 The database and saved listing pages live in the `data` volume. To schedule the
 refresh from host cron instead, set `RUN_SCHEDULER=false` and run
-`docker compose exec app python -m cdon_watcher refresh`.
+`docker compose exec app python -m shelfwatch refresh`.
 
 ## Configuration
 
@@ -72,11 +72,11 @@ The ones you are likely to set:
 ## Commands
 
 ```bash
-uv run python -m cdon_watcher refresh [--store ax|cdon|mymovies]   # sync, crawl, import, match
-uv run python -m cdon_watcher refresh --search-only        # sync + wishlist searches, no crawl
-uv run python -m cdon_watcher sync                        # pull lists from moviecatalog
-uv run python -m cdon_watcher search --store cdon         # wishlist searches only
-uv run python -m cdon_watcher match                       # TMDB matching only
+uv run python -m shelfwatch refresh [--store ax|cdon|mymovies]   # sync, crawl, import, match
+uv run python -m shelfwatch refresh --search-only        # sync + wishlist searches, no crawl
+uv run python -m shelfwatch sync                        # pull lists from moviecatalog
+uv run python -m shelfwatch search --store cdon         # wishlist searches only
+uv run python -m shelfwatch match                       # TMDB matching only
 ```
 
 `--help` on any command lists the rest, including the individual refresh stages.

@@ -1,6 +1,6 @@
 # Usage Guide
 
-This guide covers how to use CDON Watcher for price monitoring and management of your Blu-ray movie collection.
+This guide covers how to use Shelfwatch for price monitoring and management of your Blu-ray movie collection.
 
 ## Command Line Interface
 
@@ -31,7 +31,7 @@ podman-compose up -d web
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d web
 
 # Or locally (any environment)
-uv run python -m cdon_watcher web
+uv run python -m shelfwatch web
 ```
 
 #### Run Initial Crawl
@@ -44,44 +44,44 @@ podman-compose --profile crawler run --rm crawler
 docker-compose --profile crawler run --rm crawler
 
 # Or locally with default settings (fast mode)
-uv run python -m cdon_watcher crawl
+uv run python -m shelfwatch crawl
 
 # With custom page limit
-uv run python -m cdon_watcher crawl --max-pages 20
+uv run python -m shelfwatch crawl --max-pages 20
 
 # Different scan modes
-uv run python -m cdon_watcher crawl --scan-mode fast      # Quick scan (default)
-uv run python -m cdon_watcher crawl --scan-mode moderate  # Development scan
-uv run python -m cdon_watcher crawl --scan-mode slow      # Production scan
+uv run python -m shelfwatch crawl --scan-mode fast      # Quick scan (default)
+uv run python -m shelfwatch crawl --scan-mode moderate  # Development scan
+uv run python -m shelfwatch crawl --scan-mode slow      # Production scan
 
 # Dedicated development scan command
-uv run python -m cdon_watcher update-scan
+uv run python -m shelfwatch update-scan
 ```
 
 ### Scanning Modes
 
-CDON Watcher supports three scanning modes optimized for different use cases:
+Shelfwatch supports three scanning modes optimized for different use cases:
 
 #### Fast Scan (Default)
 
 - **Use Case**: Initial database population, one-time crawls
 - **Speed**: 2 seconds between category pages
 - **Best For**: Getting data quickly, development testing
-- **Command**: `uv run python -m cdon_watcher crawl` or `uv run python -m cdon_watcher crawl --scan-mode fast`
+- **Command**: `uv run python -m shelfwatch crawl` or `uv run python -m shelfwatch crawl --scan-mode fast`
 
 #### Moderate Scan
 
 - **Use Case**: Development database updates, quick refreshes
 - **Speed**: 3 minutes between category pages, 3 minutes between products
 - **Best For**: Updating test data without overwhelming the site
-- **Command**: `uv run python -m cdon_watcher crawl --scan-mode moderate` or `uv run python -m cdon_watcher update-scan`
+- **Command**: `uv run python -m shelfwatch crawl --scan-mode moderate` or `uv run python -m shelfwatch update-scan`
 
 #### Slow Scan (Production)
 
 - **Use Case**: Production monitoring, gentle crawling
 - **Speed**: 30 minutes between category pages, 30 minutes between products
 - **Best For**: Continuous production use without taxing CDON servers
-- **Command**: `uv run python -m cdon_watcher crawl --scan-mode slow`
+- **Command**: `uv run python -m shelfwatch crawl --scan-mode slow`
 
 #### Performance Estimates
 
@@ -109,7 +109,7 @@ task crawl-slow
 podman-compose up -d monitor
 
 # Or locally
-uv run python -m cdon_watcher monitor
+uv run python -m shelfwatch monitor
 ```
 
 ### Advanced CLI Usage
@@ -118,10 +118,10 @@ uv run python -m cdon_watcher monitor
 
 ```bash
 # Limit pages per category
-uv run python -m cdon_watcher crawl --max-pages 5
+uv run python -m shelfwatch crawl --max-pages 5
 
 # Custom environment variables
-MAX_PAGES_PER_CATEGORY=3 uv run python -m cdon_watcher crawl
+MAX_PAGES_PER_CATEGORY=3 uv run python -m shelfwatch crawl
 ```
 
 #### Monitor Options
@@ -130,10 +130,10 @@ The monitor runs continuously and checks prices every 6 hours by default. Config
 
 ```bash
 # Check every 2 hours
-CHECK_INTERVAL_HOURS=2 uv run python -m cdon_watcher monitor
+CHECK_INTERVAL_HOURS=2 uv run python -m shelfwatch monitor
 
 # Enable debug logging
-API_DEBUG=true uv run python -m cdon_watcher monitor
+API_DEBUG=true uv run python -m shelfwatch monitor
 ```
 
 ## Web Dashboard
@@ -284,7 +284,7 @@ curl -X DELETE http://localhost:8080/api/watchlist/MOVIE_ID
 
 ### Alert Types
 
-CDON Watcher generates alerts for:
+Shelfwatch generates alerts for:
 
 - **Price Drops**: When a movie price decreases
 - **Target Reached**: When current price drops to or below target

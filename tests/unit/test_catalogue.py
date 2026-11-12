@@ -8,7 +8,7 @@ import requests
 from sqlalchemy import inspect
 from sqlmodel import Session
 
-from cdon_watcher.catalog.catalogue import (
+from shelfwatch.catalog.catalogue import (
     CatalogueError,
     HttpCatalogueClient,
     SyncPayload,
@@ -17,7 +17,7 @@ from cdon_watcher.catalog.catalogue import (
     remember_want,
     sync_catalogue,
 )
-from cdon_watcher.catalog.db import CURRENT_VERSION, migrate, open_catalog
+from shelfwatch.catalog.db import CURRENT_VERSION, migrate, open_catalog
 
 PAYLOAD = {
     "owned": [

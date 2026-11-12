@@ -24,7 +24,7 @@ Then look at the evidence the last refresh left behind:
 ```bash
 ls data/raw/<store>/            # numbered runs; highest is latest
 cat data/raw/<store>/<run>/manifest.json | jq '.complete, .failures, .snapshots[].error'
-uv run python -m cdon_watcher parse-raw --store <store>   # re-parse offline; shows row errors
+uv run python -m shelfwatch parse-raw --store <store>   # re-parse offline; shows row errors
 ```
 
 `manifest.json` records every fetch (status, error, body file). `parsed.json`
@@ -43,7 +43,7 @@ error counts; a stale row there means the daily refresh is not importing.
 Plain HTTP works. Fetch one page and poke at it:
 
 ```bash
-curl -sA "cdon-watcher/0.1" "https://www.levykauppax.fi/leffat/offer/?p2=2" > /tmp/ax.html
+curl -sA "shelfwatch/0.1" "https://www.levykauppax.fi/leffat/offer/?p2=2" > /tmp/ax.html
 ```
 
 Shape the adapter expects (`ingestion/stores.py::AxAdapter`, `ax_parser.py`):
@@ -65,7 +65,7 @@ project's own fetcher:
 
 ```bash
 PYTHONPATH=./src uv run python - <<'PY'
-from cdon_watcher.ingestion.browser import BrowserFetcher
+from shelfwatch.ingestion.browser import BrowserFetcher
 f = BrowserFetcher(); r = f("https://cdon.fi/elokuvat/?page=2"); f.close()
 open("/tmp/cdon.html", "wb").write(r.body); print(r.status, len(r.body))
 PY
@@ -130,7 +130,7 @@ task build       # unit tests + lint
 task test-live   # the live shape tests
 ```
 
-Re-import the saved run without re-crawling: `uv run python -m cdon_watcher
+Re-import the saved run without re-crawling: `uv run python -m shelfwatch
 refresh --store <store> --skip-crawl`.
 
 ---

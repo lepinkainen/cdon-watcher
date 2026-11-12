@@ -137,7 +137,7 @@ def _cmd_web(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     port = CONFIG["api_port"]
     print(f"Starting web app on http://{host}:{port}")
     uvicorn.run(
-        "cdon_watcher.web.app:create_app",
+        "shelfwatch.web.app:create_app",
         factory=True,
         host=host,
         port=port,
@@ -236,7 +236,7 @@ def main() -> None:
     args = parser.parse_args()
     if getattr(args, "verbose", False):
         # Only our loggers: DEBUG on the root would flood with urllib3/asyncio noise.
-        logging.getLogger("cdon_watcher").setLevel(logging.DEBUG)
+        logging.getLogger("shelfwatch").setLevel(logging.DEBUG)
     command = COMMANDS.get(args.command)
     if command is None:
         parser.print_help()

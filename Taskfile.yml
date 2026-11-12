@@ -55,22 +55,22 @@ tasks:
   web:
     desc: Start the web app locally
     cmds:
-      - uv run python -m cdon_watcher web
+      - uv run python -m shelfwatch web
 
   refresh:
     desc: Crawl, parse, import and match every configured store
     cmds:
-      - uv run python -m cdon_watcher refresh
+      - uv run python -m shelfwatch refresh
 
   refresh-ax:
     desc: Refresh Levykauppa Äx only
     cmds:
-      - uv run python -m cdon_watcher refresh --store ax
+      - uv run python -m shelfwatch refresh --store ax
 
   refresh-cdon:
     desc: Refresh CDON only
     cmds:
-      - uv run python -m cdon_watcher refresh --store cdon
+      - uv run python -m shelfwatch refresh --store cdon
 
   docker-build:
     desc: Build the container image

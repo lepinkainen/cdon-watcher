@@ -1,6 +1,6 @@
 # API Reference
 
-This document provides comprehensive documentation for the CDON Watcher REST API, including all endpoints, request/response formats, and usage examples.
+This document provides comprehensive documentation for the Shelfwatch REST API, including all endpoints, request/response formats, and usage examples.
 
 ## Base URL
 
@@ -537,7 +537,7 @@ The API includes CORS (Cross-Origin Resource Sharing) support:
 import requests
 
 
-class CDONWatcherAPI:
+class ShelfwatchAPI:
     def __init__(self, base_url="http://localhost:8080"):
         self.base_url = base_url
 
@@ -561,7 +561,7 @@ class CDONWatcherAPI:
 
 
 # Usage
-api = CDONWatcherAPI()
+api = ShelfwatchAPI()
 stats = api.get_stats()
 movies = api.search_movies("Inception")
 api.add_to_watchlist("MOVIE_123", 19.99)
@@ -570,7 +570,7 @@ api.add_to_watchlist("MOVIE_123", 19.99)
 ### JavaScript Client
 
 ```javascript
-class CDONWatcherAPI {
+class ShelfwatchAPI {
   constructor(baseURL = 'http://localhost:8080') {
     this.baseURL = baseURL
   }
@@ -605,7 +605,7 @@ class CDONWatcherAPI {
 }
 
 // Usage
-const api = new CDONWatcherAPI()
+const api = new ShelfwatchAPI()
 api.getStats().then((stats) => console.log(stats))
 api.searchMovies('Batman').then((movies) => console.log(movies))
 ```
