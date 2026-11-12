@@ -13,7 +13,7 @@ task lint                    # ruff check + ruff format --check + mypy src + npx
 task lint-fix                # ruff + prettier auto-fix
 
 uv run python -m cdon_watcher web                      # Web app at :8080
-uv run python -m cdon_watcher refresh [--store ax|cdon] # crawl → parse → import → match (-v: per-page progress)
+uv run python -m cdon_watcher refresh [--store ax|cdon|mymovies] # crawl → parse → import → match (-v: per-page progress)
 uv run python -m cdon_watcher refresh --search-only   # sync + wishlist searches only, no category crawl
 uv run python -m cdon_watcher crawl-raw --store ax     # Stage 1 only: archive listing pages
 uv run python -m cdon_watcher parse-raw --store ax     # Stage 2 only: parsed.json from latest run
@@ -31,8 +31,9 @@ against a running server, not part of the pytest suite (`testpaths = ["tests"]`)
 
 ## What this is
 
-Single-user tracker of physical movie offers (Blu-ray, 4K UHD) at two stores:
-Levykauppa Äx (`/leffat/offer/`) and CDON (`/elokuvat/`). Daily refresh,
+Single-user tracker of physical movie offers (Blu-ray, 4K UHD) at three stores:
+Levykauppa Äx (`/leffat/offer/`), CDON (`/elokuvat/`) and MyMovies (in-stock
+catalogue). Daily refresh,
 read-mostly web UI, SQLite. No auth; runs locally or on a VPS behind Tailscale,
 in one Docker container. Spec: `docs/09_multi_store_plan.md` (phase 2 is the
 moviecatalog integration).
@@ -60,12 +61,12 @@ crawl-raw            parse-raw              import-run            match
                                           └─────────────────┘
 ```
 
-| Layer     | Files                                                                                                                                                                                                          |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Ingestion | `ingestion/stores.py` (adapters), `crawler.py`, `browser.py` (Playwright for CDON), `archive.py`, `ax_parser.py`, `cdon_parser.py`, `parse.py`, `contract.py`, `normalize.py`, `search.py` (wishlist searches) |
-| Catalog   | `catalog/models.py`, `db.py` (versioned migrations), `importer.py`, `matching.py`, `tmdb.py`, `preferences.py`, `queries.py`, `catalogue.py` (moviecatalog)                                                    |
-| Web       | `web/app.py`, `web/catalog_routes.py`, `web/filters.py`, `templates/`, `static/`                                                                                                                               |
-| Ops       | `refresh.py` (stage orchestration + per-store lock), `scheduler.py` (in-process daily), `cli.py`, `config.py`                                                                                                  |
+| Layer     | Files                                                                                                                                                                                                                                                                           |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ingestion | `ingestion/stores.py` (adapters), `mymovies.py` (MyMovies fetcher, adapter), `crawler.py`, `browser.py` (Playwright for CDON), `archive.py`, `ax_parser.py`, `cdon_parser.py`, `mymovies_parser.py`, `parse.py`, `contract.py`, `normalize.py`, `search.py` (wishlist searches) |
+| Catalog   | `catalog/models.py`, `db.py` (versioned migrations), `importer.py`, `matching.py`, `tmdb.py`, `preferences.py`, `queries.py`, `catalogue.py` (moviecatalog)                                                                                                                     |
+| Web       | `web/app.py`, `web/catalog_routes.py`, `web/filters.py`, `templates/`, `static/`                                                                                                                                                                                                |
+| Ops       | `refresh.py` (stage orchestration + per-store lock), `scheduler.py` (in-process daily), `cli.py`, `config.py`                                                                                                                                                                   |
 
 Refresh order: `sync` (GET moviecatalog `/api/sync`, stored in `catalogue_sync`;
 failure keeps the stored lists) → per store: category crawl/parse/import →
@@ -81,12 +82,13 @@ Store facts that drive the design:
 
 - Äx: plain HTTP, listing rows carry everything (price, `<del>` regular price, stock text, format, edition id in URL fragment). Offer category membership defines scope; a complete run expires unseen products.
 - CDON: Cloudflare challenge blocks plain HTTP, so `BrowserFetcher` renders listings in headless Chromium. Products come from `__NEXT_DATA__` articles (price, stock count, condition, `preset_media_format`). First N pages only; no product pages; no membership expiry, freshness (48 h) hides stale rows.
+- MyMovies: `/tuotteet.php` is an empty shell; its script POSTs the filter form to `/ajax/hae-tuotteet2.php`, which returns JSON with result cards as HTML. `MyMoviesFetcher` turns an archived `/tuotteet.php?q=&saatavuus=&page=` URL into that POST (fixed filters: Blu-ray + 4K only, new + used, all types, title search). The crawl is the empty query with `saatavuus=1` (all in-stock products, 60 per page, about 50 pages); a complete run expires unseen products. Searches send `saatavuus=0`. Each card has a new and a used price with separate stock (buy button `data-uusi` / `data-kaytetty`), so one card becomes products `<id>:new` and `<id>:used`. No product pages. Requests need a desktop Chrome User-Agent (403 otherwise). Details: `docs/11_mymovies.md`.
 - Collections (multi-movie boxes, TV seasons) are shown as-is under the store title and never matched.
 - Search: Äx `/v2/search/?q=` returns offer-style rows mixed with music. CDON `/s?q=` renders no products; its script POSTs to `search-bff.cdon.se/search/v2/result`, and `BrowserFetcher.search` keeps that response from the page load. Never call that API directly. Most CDON hits are marketplace listings without `preset_media_format`, and CDON never returns an empty result.
 
 ## Pages and endpoints
 
-- `/` main page: in-stock offers under the hardcoded caps (BD ≤ €15, 4K ≤ €20), minus movies owned on Blu-ray/UHD; wished movies are badged and a link counts wishlist offers. Query params `max_bd`, `max_4k` (euros), `format=bd|4k`, `store=ax|cdon`, `condition=new|used`, `q`.
+- `/` main page: in-stock offers under the hardcoded caps (BD ≤ €15, 4K ≤ €20), minus movies owned on Blu-ray/UHD; wished movies are badged and a link counts wishlist offers. Query params `max_bd`, `max_4k` (euros), `format=bd|4k`, `store=ax|cdon|mymovies`, `condition=new|used`, `q`.
 - `/in-stock`: wishlist offers in stock (accepted formats, any price, deals marked).
 - `/wishlist` (read-only, offers and searches per wish), `/queue` (manual TMDB matching), `/ignored`, `/products/<id>` (price history), `/status`. `/watchlist` redirects to `/wishlist`.
 - `POST /api/v2/products/<id>/{ignore|unignore}`; `POST /api/v2/products/<id>/wish` (forwards to moviecatalog `POST /api/wants`); `POST /api/v2/products/<id>/match` with `{"tmdb_id": int|null}`; `GET /api/v2/tmdb/search?q=`.
@@ -103,7 +105,7 @@ Store facts that drive the design:
 - **Fixtures**: gzip page captures under `tests/fixtures/<store>/` with a README per store. Unit tests never touch the network; `tests/integration/test_live_stores.py` does. Web tests use FastAPI's `TestClient`, which needs `httpx2` (not `httpx`).
 - **Docker**: `python:*-slim-trixie` base; `libatomic1` is installed explicitly because Playwright's bundled Node needs it. uv is pinned to an exact version in both the Dockerfile and CI.
 - **CI**: `.github/workflows/python-ci.yml` pins actions to exact versions (`astral-sh/setup-uv` has no floating major tags) and reads Python from `.python-version`.
-- **Politeness**: one listing fetch per page, 2 s delay, a browser-identifying User-Agent for CDON only because the site requires a browser.
+- **Politeness**: one listing fetch per page, 2 s delay, a browser-identifying User-Agent for CDON and MyMovies only because those sites require a browser.
 
 ## Environment Variables
 

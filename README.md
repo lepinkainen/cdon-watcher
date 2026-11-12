@@ -1,7 +1,7 @@
 # cdon-watcher
 
-Tracks Blu-ray and 4K UHD offers at two Finnish stores, [Levykauppa Äx](https://www.levykauppax.fi/)
-and [CDON](https://cdon.fi/), and shows the cheap ones in a small web app. Once a
+Tracks Blu-ray and 4K UHD offers at three Finnish stores, [Levykauppa Äx](https://www.levykauppax.fi/),
+[CDON](https://cdon.fi/) and [MyMovies](https://www.mymovies.fi/), and shows the cheap ones in a small web app. Once a
 day it reads the stores' movie listings, records prices in SQLite and matches each
 product to a movie on [TMDB](https://www.themoviedb.org/).
 
@@ -23,7 +23,7 @@ private server.
 
 Owned movies and the wishlist come from moviecatalog, a separate app. Set
 `MOVIECATALOG_URL` and each refresh pulls both lists, hides owned movies and
-searches both stores for every wished movie. Without it, every offer shows and
+searches every store for every wished movie. Without it, every offer shows and
 there are no wishlist searches.
 
 moviecatalog in turn reads offers from `GET /api/v2/offers?tmdb_id=…`.
@@ -40,6 +40,8 @@ uv run python -m cdon_watcher web        # http://localhost:8080
 ```
 
 CDON blocks plain HTTP, so its listings are fetched with headless Chromium.
+MyMovies refuses non-browser User-Agents, so its requests identify as desktop
+Chrome.
 
 ## Run in Docker
 
@@ -62,7 +64,7 @@ The ones you are likely to set:
 | ------------------------ | --------------------------------------------------------------- |
 | `TMDB_API_KEY`           | TMDB matching. Without it, products stay unmatched.             |
 | `MOVIECATALOG_URL`       | Owned movies and wishlist (see above).                          |
-| `STORES`                 | Stores to refresh, default `ax,cdon`.                           |
+| `STORES`                 | Stores to refresh, default `ax,cdon,mymovies`.                  |
 | `MAX_PAGES_PER_CATEGORY` | CDON listing pages to read per refresh, default 10.             |
 | `SEARCH_DAILY_CAP`       | Wishlist search requests per store per day, default 100.        |
 | `RUN_SCHEDULER`          | Daily refresh inside the web process (on by default in Docker). |
@@ -70,7 +72,7 @@ The ones you are likely to set:
 ## Commands
 
 ```bash
-uv run python -m cdon_watcher refresh [--store ax|cdon]   # sync, crawl, import, match
+uv run python -m cdon_watcher refresh [--store ax|cdon|mymovies]   # sync, crawl, import, match
 uv run python -m cdon_watcher refresh --search-only        # sync + wishlist searches, no crawl
 uv run python -m cdon_watcher sync                        # pull lists from moviecatalog
 uv run python -m cdon_watcher search --store cdon         # wishlist searches only
