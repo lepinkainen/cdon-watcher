@@ -12,7 +12,7 @@ def test_defaults():
         config = load_config()
     assert config["db_path"] == "./data/catalog.db"
     assert config["raw_dir"] == Path("./data/raw")
-    assert config["stores"] == ["ax", "cdon"]
+    assert config["stores"] == ["ax", "cdon", "mymovies"]
     assert config["max_pages"] == 10
     assert config["run_scheduler"] is False
     assert config["tmdb_api_key"] == ""

@@ -14,7 +14,9 @@ def _bool(name: str, default: bool) -> bool:
 
 
 def load_config() -> dict[str, Any]:
-    stores = [s.strip() for s in os.environ.get("STORES", "ax,cdon").split(",") if s.strip()]
+    stores = [
+        s.strip() for s in os.environ.get("STORES", "ax,cdon,mymovies").split(",") if s.strip()
+    ]
     return {
         "db_path": os.environ.get("DB_PATH", "./data/catalog.db"),
         "raw_dir": Path(os.environ.get("RAW_DIR", "./data/raw")),

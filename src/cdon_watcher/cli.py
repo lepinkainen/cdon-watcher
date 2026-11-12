@@ -167,7 +167,9 @@ def _add_common(sub: argparse.ArgumentParser, *, store_required: bool) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Movie offer tracker (CDON + Levykauppa Äx)")
+    parser = argparse.ArgumentParser(
+        description="Movie offer tracker (Levykauppa Äx, CDON, MyMovies)"
+    )
     sub = parser.add_subparsers(dest="command", help="Available commands")
 
     crawl = sub.add_parser("crawl-raw", help="Archive store listing responses without importing")

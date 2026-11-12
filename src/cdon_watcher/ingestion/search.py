@@ -20,6 +20,7 @@ from bs4 import BeautifulSoup
 from .archive import ArchivedRun, RawArchive
 from .contract import SEARCH_SCOPE
 from .crawler import FetchError, Response
+from .mymovies import ANY_AVAILABILITY, page_url, parse_url, read_results
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,21 @@ class CdonSearchAdapter:
         if not isinstance(articles, list):
             raise ValueError("Search result has no articles")
         return len(articles)
+
+
+class MyMoviesSearchAdapter:
+    """The MyMovies search endpoint, any availability; the body is its result JSON."""
+
+    key = "mymovies"
+
+    def search_url(self, query: str) -> str:
+        return page_url(query, ANY_AVAILABILITY)
+
+    def result_count(self, body: bytes, final_url: str) -> int:
+        request = parse_url(final_url)
+        if request.availability != ANY_AVAILABILITY or not request.query:
+            raise ValueError(f"Not a wishlist search URL: {final_url}")
+        return len(read_results(body).cards)
 
 
 class Searcher:
@@ -174,4 +190,6 @@ def make_search_adapter(store: str) -> SearchAdapter:
         return CdonSearchAdapter()
     if store == "ax":
         return AxSearchAdapter()
+    if store == "mymovies":
+        return MyMoviesSearchAdapter()
     raise ValueError(f"No search adapter for store {store!r}")

@@ -27,7 +27,7 @@ from .models import (
     WishSearch,
 )
 
-STORE_NAMES = {"ax": "Levykauppa Äx", "cdon": "CDON"}
+STORE_NAMES = {"ax": "Levykauppa Äx", "cdon": "CDON", "mymovies": "MyMovies"}
 
 
 def utc_naive(value: datetime) -> datetime:

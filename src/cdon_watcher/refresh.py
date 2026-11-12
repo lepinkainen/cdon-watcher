@@ -24,13 +24,15 @@ from .ingestion.ax_parser import AxParser
 from .ingestion.cdon_parser import CdonParser
 from .ingestion.contract import SEARCH_SCOPE, ParsedRun
 from .ingestion.crawler import Crawler, HttpFetcher, Response
+from .ingestion.mymovies import MyMoviesAdapter, MyMoviesFetcher
+from .ingestion.mymovies_parser import MyMoviesParser
 from .ingestion.parse import parse_run
 from .ingestion.search import Searcher, SearchTask, make_search_adapter
 from .ingestion.stores import AxAdapter, CdonAdapter
 
 logger = logging.getLogger(__name__)
 
-STORES = ("ax", "cdon")
+STORES = ("ax", "cdon", "mymovies")
 
 
 class RefreshBusyError(RuntimeError):
@@ -59,12 +61,14 @@ class RefreshReport:
 
 
 def make_parser(store: str) -> Any:
-    return {"ax": AxParser, "cdon": CdonParser}[store]()
+    return {"ax": AxParser, "cdon": CdonParser, "mymovies": MyMoviesParser}[store]()
 
 
 def make_adapter(store: str, max_pages: int) -> Any:
     if store == "cdon":
         return CdonAdapter(max_pages=max_pages)
+    if store == "mymovies":
+        return MyMoviesAdapter()
     return AxAdapter()
 
 
@@ -73,6 +77,8 @@ def make_fetcher(store: str) -> Any:
         from .ingestion.browser import BrowserFetcher
 
         return BrowserFetcher()
+    if store == "mymovies":
+        return MyMoviesFetcher()
     return HttpFetcher()
 
 
@@ -93,7 +99,7 @@ def refresh_lock(raw_dir: Path, store: str) -> Iterator[None]:
 
 
 def search_fetch(store: str, fetcher: Any) -> Callable[[str], Response]:
-    """CDON searches read the result JSON the search page loads; Äx is a plain GET."""
+    """CDON searches read the result JSON the search page loads; the others fetch directly."""
     return fetcher.search if store == "cdon" else fetcher  # type: ignore[no-any-return]
 
 

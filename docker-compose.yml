@@ -16,7 +16,7 @@ services:
       - SEARCH_DAILY_CAP=${SEARCH_DAILY_CAP:-100}
       - RUN_SCHEDULER=${RUN_SCHEDULER:-true}
       - MAX_PAGES_PER_CATEGORY=${MAX_PAGES_PER_CATEGORY:-10}
-      - STORES=${STORES:-ax,cdon}
+      - STORES=${STORES:-ax,cdon,mymovies}
     restart: unless-stopped
 
 volumes:
