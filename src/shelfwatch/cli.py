@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from . import logcontext
 from .config import CONFIG
 from .refresh import STORES, describe, make_adapter, make_fetcher, make_parser, refresh_all
 
@@ -270,7 +271,10 @@ def main() -> None:
     # Keep printed summaries in order with log lines (stderr) when piped or redirected.
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(line_buffering=True)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    handler = logging.StreamHandler()
+    # "[mymovies]" is the widest tag; stores refresh in parallel and interleave.
+    logcontext.install(handler, width=max(map(len, STORES)) + 2)
+    logging.basicConfig(level=logging.INFO, handlers=[handler])
     parser = build_parser()
     args = parser.parse_args()
     if getattr(args, "verbose", False):

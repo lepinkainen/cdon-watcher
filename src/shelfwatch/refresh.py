@@ -1,9 +1,11 @@
-"""The refresh command: crawl, parse, import, match for one store at a time."""
+"""The refresh command: crawl and search per store in parallel, then parse, import, match."""
 
 import fcntl
 import logging
+import threading
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -30,6 +32,7 @@ from .ingestion.mymovies_parser import MyMoviesParser
 from .ingestion.parse import parse_run
 from .ingestion.search import Searcher, SearchTask, make_search_adapter
 from .ingestion.stores import AxAdapter, CdonAdapter
+from .logcontext import store_context
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +182,8 @@ class _Settings:
     attempts: int
     search_cap: int
     search_interval_hours: float
+    # Set when the refresh is interrupted; delays then end the fetch stages.
+    stop: threading.Event = field(default_factory=threading.Event)
 
 
 def _crawl_stage(
@@ -192,7 +197,11 @@ def _crawl_stage(
     crawler: Crawler | None = None
     try:
         crawler = Crawler(
-            RawArchive(cfg.raw_dir), fetcher.get(), attempts=cfg.attempts, delay=cfg.delay
+            RawArchive(cfg.raw_dir),
+            fetcher.get(),
+            attempts=cfg.attempts,
+            delay=cfg.delay,
+            sleep=_cancellable_sleep(cfg.stop),
         )
         run = crawler.crawl(make_adapter(store, cfg.max_pages))
     except StoreBusyError:
@@ -228,6 +237,7 @@ def _search_stage(
             make_search_adapter(store),
             attempts=cfg.attempts,
             delay=cfg.delay,
+            sleep=_cancellable_sleep(cfg.stop),
         )
         run = searcher.search(tasks)
     except StoreBusyError:
@@ -279,23 +289,12 @@ def _logged_import(engine: Engine, parsed: ParsedRun) -> ImportResult:
     return result
 
 
-def _category_stages(
-    store: str,
-    engine: Engine,
-    fetcher: _LazyFetcher,
-    cfg: _Settings,
-    report: RefreshReport,
-    *,
-    skip_crawl: bool,
-) -> None:
-    run_id = None
-    if not skip_crawl:
-        run_id = _crawl_stage(store, fetcher, cfg, report)
-        if run_id is None:
-            # Parsing with no run id would pick an older, already imported run.
-            return
+def _category_import(engine: Engine, job: _StoreJob) -> None:
+    report = job.report
     try:
-        report.parsed = parse_run(cfg.raw_dir, make_parser(store), run_id, search=False)
+        report.parsed = parse_run(
+            job.cfg.raw_dir, make_parser(job.store), job.crawl_run, search=False
+        )
     except FileNotFoundError as error:
         report.notes.append(f"Nothing to parse: {error}")
         return
@@ -303,6 +302,107 @@ def _category_stages(
     if report.parsed.errors:
         report.notes.append(f"{len(report.parsed.errors)} row parse errors")
     report.imported = _logged_import(engine, report.parsed)
+
+
+class RefreshCancelled(BaseException):
+    """Ends a store's fetch thread at its next delay once the refresh is interrupted."""
+
+
+def _cancellable_sleep(stop: threading.Event) -> Callable[[float], None]:
+    def sleep(seconds: float) -> None:
+        if stop.wait(seconds):
+            raise RefreshCancelled
+
+    return sleep
+
+
+@dataclass
+class _StoreJob:
+    """One store's refresh: what to run, and the run ids the fetch stages saved."""
+
+    store: str
+    cfg: _Settings
+    categories: bool
+    searches: bool
+    skip_crawl: bool
+    report: RefreshReport
+    crawl_run: int | None = None
+    search_run: int | None = None
+
+
+def _job(
+    store: str,
+    *,
+    raw_dir: Path | None,
+    max_pages: int | None,
+    delay: float | None,
+    attempts: int | None,
+    search_cap: int | None,
+    skip_crawl: bool,
+    categories: bool,
+    searches: bool,
+    stop: threading.Event | None = None,
+) -> _StoreJob:
+    if store not in STORES:
+        raise ValueError(f"Unknown store {store!r}")
+    cfg = _Settings(
+        raw_dir=raw_dir or CONFIG["raw_dir"],
+        max_pages=max_pages or CONFIG["max_pages"],
+        delay=delay or CONFIG["crawl_delay"],
+        attempts=attempts or CONFIG["crawl_attempts"],
+        search_cap=CONFIG["search_daily_cap"] if search_cap is None else search_cap,
+        search_interval_hours=CONFIG["search_min_interval_hours"],
+        stop=stop or threading.Event(),
+    )
+    return _StoreJob(
+        store=store,
+        cfg=cfg,
+        categories=categories,
+        searches=searches,
+        skip_crawl=skip_crawl,
+        report=RefreshReport(store=store),
+    )
+
+
+def _fetch_stages(engine: Engine, job: _StoreJob) -> None:
+    """Category crawl, then wishlist searches. Network and archive only; reads the database.
+
+    Runs in its own thread under refresh_all, so it must never write the database.
+    """
+    if job.skip_crawl:
+        return
+    fetcher = _LazyFetcher(job.store)
+    try:
+        if job.categories:
+            job.crawl_run = _crawl_stage(job.store, fetcher, job.cfg, job.report)
+        if job.searches:
+            job.search_run = _search_stage(job.store, engine, fetcher, job.cfg, job.report)
+    except StoreBusyError as error:
+        job.report.notes.append(str(error))
+    finally:
+        fetcher.close()
+
+
+def _process_stages(engine: Engine, job: _StoreJob, tmdb_api_key: str) -> None:
+    """Parse and import what the fetch stages saved, then match. The only stages that write.
+
+    Without skip_crawl a stage that saved no run imports nothing: parsing with no
+    run id would pick an older, already imported run.
+    """
+    report = job.report
+    if job.categories and (job.skip_crawl or job.crawl_run is not None):
+        _category_import(engine, job)
+    if job.searches and (job.skip_crawl or job.search_run is not None):
+        report.search_imported = _import(engine, job.cfg, job.store, job.search_run, search=True)
+    if not report.imported_any:
+        return
+    jev = jev_client()
+    if jev is not None:
+        report.box_sets = gate_box_sets(engine, jev, store=job.store)
+    if not tmdb_api_key:
+        report.notes.append("TMDB_API_KEY not set; matching skipped")
+        return
+    report.matched = match_pending(engine, HttpTmdbClient(tmdb_api_key), jev=jev, store=job.store)
 
 
 def refresh_store(
@@ -321,53 +421,29 @@ def refresh_store(
 ) -> RefreshReport:
     """Run every stage for one store. Stage failures are reported, not raised.
 
-    Category crawl, parse, import; then one search per wished-for movie, parse,
-    import; then matching. A failed crawl still parses and imports whatever it
+    Category crawl, then one search per wished-for movie; then parse and import
+    both runs; then matching. A failed crawl still parses and imports whatever it
     saved, but the report is not ok; a crawl that saved no run imports nothing,
     never an older run. skip_crawl reprocesses the latest saved runs without fetching. A
     missing TMDB key skips matching. The web app keeps serving committed data.
     """
-    if store not in STORES:
-        raise ValueError(f"Unknown store {store!r}")
-    cfg = _Settings(
-        raw_dir=raw_dir or CONFIG["raw_dir"],
-        max_pages=max_pages or CONFIG["max_pages"],
-        delay=delay or CONFIG["crawl_delay"],
-        attempts=attempts or CONFIG["crawl_attempts"],
-        search_cap=CONFIG["search_daily_cap"] if search_cap is None else search_cap,
-        search_interval_hours=CONFIG["search_min_interval_hours"],
+    job = _job(
+        store,
+        raw_dir=raw_dir,
+        max_pages=max_pages,
+        delay=delay,
+        attempts=attempts,
+        search_cap=search_cap,
+        skip_crawl=skip_crawl,
+        categories=categories,
+        searches=searches,
     )
     tmdb_api_key = CONFIG["tmdb_api_key"] if tmdb_api_key is None else tmdb_api_key
     engine = open_catalog(db_path or CONFIG["db_path"])
-    report = RefreshReport(store=store)
-
-    with refresh_lock(cfg.raw_dir, store):
-        fetcher = _LazyFetcher(store)
-        try:
-            if categories:
-                _category_stages(store, engine, fetcher, cfg, report, skip_crawl=skip_crawl)
-            if searches:
-                search_run = (
-                    None if skip_crawl else _search_stage(store, engine, fetcher, cfg, report)
-                )
-                if search_run is not None or skip_crawl:
-                    report.search_imported = _import(engine, cfg, store, search_run, search=True)
-        except StoreBusyError as error:
-            report.notes.append(str(error))
-            return report
-        finally:
-            fetcher.close()
-
-        if not report.imported_any:
-            return report
-        jev = jev_client()
-        if jev is not None:
-            report.box_sets = gate_box_sets(engine, jev, store=store)
-        if not tmdb_api_key:
-            report.notes.append("TMDB_API_KEY not set; matching skipped")
-            return report
-        report.matched = match_pending(engine, HttpTmdbClient(tmdb_api_key), jev=jev, store=store)
-    return report
+    with refresh_lock(job.cfg.raw_dir, store), store_context(store):
+        _fetch_stages(engine, job)
+        _process_stages(engine, job, tmdb_api_key)
+    return job.report
 
 
 def jev_client() -> JevClient | None:
@@ -397,18 +473,82 @@ def refresh_all(
     stores: list[str] | None = None,
     *,
     catalogue: CatalogueClient | None = None,
-    **kwargs: Any,
+    raw_dir: Path | None = None,
+    db_path: str | Path | None = None,
+    max_pages: int | None = None,
+    delay: float | None = None,
+    attempts: int | None = None,
+    tmdb_api_key: str | None = None,
+    skip_crawl: bool = False,
+    categories: bool = True,
+    searches: bool = True,
+    search_cap: int | None = None,
 ) -> list[RefreshReport]:
-    """Sync the catalogue once, then refresh each store in turn."""
+    """Sync the catalogue once, then refresh the stores in parallel.
+
+    Each store crawls and searches in its own thread. The stores are different
+    sites, so each one still gets one request per delay. Parse, import and match
+    run on this thread, one store at a time as its fetching finishes, so a single
+    writer touches the database. A store already refreshing elsewhere is reported
+    busy and skipped. Reports come back in store order.
+    """
     client = catalogue if catalogue is not None else catalogue_client()
-    logger.info(sync_from_catalogue(kwargs.get("db_path"), client)[1])
-    reports = []
-    for store in stores or CONFIG["stores"]:
+    logger.info(sync_from_catalogue(db_path, client)[1])
+    tmdb_api_key = CONFIG["tmdb_api_key"] if tmdb_api_key is None else tmdb_api_key
+    stop = threading.Event()
+    jobs = [
+        _job(
+            store,
+            raw_dir=raw_dir,
+            max_pages=max_pages,
+            delay=delay,
+            attempts=attempts,
+            search_cap=search_cap,
+            skip_crawl=skip_crawl,
+            categories=categories,
+            searches=searches,
+            stop=stop,
+        )
+        for store in stores or CONFIG["stores"]
+    ]
+    with ExitStack() as locks:
+        locked = []
+        for job in jobs:
+            try:
+                locks.enter_context(refresh_lock(job.cfg.raw_dir, job.store))
+            except RefreshBusyError as error:
+                job.report.notes.append(str(error))
+                continue
+            locked.append(job)
+        if locked:
+            _run_parallel(open_catalog(db_path or CONFIG["db_path"]), locked, tmdb_api_key, stop)
+    return [job.report for job in jobs]
+
+
+def _fetch_in_thread(engine: Engine, job: _StoreJob) -> None:
+    with store_context(job.store):
+        _fetch_stages(engine, job)
+
+
+def _run_parallel(
+    engine: Engine, jobs: list[_StoreJob], tmdb_api_key: str, stop: threading.Event
+) -> None:
+    with ThreadPoolExecutor(max_workers=len(jobs), thread_name_prefix="fetch") as pool:
+        futures = {pool.submit(_fetch_in_thread, engine, job): job for job in jobs}
         try:
-            reports.append(refresh_store(store, **kwargs))
-        except RefreshBusyError as error:
-            reports.append(RefreshReport(store=store, notes=[str(error)]))
-    return reports
+            for future in as_completed(futures):
+                job = futures[future]
+                with store_context(job.store):
+                    try:
+                        future.result()
+                        _process_stages(engine, job, tmdb_api_key)
+                    except Exception as error:  # noqa: BLE001 - one store must not end the rest
+                        logger.exception("Refresh failed for %s", job.store)
+                        job.report.notes.append(f"Refresh failed: {error}")
+        except BaseException:
+            # Ctrl-C: the fetch threads stop at their next delay and close their browsers.
+            stop.set()
+            raise
 
 
 def describe(report: RefreshReport) -> str:

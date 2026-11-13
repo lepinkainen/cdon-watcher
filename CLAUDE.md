@@ -69,9 +69,12 @@ crawl-raw            parse-raw              import-run            match
 | Ops       | `refresh.py` (stage orchestration + per-store lock), `scheduler.py` (in-process daily), `cli.py`, `config.py`                                                                                                                                                                   |
 
 Refresh order: `sync` (GET moviecatalog `/api/sync`, stored in `catalogue_sync`;
-failure keeps the stored lists) → per store: category crawl/parse/import →
-wishlist searches (`ingestion/search.py`, archive scope `wish-search`) →
-parse/import → match. Search runs share the store lock, delay and browser.
+failure keeps the stored lists) → per store, in parallel threads: category crawl
+→ wishlist searches (`ingestion/search.py`, archive scope `wish-search`) → then
+on the main thread, one store at a time as its fetching finishes: parse/import
+both runs → match. Fetch threads only read the database; the main thread is the
+only refresh writer. Search runs share the store lock, delay and browser. Log
+lines carry the store as a `[store]` column (`logcontext.store_context`).
 
 Matching with `JEV_API_KEY`: the box-set gate runs before matching. When the
 title scores can't decide, `catalog/jev.py` asks Jev to pick among the top 5
@@ -106,7 +109,7 @@ Store facts that drive the design:
 
 - **Package manager**: `uv` only (`uv run`, `uv sync`). Python 3.15 (`.python-version`, `requires-python`, ruff/mypy targets and the Docker base image move together).
 - **Types**: strict mypy on `src`; ruff with 100-char lines and C901 complexity 10. `ruff format` also formats code blocks in `docs/*.md`.
-- **Database**: sync SQLModel over SQLite. `CatalogModel` has its own metadata. Schema changes go through `catalog/db.py::MIGRATIONS` with a new version number; never silence schema errors.
+- **Database**: sync SQLModel over SQLite. `CatalogModel` has its own metadata. Schema changes go through `catalog/db.py::MIGRATIONS` with a new version number; never silence schema errors. WAL mode with a 30 s busy timeout; copy the file with `sqlite3 .backup` (`task backup-db`), not `cp`.
 - **Money**: integer cents everywhere; `euros` Jinja filter for display.
 - **Timestamps**: naive UTC in the database (`importer.utc_naive`). Model fields must be typed `pydantic.NaiveDatetime`, not `datetime`: SQLModel ≥ 0.0.49 maps bare `datetime` to a tz-aware column that rejects naive values.
 - **Templates**: Jinja; excluded from prettier (it splits `{% %}` tags).

@@ -96,9 +96,9 @@ def test_parse_import_and_search_stages_log_summaries(env, caplog):
             "ax", raw_dir=tmp_path / "raw", db_path=tmp_path / "c.db", tmdb_api_key=""
         )
     assert caplog.messages == [
+        "ax: 0 wishlist searches due",
         "ax category run 1 parsed: 334 products, 1 row errors",
         "ax category run 1 imported: 334 products (334 new), 0 expired, 0 search hits",
-        "ax: 0 wishlist searches due",
     ]
 
 
@@ -243,3 +243,106 @@ def test_a_dead_browser_on_close_does_not_mask_the_outcome(caplog):
     fetcher.fetcher = Dead()
     fetcher.close()
     assert "closing the cdon fetcher failed" in caplog.text
+
+
+def test_refresh_all_fetches_stores_in_parallel_and_writes_on_one_thread(env, monkeypatch):
+    import threading
+
+    tmp_path, fetchers = env
+    # Each store's first fetch waits for the other's: a sequential refresh would time out.
+    both_fetching = threading.Barrier(2, timeout=10)
+
+    class FirstFetchWaits:
+        def __init__(self, pages):
+            self.pages, self.waited = pages, False
+
+        def __call__(self, url):
+            if not self.waited:
+                self.waited = True
+                both_fetching.wait()
+            return self.pages(url)
+
+    for fetcher in fetchers.values():
+        fetcher.pages = FirstFetchWaits(fetcher.pages)
+    writers = set()
+    real_import = refresh.import_run
+
+    def recording_import(engine, parsed):
+        writers.add(threading.current_thread())
+        return real_import(engine, parsed)
+
+    monkeypatch.setattr(refresh, "import_run", recording_import)
+    reports = refresh.refresh_all(
+        ["ax", "cdon"], raw_dir=tmp_path / "raw", db_path=tmp_path / "c.db", tmdb_api_key=""
+    )
+    assert all(r.ok for r in reports)
+    assert writers == {threading.main_thread()}
+
+
+def test_refresh_all_reports_a_busy_store_and_refreshes_the_rest(env):
+    tmp_path, fetchers = env
+    with refresh.refresh_lock(tmp_path / "raw", "ax"):
+        reports = refresh.refresh_all(
+            ["ax", "cdon"], raw_dir=tmp_path / "raw", db_path=tmp_path / "c.db", tmdb_api_key=""
+        )
+    assert [r.store for r in reports] == ["ax", "cdon"]
+    assert "already running" in reports[0].notes[0] and not reports[0].ok
+    assert reports[1].ok and not fetchers["ax"].closed
+
+
+def test_one_store_failing_does_not_stop_the_others(env, monkeypatch):
+    tmp_path, _ = env
+    real_import = refresh.import_run
+
+    def failing_for_ax(engine, parsed):
+        if parsed.store == "ax":
+            raise RuntimeError("disk full")
+        return real_import(engine, parsed)
+
+    monkeypatch.setattr(refresh, "import_run", failing_for_ax)
+    ax, cdon = refresh.refresh_all(
+        ["ax", "cdon"], raw_dir=tmp_path / "raw", db_path=tmp_path / "c.db", tmdb_api_key=""
+    )
+    assert "Refresh failed: disk full" in ax.notes and not ax.ok
+    assert cdon.ok
+
+
+def test_interrupted_refresh_ends_the_fetch_delays():
+    import threading
+
+    stop = threading.Event()
+    sleep = refresh._cancellable_sleep(stop)
+    sleep(0)
+    stop.set()
+    with pytest.raises(refresh.RefreshCancelled):
+        sleep(60)
+
+
+def test_catalog_uses_wal(tmp_path):
+    from sqlalchemy import text
+
+    with open_catalog(tmp_path / "c.db").connect() as connection:
+        assert connection.execute(text("PRAGMA journal_mode")).scalar() == "wal"
+
+
+def test_log_lines_carry_the_store_in_a_fixed_column():
+    import io
+    import logging
+
+    from shelfwatch import logcontext
+
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    logcontext.install(handler, width=10)
+    log = logging.getLogger("shelfwatch.test_store_column")
+    log.addHandler(handler)
+    log.propagate = False
+    try:
+        with logcontext.store_context("ax"):
+            log.warning("crawled")
+        log.warning("synced")
+    finally:
+        log.removeHandler(handler)
+    first, second = stream.getvalue().splitlines()
+    assert first.endswith("WARNING [ax]       crawled")
+    assert second.endswith("WARNING            synced")

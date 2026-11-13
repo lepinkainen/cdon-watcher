@@ -7,8 +7,9 @@ silently used.
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
-from sqlalchemy import Engine, inspect, text
+from sqlalchemy import Engine, event, inspect, text
 from sqlmodel import Session, create_engine, select
 
 from . import models
@@ -104,10 +105,25 @@ class SchemaError(RuntimeError):
     """The database schema cannot be brought to the version this code expects."""
 
 
+# Seconds a writer waits for another writer's lock before "database is locked".
+BUSY_TIMEOUT = 30.0
+
+
+def _enable_wal(dbapi_connection: Any, _record: Any) -> None:
+    """WAL lets readers (the web app, a store's crawl thread) run beside a writer."""
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA journal_mode=WAL")
+    finally:
+        cursor.close()
+
+
 def create_catalog_engine(path: Path | str) -> Engine:
     if str(path) != ":memory:":
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-    return create_engine(f"sqlite:///{path}")
+    engine = create_engine(f"sqlite:///{path}", connect_args={"timeout": BUSY_TIMEOUT})
+    event.listen(engine, "connect", _enable_wal)
+    return engine
 
 
 def current_version(engine: Engine) -> int:

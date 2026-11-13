@@ -95,4 +95,5 @@ tasks:
   backup-db:
     desc: Copy the catalog database with a timestamp
     cmds:
-      - cp data/catalog.db data/catalog_backup_$(date +%Y%m%d_%H%M%S).db
+      # .backup, not cp: in WAL mode recent writes may still sit in catalog.db-wal.
+      - sqlite3 data/catalog.db ".backup data/catalog_backup_$(date +%Y%m%d_%H%M%S).db"
