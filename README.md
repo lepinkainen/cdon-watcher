@@ -60,14 +60,14 @@ refresh from host cron instead, set `RUN_SCHEDULER=false` and run
 All settings are environment variables; `.env.example` lists them with defaults.
 The ones you are likely to set:
 
-| Variable                 | Purpose                                                         |
-| ------------------------ | --------------------------------------------------------------- |
-| `TMDB_API_KEY`           | TMDB matching. Without it, products stay unmatched.             |
-| `MOVIECATALOG_URL`       | Owned movies and wishlist (see above).                          |
-| `STORES`                 | Stores to refresh, default `ax,cdon,mymovies`.                  |
-| `MAX_PAGES_PER_CATEGORY` | CDON listing pages to read per refresh, default 10.             |
-| `SEARCH_DAILY_CAP`       | Wishlist search requests per store per day, default 100.        |
-| `RUN_SCHEDULER`          | Daily refresh inside the web process (on by default in Docker). |
+| Variable                 | Purpose                                                          |
+| ------------------------ | ---------------------------------------------------------------- |
+| `TMDB_API_KEY`           | TMDB matching. Without it, products stay unmatched.              |
+| `MOVIECATALOG_URL`       | Owned movies and wishlist (see above).                           |
+| `STORES`                 | Stores to refresh, default `ax,cdon,mymovies`.                   |
+| `MAX_PAGES_PER_CATEGORY` | Listing pages per CDON crawl and per Äx format pass, default 10. |
+| `SEARCH_DAILY_CAP`       | Wishlist search requests per store per day, default 100.         |
+| `RUN_SCHEDULER`          | Daily refresh inside the web process (on by default in Docker).  |
 
 ## Commands
 

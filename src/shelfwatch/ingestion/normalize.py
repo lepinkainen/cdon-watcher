@@ -14,8 +14,9 @@ _TRAILING_FORMAT = re.compile(
     re.IGNORECASE,
 )
 _WHITESPACE = re.compile(r"\s+")
-_UHD = re.compile(r"4k|ultra\s*hd|uhd", re.IGNORECASE)
-_BLURAY = re.compile(r"blu[\s_-]?ray|\bbd\b", re.IGNORECASE)
+# "ultrasb" and "blusb" are Äx steelbook format codes ("2ULTRASB + 2BLU", "2blusb").
+_UHD = re.compile(r"4k|ultra\s*hd|uhd|ultrasb", re.IGNORECASE)
+_BLURAY = re.compile(r"blu[\s_-]?ray|blusb|\bbd\b", re.IGNORECASE)
 _DVD = re.compile(r"dvd", re.IGNORECASE)
 
 

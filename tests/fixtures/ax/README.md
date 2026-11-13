@@ -6,7 +6,23 @@ the full response bodies, without formatting or cleanup.
 - `offers-page-1.html.gz`: <https://www.levykauppax.fi/leffat/offer/>, 96 rows.
 - `offers-page-14.html.gz`: <https://www.levykauppax.fi/leffat/offer/?p2=14>, 39 rows.
 
-These captures cover pagination, edition fragments, DVD exclusion, Blu-ray,
+These two unfiltered captures predate the format passes and now serve the
+parser tests only; the adapter rejects unfiltered offer URLs.
+
+## Format passes
+
+Captured 2026-11-13 with plain HTTP GET, during a storewide -10% sale. Each is
+page 1 of a cheapest-first pass.
+
+- `offers-blu-page-1.html.gz`: <https://www.levykauppax.fi/leffat/offer/?f2=blu&o2=p>,
+  100 rows, paginator up to page 181.
+- `offers-uhd-page-1.html.gz`: <https://www.levykauppax.fi/leffat/offer/?f2=uhd&o2=p>, 100 rows.
+- `offers-ultrasb-page-1.html.gz`: <https://www.levykauppax.fi/leffat/offer/?f2=ultrasb&o2=p>,
+  100 rows, one without a price ("Tuote ei ole myynnissä"), `2ULTRASB + 2BLU` codes.
+- `offers-blusb-page-1.html.gz`: <https://www.levykauppax.fi/leffat/offer/?f2=blusb&o2=p>,
+  35 rows, no paginator, `2blusb` codes.
+
+The unfiltered captures cover pagination, edition fragments, DVD exclusion, Blu-ray,
 combined UHD/Blu-ray editions, regular prices, and several stock descriptions.
 Counts describe these fixtures only. Tests derive smaller pages from a captured
 row to exercise failures and pagination changes without network requests.

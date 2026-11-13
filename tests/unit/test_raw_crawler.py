@@ -16,44 +16,116 @@ from shelfwatch.ingestion.crawler import Crawler, FetchError, HttpFetcher, Respo
 from shelfwatch.ingestion.stores import AxAdapter
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "ax"
-URL = AxAdapter.start_url
+URL = AxAdapter().page_url("blu", 1)
 
 
-def fixture(page=1):
-    return gzip.decompress((FIXTURES / f"offers-page-{page}.html.gz").read_bytes())
+def page_url(page, media_filter="blu"):
+    return AxAdapter().page_url(media_filter, page)
 
 
-def small_page(page=1, pages=1, product_id="1120921", media="2 Blu-ray"):
+def fixture(name="page-1"):
+    return gzip.decompress((FIXTURES / f"offers-{name}.html.gz").read_bytes())
+
+
+def small_page(page=1, pages=1, product_id="1120921", media="2 Blu-ray", media_filter="blu"):
     """Reduce a captured page to one real row with controlled pagination."""
-    soup = BeautifulSoup(fixture(), "html.parser")
+    soup = BeautifulSoup(fixture("blu-page-1"), "html.parser")
     row = soup.select_one("li.hproduct")
     row["id"] = f"p-{product_id}"
     row.select_one("a.fn")["href"] = f"/movie/example/#{product_id}"
     row.select_one("span.type").string = media
     return (
-        '<h1>Elokuvat - Tarjoukset</h1><ul class="list-products">'
+        f'<h1>{AxAdapter.passes[media_filter]}</h1><ul class="list-products">'
         + str(row)
         + f'</ul><ul class="pagination"><li class="active"><span>{page}</span></li>'
-        + f'<li><a href="./?p2={pages}">{pages}</a></li></ul>'
+        + f'<li><a href="./?p2={pages}&amp;f2={media_filter}&amp;o2=p">{pages}</a></li></ul>'
     ).encode()
+
+
+def first_page_of_pass(url):
+    """A one-page listing for any format pass, with a product id unique to the pass."""
+    product_id = str(1 + AxAdapter().start_urls.index(url))
+    return small_page(product_id=product_id, media_filter=AxAdapter().page_number(url)[0])
+
+
+def blu_only(max_pages=10):
+    """An adapter that crawls only the Blu-ray pass, so tests control every response."""
+    adapter = AxAdapter(max_pages)
+    adapter.start_urls = adapter.start_urls[:1]
+    return adapter
 
 
 def crawler(tmp_path, fetch, **kwargs):
     return Crawler(RawArchive(tmp_path), fetch, sleep=Mock(), **kwargs)
 
 
-def test_captured_pagination_and_edition_scope():
-    adapter = AxAdapter()
-    first = adapter.discover(fixture(), URL, URL)
-    last = adapter.discover(fixture(14), URL + "?p2=14", URL + "?p2=14")
-    assert len(first.pages) == 14
-    assert len(last.pages) == 14
-    assert first.products[0].product_id == "1120921"
-    assert first.products[0].edition_url.endswith(
-        "/mission_impossible_the_final_reckoning/#1120921"
+def test_captured_pagination_is_capped_per_format_pass():
+    body = fixture("blu-page-1")
+    listing = AxAdapter().discover(body, URL, URL)
+    assert listing.pages == [page_url(n) for n in range(1, 11)]
+    assert AxAdapter(200).discover(body, URL, URL).pages[-1] == page_url(181)
+    assert len(listing.products) == 100
+    assert all(
+        p.edition_url.startswith("https://www.levykauppax.fi/movie/") for p in listing.products
     )
-    assert "1185326" not in {p.product_id for p in first.products}  # DVD
-    assert "1149002" in {p.product_id for p in first.products}  # Combined UHD/Blu-ray
+    single = page_url(1, "blusb")
+    steelbooks = AxAdapter().discover(fixture("blusb-page-1"), single, single)
+    assert steelbooks.pages == [single]
+    assert len(steelbooks.products) == 35
+
+
+def test_four_cheapest_first_format_passes():
+    assert AxAdapter().start_urls == tuple(
+        f"https://www.levykauppax.fi/leffat/offer/?f2={f}&o2=p"
+        for f in ("blu", "uhd", "ultrasb", "blusb")
+    )
+    assert page_url(3, "uhd") == "https://www.levykauppax.fi/leffat/offer/?p2=3&f2=uhd&o2=p"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://www.levykauppax.fi/leffat/offer/",
+        "https://www.levykauppax.fi/leffat/offer/?p2=2",
+        "https://www.levykauppax.fi/leffat/offer/?f2=dvd&o2=p",
+        "https://www.levykauppax.fi/leffat/offer/?f2=blu",
+        "https://www.levykauppax.fi/leffat/offer/?f2=blu&o2=p&pr2=0-10",
+        "https://www.levykauppax.fi/leffat/offer/?f2=blu&f2=uhd&o2=p",
+    ],
+)
+def test_unfiltered_or_unexpected_listing_urls_are_rejected(url):
+    with pytest.raises(ValueError):
+        AxAdapter().page_number(url)
+
+
+def test_generic_offer_heading_is_accepted_after_page_two():
+    # Seen live on 2026-11-13: ?p2=3&f2=blu&o2=p is filtered and sorted but says "Tarjoukset".
+    body = small_page(3, 5).replace(b"Elokuvat - Blu-Ray", b"Elokuvat - Tarjoukset")
+    assert len(AxAdapter().discover(body, page_url(3), page_url(3)).products) == 1
+
+
+def test_pagination_must_stay_in_its_format_pass():
+    body = small_page(pages=2).replace(b"f2=blu&amp;o2=p", b"f2=uhd&amp;o2=p")
+    with pytest.raises(ValueError, match="left the blu filter"):
+        AxAdapter().discover(body, URL, URL)
+
+
+def test_crawl_runs_every_pass_up_to_the_page_cap(tmp_path):
+    fetched = []
+
+    def fetch(url):
+        fetched.append(url)
+        media_filter, page = AxAdapter().page_number(url)
+        product_id = str(1000 * (list(AxAdapter.passes).index(media_filter) + 1) + page)
+        return Response(url, 200, small_page(page, 50, product_id, media_filter=media_filter))
+
+    run = crawler(tmp_path, fetch).crawl(AxAdapter(max_pages=3))
+    assert run.manifest.complete
+    assert run.manifest.listing_count == 12
+    assert fetched[:4] == list(AxAdapter().start_urls)
+    assert {AxAdapter().page_number(u) for u in fetched} == {
+        (f, n) for f in AxAdapter.passes for n in (1, 2, 3)
+    }
 
 
 @pytest.mark.parametrize(
@@ -69,19 +141,19 @@ def test_captured_pagination_and_edition_scope():
     ],
 )
 def test_eligible_format_discovery(media, eligible):
-    result = AxAdapter().discover(small_page(media=media), URL, URL)
+    result = blu_only().discover(small_page(media=media), URL, URL)
     assert bool(result.products) == eligible
 
 
 def test_archive_bodies_hashes_run_ids_and_polite_listing_only_fetches(tmp_path):
     bodies = {
         URL: small_page(pages=3),
-        URL + "?p2=2": small_page(2, 3, "222"),
-        URL + "?p2=3": small_page(3, 3, "333"),
+        page_url(2): small_page(2, 3, "222"),
+        page_url(3): small_page(3, 3, "333"),
     }
     fetch = Mock(side_effect=lambda url: Response(url, 200, bodies[url]))
     worker = crawler(tmp_path, fetch)
-    run = worker.crawl(AxAdapter())
+    run = worker.crawl(blu_only())
     assert run.manifest.complete
     assert run.manifest.product_count == 3
     assert run.manifest.listing_count == 3
@@ -95,7 +167,7 @@ def test_archive_bodies_hashes_run_ids_and_polite_listing_only_fetches(tmp_path)
         assert snapshot.sha256 == hashlib.sha256(body).hexdigest()
         assert snapshot.fetched_at.tzinfo is not None
     manifest_before = (run.path / "manifest.json").read_bytes()
-    second = worker.crawl(AxAdapter())
+    second = worker.crawl(blu_only())
     assert second.manifest.run_id == 2
     assert (run.path / "manifest.json").read_bytes() == manifest_before
 
@@ -108,7 +180,7 @@ def test_retry_archives_http_errors_and_transport_errors(tmp_path):
             Response(URL, 200, small_page()),
         ]
     )
-    run = crawler(tmp_path, fetch).crawl(AxAdapter())
+    run = crawler(tmp_path, fetch).crawl(blu_only())
     assert run.manifest.complete
     assert [s.status for s in run.manifest.snapshots] == [503, None, 200]
     assert [s.attempt for s in run.manifest.snapshots] == [1, 2, 3]
@@ -118,13 +190,13 @@ def test_retry_archives_http_errors_and_transport_errors(tmp_path):
 
 def test_missing_page_preserves_partial_run_and_continues(tmp_path):
     def fetch(url):
-        if url.endswith("=2"):
+        if "p2=2&" in url:
             return Response(url, 500, b"error")
         return Response(
-            url, 200, small_page(3, 3, "333") if url.endswith("=3") else small_page(pages=3)
+            url, 200, small_page(3, 3, "333") if "p2=3&" in url else small_page(pages=3)
         )
 
-    run = crawler(tmp_path, fetch, attempts=2).crawl(AxAdapter())
+    run = crawler(tmp_path, fetch, attempts=2).crawl(blu_only())
     assert not run.manifest.complete
     assert run.manifest.listing_count == 2
     assert len(run.manifest.snapshots) == 4
@@ -135,13 +207,14 @@ def test_missing_page_preserves_partial_run_and_continues(tmp_path):
     "body",
     [
         b"<html>Temporary error</html>",
-        b'<h1>Elokuvat - Tarjoukset</h1><ul class="list-products"></ul>',
+        b'<h1>Elokuvat - Blu-Ray</h1><ul class="list-products"></ul>',
+        small_page().replace(b"Elokuvat - Blu-Ray", b"Elokuvat - 4K Ultra HD"),
         small_page().replace(b"#1120921", b"#999"),
         small_page().replace(b"./?p2=1", b"/leffat/?p2=2"),
     ],
 )
 def test_unrecognized_or_out_of_scope_pages_are_incomplete(tmp_path, body):
-    run = crawler(tmp_path, lambda url: Response(url, 200, body), attempts=2).crawl(AxAdapter())
+    run = crawler(tmp_path, lambda url: Response(url, 200, body), attempts=2).crawl(blu_only())
     assert not run.manifest.complete
     assert run.manifest.product_count == 0
     assert len(run.manifest.snapshots) == 2
@@ -152,7 +225,7 @@ def test_pagination_loop_detection(tmp_path, active_page):
     fetch = Mock(
         side_effect=lambda url: Response(url, 200, small_page(1 if url == URL else active_page, 2))
     )
-    run = crawler(tmp_path, fetch, attempts=1).crawl(AxAdapter())
+    run = crawler(tmp_path, fetch, attempts=1).crawl(blu_only())
     assert not run.manifest.complete
     assert "Pagination loop" in run.manifest.failures[0]
 
@@ -164,7 +237,7 @@ def test_same_document_different_editions_preserves_fragments(tmp_path):
         + b"</ul><ul",
         1,
     )
-    run = crawler(tmp_path, lambda url: Response(url, 200, body)).crawl(AxAdapter())
+    run = crawler(tmp_path, lambda url: Response(url, 200, body)).crawl(blu_only())
     assert run.manifest.complete
     assert [p.edition_url for p in run.manifest.snapshots[0].products] == [
         "https://www.levykauppax.fi/movie/example/#1120921",
@@ -195,10 +268,10 @@ def test_raw_cli_does_not_start_legacy_crawl(tmp_path, monkeypatch, capsys):
     )
     monkeypatch.setattr(
         "shelfwatch.ingestion.crawler.HttpFetcher.__call__",
-        lambda self, url: Response(url, 200, small_page()),
+        lambda self, url: Response(url, 200, first_page_of_pass(url)),
     )
     main()
-    assert "1 pages, 1 eligible editions" in capsys.readouterr().out
+    assert "4 pages, 4 eligible editions" in capsys.readouterr().out
     assert (tmp_path / "ax" / "1" / "manifest.json").exists()
 
 
@@ -249,7 +322,7 @@ def test_raw_cli_incomplete_exit_preserves_archive(tmp_path, monkeypatch):
 
 def test_browser_transport_errors_are_archived_and_retried(tmp_path):
     fetch = Mock(side_effect=[FetchError("Timeout 45000ms"), Response(URL, 200, small_page())])
-    run = crawler(tmp_path, fetch).crawl(AxAdapter())
+    run = crawler(tmp_path, fetch).crawl(blu_only())
     assert run.manifest.complete
     assert [(s.status, s.error) for s in run.manifest.snapshots] == [
         (None, "Timeout 45000ms"),
@@ -285,15 +358,15 @@ def test_debug_log_per_page_and_failed_attempt(tmp_path, caplog):
         side_effect=[
             Response(URL, 503, b"unavailable"),
             Response(URL, 200, small_page(pages=2)),
-            Response(URL + "?p2=2", 200, small_page(2, 2, "222")),
+            Response(page_url(2), 200, small_page(2, 2, "222")),
         ]
     )
     with caplog.at_level("DEBUG", logger="shelfwatch.ingestion.crawler"):
-        crawler(tmp_path, fetch).crawl(AxAdapter())
+        crawler(tmp_path, fetch).crawl(blu_only())
     assert caplog.messages == [
         f"ax attempt 1/3 failed: HTTP 503 ({URL})",
         f"ax page 1: 1 products, 1 editions so far ({URL})",
-        f"ax page 2: 1 products, 2 editions so far ({URL}?p2=2)",
+        f"ax page 2: 1 products, 2 editions so far ({page_url(2)})",
     ]
 
 
@@ -311,7 +384,7 @@ def test_verbose_flag_enables_debug_for_project_loggers(tmp_path, monkeypatch, f
     )
     monkeypatch.setattr(
         "shelfwatch.ingestion.crawler.HttpFetcher.__call__",
-        lambda self, url: Response(url, 200, small_page()),
+        lambda self, url: Response(url, 200, first_page_of_pass(url)),
     )
     main()
     assert logging.getLevelName(project.level) == level

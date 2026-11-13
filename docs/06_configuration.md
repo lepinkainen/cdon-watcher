@@ -62,10 +62,10 @@ Shelfwatch uses **environment variables** as the primary configuration mechanism
 
 #### `MAX_PAGES_PER_CATEGORY`
 
-- **Description**: Maximum pages to crawl per category during initial crawl
+- **Description**: Listing pages to crawl for CDON, and for each of the four Äx format passes (Blu-ray, 4K, and their steelbooks, cheapest first)
 - **Default**: `10`
 - **Example**: `20`
-- **Notes**: Higher values discover more movies but take longer
+- **Notes**: Higher values discover more movies but take longer. Äx offers priced past the cap are not seen and expire from the offer category
 
 #### `REQUEST_TIMEOUT`
 

@@ -14,8 +14,8 @@ from shelfwatch.ingestion.stores import AxAdapter, CdonAdapter
 FIXTURES = Path(__file__).parents[1] / "fixtures"
 
 
-def ax_page(n):
-    return gzip.decompress((FIXTURES / "ax" / f"offers-page-{n}.html.gz").read_bytes())
+def ax_page(media_filter):
+    return gzip.decompress((FIXTURES / "ax" / f"offers-{media_filter}-page-1.html.gz").read_bytes())
 
 
 def cdon_page(n):
@@ -35,11 +35,11 @@ class FakeFetcher:
         self.closed = True
 
 
-def one_row_ax():
-    """Äx fixture trimmed to one page by making the paginator point at page 1 only."""
+def one_page_ax(url):
+    """First page of the URL's format pass, with the paginator pointing at page 1 only."""
     from bs4 import BeautifulSoup
 
-    soup = BeautifulSoup(ax_page(1), "html.parser")
+    soup = BeautifulSoup(ax_page(AxAdapter().page_number(url)[0]), "html.parser")
     for a in soup.select(".pagination a[href]"):
         a.decompose()
     return str(soup).encode()
@@ -50,7 +50,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(refresh, "make_fetcher", lambda store: fetchers[store])
     monkeypatch.setattr(refresh.Crawler, "__init__", _no_sleep_init)
     fetchers = {
-        "ax": FakeFetcher(lambda url: one_row_ax()),
+        "ax": FakeFetcher(one_page_ax),
         "cdon": FakeFetcher(lambda url: cdon_page(2 if url.endswith("=2") else 1)),
     }
     return tmp_path, fetchers
@@ -84,7 +84,7 @@ def test_refresh_all_runs_every_stage_and_skips_matching_without_key(env):
     assert all(r.matched is None for r in reports)
     assert any("TMDB_API_KEY" in n for n in reports[0].notes)
     assert fetchers["ax"].closed and fetchers["cdon"].closed
-    assert count_products(db) == 66 + 72
+    assert count_products(db) == 334 + 72  # four Äx passes: 100 + 100 + 99 + 35
     assert (tmp_path / "raw" / "cdon" / "1" / "parsed.json").exists()
     assert "imported" in refresh.describe(reports[1])
 
@@ -144,7 +144,7 @@ def test_skip_crawl_reprocesses_latest_run(env):
     refresh.refresh_store("ax", **kwargs)
     report = refresh.refresh_store("ax", skip_crawl=True, **kwargs)
     assert report.crawl is None
-    assert report.imported is not None and report.imported.observations_updated == 66
+    assert report.imported is not None and report.imported.observations_updated == 334
 
 
 def test_nothing_to_parse_is_reported_not_raised(tmp_path):
@@ -172,9 +172,7 @@ def test_unknown_store_rejected(tmp_path):
 def test_cli_refresh_reports(tmp_path, monkeypatch, capsys):
     from shelfwatch.cli import main
 
-    monkeypatch.setattr(
-        refresh, "make_fetcher", lambda store: FakeFetcher(lambda url: one_row_ax())
-    )
+    monkeypatch.setattr(refresh, "make_fetcher", lambda store: FakeFetcher(one_page_ax))
     monkeypatch.setattr(refresh.Crawler, "__init__", _no_sleep_init)
     monkeypatch.setattr(
         "sys.argv",
@@ -192,7 +190,7 @@ def test_cli_refresh_reports(tmp_path, monkeypatch, capsys):
     monkeypatch.setitem(refresh.CONFIG, "tmdb_api_key", "")
     main()
     out = capsys.readouterr().out
-    assert "[ax] crawl run 1 complete" in out and "imported 66 (66 new)" in out
+    assert "[ax] crawl run 1 complete" in out and "imported 334 (334 new)" in out
 
 
 def test_cli_refresh_search_only_skips_categories(monkeypatch, capsys):

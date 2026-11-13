@@ -30,20 +30,24 @@ def _reachable(url: str) -> None:
 
 @pytest.mark.timeout(60)
 def test_ax_first_offer_page_shape():
-    _reachable(AxAdapter.start_url)
+    adapter = AxAdapter()
+    start = adapter.start_urls[0]
+    _reachable(start)
     fetcher = HttpFetcher()
     try:
-        response = fetcher(AxAdapter.start_url)
+        response = fetcher(start)
     finally:
         fetcher.close()
     assert response.status == 200
-    listing = AxAdapter().discover(response.body, AxAdapter.start_url, response.final_url)
+    listing = adapter.discover(response.body, start, response.final_url)
     assert len(listing.pages) >= 2
     assert len(listing.products) >= 5
     products, errors = AxParser().parse(response.body)
     assert len(products) >= 20
     assert len(errors) <= len(products) // 10
     assert any(p.regular_price_cents for p in products)
+    prices = [p.price_cents for p in products]
+    assert prices == sorted(prices)  # o2=p: cheapest first
 
 
 @pytest.mark.timeout(180)

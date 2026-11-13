@@ -182,6 +182,7 @@ class MyMoviesAdapter:
     key = "mymovies"
     scope = "in-stock"
     start_url = page_url("", IN_STOCK_ONLY)
+    start_urls = (start_url,)
     expires_unseen = True
 
     def page_number(self, url: str) -> int:

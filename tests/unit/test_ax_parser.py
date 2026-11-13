@@ -122,6 +122,11 @@ def test_parse_price_cents(text, expected):
         ("Käytetty 8DVD", (Format.DVD, Condition.USED, 8)),
         ("4DVD", (Format.DVD, Condition.NEW, 4)),
         ("VHS", (Format.UNKNOWN, Condition.NEW, None)),
+        # Steelbook codes, seen in the f2=blusb and f2=ultrasb offer passes.
+        ("Blu-Ray Steelbook", (Format.BLURAY, Condition.NEW, None)),
+        ("2blusb", (Format.BLURAY, Condition.NEW, 2)),
+        ("4K UHD STEELBOOK + BLUSB", (Format.UHD, Condition.NEW, None)),
+        ("2ULTRASB + 2BLU", (Format.UHD, Condition.NEW, 2)),
     ],
 )
 def test_parse_format(raw, expected):

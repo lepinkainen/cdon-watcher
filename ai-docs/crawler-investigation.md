@@ -43,19 +43,23 @@ error counts; a stale row there means the daily refresh is not importing.
 Plain HTTP works. Fetch one page and poke at it:
 
 ```bash
-curl -sA "shelfwatch/0.1" "https://www.levykauppax.fi/leffat/offer/?p2=2" > /tmp/ax.html
+curl -sA "shelfwatch/0.1" "https://www.levykauppax.fi/leffat/offer/?p2=2&f2=blu&o2=p" > /tmp/ax.html
 ```
 
 Shape the adapter expects (`ingestion/stores.py::AxAdapter`, `ax_parser.py`):
 
-- `<h1>Elokuvat - Tarjoukset</h1>` on every page (error-page guard).
+- One pass per format filter, cheapest first: `?f2=blu|uhd|ultrasb|blusb&o2=p`.
+- `<h1>` is the error-page guard. Pages 1-2 name the filter (`Elokuvat - Blu-Ray`,
+  `Elokuvat - 4K Ultra HD`, `Elokuvat - 4K UHD Steelbook`, `Elokuvat - Blu-Ray Steelbook`);
+  from page 3 on it is `Elokuvat - Tarjoukset`, though the rows stay filtered and sorted.
 - `ul.list-products > li.hproduct` rows with `id="p-<digits>"`.
 - Row: `a.fn[href]` title link whose fragment is the edition id,
-  `span.type` media text (`Käytetty` prefix = used; `2 Blu-ray`, `4K ULTRA HD + BLU`),
+  `span.type` media text (`Käytetty` prefix = used; `2 Blu-ray`, `4K ULTRA HD + BLU`,
+  steelbook codes `2blusb`, `2ULTRASB + 2BLU`),
   `span.price` with optional `<del>` regular price, `p.shipping` stock text
   (`in-stock` class), `.sticker-bottom-right` quantity (`Enää N kpl`),
   `dl` with `Julkaisuvuosi` / `Yhtiö`.
-- `.pagination a[href]` links with `?p2=N`; `.active` marks the current page.
+- `.pagination a[href]` links with `./?p2=N&f2=<filter>&o2=p`; `.active` marks the current page.
 
 ### CDON
 

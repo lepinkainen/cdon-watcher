@@ -84,7 +84,7 @@ class Crawler:
     def crawl(self, adapter: StoreAdapter) -> ArchivedRun:
         with self.archive.start(adapter.key, adapter.scope) as run:
             self.run = run
-            pending = [adapter.start_url]
+            pending = list(adapter.start_urls)
             visited: set[str] = set()
             signatures: set[tuple[str, ...]] = set()
             product_ids: set[str] = set()

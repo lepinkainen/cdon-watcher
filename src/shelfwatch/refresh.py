@@ -69,7 +69,7 @@ def make_adapter(store: str, max_pages: int) -> Any:
         return CdonAdapter(max_pages=max_pages)
     if store == "mymovies":
         return MyMoviesAdapter()
-    return AxAdapter()
+    return AxAdapter(max_pages=max_pages)
 
 
 def make_fetcher(store: str) -> Any:

@@ -176,6 +176,11 @@ Which pages each adapter fetches in v1:
 | Äx    | All offer-category pages (`?p2=N`), plain HTTP | None. Listing rows carry everything v1 needs    |
 | CDON  | First N pages of `/elokuvat/`, Playwright      | None. `__NEXT_DATA__` articles carry everything |
 
+Since November 2026 Äx is crawled in four format passes (`?f2=blu|uhd|ultrasb|blusb`),
+cheapest first (`o2=p`), capped at `MAX_PAGES_PER_CATEGORY` pages each: a
+storewide -10% sale had put about 29,000 products, some 300 pages, in the
+offer category.
+
 Neither store needs detail pages in v1. Äx detail pages (EAN, language,
 subtitles) and CDON product pages (production year in the description) are
 deferred. CDON listing pages are fetched once and filtered to Blu-ray and 4K

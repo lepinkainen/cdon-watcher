@@ -176,7 +176,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(crawl, store_required=True)
     crawl.add_argument("--attempts", type=int, default=CONFIG["crawl_attempts"])
     crawl.add_argument("--delay", type=float, default=CONFIG["crawl_delay"])
-    crawl.add_argument("--max-pages", type=int, default=CONFIG["max_pages"], help="CDON only")
+    crawl.add_argument(
+        "--max-pages", type=int, default=CONFIG["max_pages"], help="Äx (per format) and CDON"
+    )
 
     parse = sub.add_parser("parse-raw", help="Parse an archived run offline into parsed.json")
     _add_common(parse, store_required=True)
@@ -200,7 +202,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_common(refresh, store_required=False)
     refresh.add_argument("--db", type=Path, default=None)
-    refresh.add_argument("--max-pages", type=int, default=None, help="CDON only")
+    refresh.add_argument("--max-pages", type=int, default=None, help="Äx (per format) and CDON")
     mode = refresh.add_mutually_exclusive_group()
     mode.add_argument("--skip-crawl", action="store_true", help="Reprocess the latest run")
     mode.add_argument("--no-search", action="store_true", help="Skip wishlist searches")
