@@ -36,6 +36,18 @@ class MovieDetails:
     cast: list[str] = field(default_factory=list)
 
 
+@dataclass
+class MovieTitles:
+    """What tells same-titled candidates apart, and the titles a Finnish store uses."""
+
+    tmdb_id: int
+    popularity: float = 0.0
+    vote_count: int = 0
+    finnish_title: str | None = None
+    finland_titles: list[str] = field(default_factory=list)
+    """Other titles TMDB lists for Finland, often the Swedish release title."""
+
+
 class TmdbError(RuntimeError):
     """TMDB was unreachable or answered with an error. Retry later."""
 
@@ -44,6 +56,8 @@ class TmdbClient(Protocol):
     def search_movies(self, query: str, year: int | None = None) -> list[Candidate]: ...
 
     def movie_details(self, tmdb_id: int) -> MovieDetails: ...
+
+    def movie_titles(self, tmdb_id: int) -> MovieTitles: ...
 
 
 def _year(date: Any) -> int | None:
@@ -117,4 +131,31 @@ class HttpTmdbClient:
             overview=data.get("overview"),
             director=", ".join(directors[:2]) or None,
             cast=cast,
+        )
+
+    def movie_titles(self, tmdb_id: int) -> MovieTitles:
+        data = self._get(f"/movie/{tmdb_id}", append_to_response="translations,alternative_titles")
+        translations = data.get("translations", {}).get("translations", [])
+        finnish = next(
+            (
+                str(t["data"]["title"])
+                for t in translations
+                if isinstance(t, dict)
+                and t.get("iso_639_1") == "fi"
+                and isinstance(t.get("data"), dict)
+                and t["data"].get("title")
+            ),
+            None,
+        )
+        finland = [
+            str(a["title"])
+            for a in data.get("alternative_titles", {}).get("titles", [])
+            if isinstance(a, dict) and a.get("iso_3166_1") == "FI" and a.get("title")
+        ]
+        return MovieTitles(
+            tmdb_id=tmdb_id,
+            popularity=float(data.get("popularity") or 0.0),
+            vote_count=int(data.get("vote_count") or 0),
+            finnish_title=finnish,
+            finland_titles=[t for t in finland if t != finnish],
         )

@@ -15,7 +15,8 @@ from sqlmodel import Session, select
 from .catalog.catalogue import CatalogueClient, HttpCatalogueClient, load_catalogue, sync_catalogue
 from .catalog.db import open_catalog
 from .catalog.importer import ImportResult, import_run
-from .catalog.matching import MatchResult, match_pending
+from .catalog.jev import HttpJevClient, JevClient
+from .catalog.matching import BoxSetResult, MatchResult, gate_box_sets, match_pending
 from .catalog.models import CrawlRun, Store, WishSearch
 from .catalog.tmdb import HttpTmdbClient
 from .config import CONFIG
@@ -47,6 +48,7 @@ class RefreshReport:
     imported: ImportResult | None = None
     searched: RunManifest | None = None
     search_imported: ImportResult | None = None
+    box_sets: BoxSetResult | None = None
     matched: MatchResult | None = None
     crawl_failed: bool = False
     notes: list[str] = field(default_factory=list)
@@ -160,8 +162,13 @@ class _LazyFetcher:
         return self.fetcher
 
     def close(self) -> None:
-        if self.fetcher is not None:
+        if self.fetcher is None:
+            return
+        try:
             self.fetcher.close()
+        except Exception as error:  # cleanup must not mask the run's outcome
+            # After Ctrl-C the browser has often died with the same signal.
+            logger.warning("closing the %s fetcher failed: %s", self.store, error)
 
 
 @dataclass
@@ -353,11 +360,20 @@ def refresh_store(
 
         if not report.imported_any:
             return report
+        jev = jev_client()
+        if jev is not None:
+            report.box_sets = gate_box_sets(engine, jev, store=store)
         if not tmdb_api_key:
             report.notes.append("TMDB_API_KEY not set; matching skipped")
             return report
-        report.matched = match_pending(engine, HttpTmdbClient(tmdb_api_key), store=store)
+        report.matched = match_pending(engine, HttpTmdbClient(tmdb_api_key), jev=jev, store=store)
     return report
+
+
+def jev_client() -> JevClient | None:
+    """Jev for the box-set gate and ambiguous matches; None without JEV_API_KEY."""
+    key = CONFIG["jev_api_key"]
+    return HttpJevClient(key, model=CONFIG["jev_model"]) if key else None
 
 
 def catalogue_client() -> CatalogueClient | None:
@@ -417,11 +433,16 @@ def describe(report: RefreshReport) -> str:
             f"searched {s.searches} wishes ({s.searches_failed} failed): {s.search_hits} results, "
             f"{s.hits_dropped} no longer found"
         )
+    if report.box_sets is not None:
+        b = report.box_sets
+        parts.append(
+            f"box-set check {b.checked}: {b.box_sets} box sets, {b.maybe} unsure, {b.errors} errors"
+        )
     if report.matched is not None:
         m = report.matched
         parts.append(
-            f"matched {m.auto} auto + {m.reused} reused + {m.searched} wished, "
-            f"{m.ambiguous} ambiguous, {m.unmatched} unmatched, {m.errors} errors"
+            f"matched {m.auto} auto + {m.reused} reused + {m.searched} wished + {m.jev} by Jev, "
+            f"{m.held} held, {m.ambiguous} ambiguous, {m.unmatched} unmatched, {m.errors} errors"
         )
     parts.extend(report.notes)
     return f"[{report.store}] " + "; ".join(parts)

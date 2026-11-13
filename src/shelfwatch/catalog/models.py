@@ -74,6 +74,9 @@ class StoreProduct(CatalogModel, table=True):
     edition_note: str | None = None
     image_url: str | None = None
     is_collection: bool = Field(default=False, index=True)
+    """A box set: the title patterns or Jev say it holds several different films."""
+    box_set_probability: float | None = None
+    """Jev's answer for the current raw title; None until checked."""
     tmdb_id: int | None = Field(default=None, index=True)
 
     current_price_cents: int = Field(index=True)

@@ -41,6 +41,7 @@
   <p class="meta">
     {{ page.rows | length }} offers · last refresh {{ page.last_refresh | when }}
     {% if page.hidden_owned %}· {{ page.hidden_owned }} owned on Blu-ray/UHD hidden{% endif %}
+    {% if page.box_set_count %}· <a href="/box-sets">{{ page.box_set_count }} box set{{ "s" if page.box_set_count != 1 }} in stock</a>{% endif %}
     {% if page.catalogue.fetched_at %}· catalogue synced {{ page.catalogue.fetched_at | when }}{% else %}· catalogue never synced{% endif %}
     {% if page.catalogue.last_error %}<span class="warn">· last sync failed</span>{% endif %}
   </p>

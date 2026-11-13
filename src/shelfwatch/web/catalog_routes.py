@@ -113,6 +113,23 @@ def index(
     )
 
 
+@router.get("/box-sets")
+def box_sets(
+    request: Request,
+    format: str | None = Query(default=None),
+    store: str | None = Query(default=None),
+    condition: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+) -> Response:
+    filters = queries.Filters(
+        format=format if format in FORMATS else None,
+        store=store or None,
+        condition=condition if condition in CONDITIONS else None,
+        q=q.strip() if q and q.strip() else None,
+    )
+    return _render(request, "box_sets.html", page=queries.box_sets_page(_engine(request), filters))
+
+
 @router.get("/ignored")
 def ignored(request: Request) -> Response:
     return _render(request, "ignored.html", rows=queries.ignored_page(_engine(request)))

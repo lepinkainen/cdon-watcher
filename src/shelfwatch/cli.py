@@ -1,7 +1,9 @@
 """Command-line interface: ingestion stages, refresh, and the web app."""
 
 import argparse
+import io
 import logging
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -72,17 +74,39 @@ def _cmd_import_run(args: argparse.Namespace, parser: argparse.ArgumentParser) -
 
 def _cmd_match(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     from .catalog.db import SchemaError, open_catalog
-    from .catalog.matching import match_pending
+    from .catalog.matching import (
+        clear_box_set_answers,
+        gate_box_sets,
+        match_pending,
+        reset_ambiguous,
+    )
     from .catalog.tmdb import HttpTmdbClient
+    from .refresh import jev_client
 
     try:
         client = HttpTmdbClient(CONFIG["tmdb_api_key"])
         engine = open_catalog(args.db or CONFIG["db_path"])
     except (ValueError, SchemaError) as error:
         parser.exit(2, f"{error}\n")
-    result = match_pending(engine, client, store=args.store, limit=args.limit)
+    jev = jev_client()
+    if (args.retry_ambiguous or args.recheck_box_sets) and jev is None:
+        parser.exit(2, "--retry-ambiguous and --recheck-box-sets need JEV_API_KEY\n")
+    if args.recheck_box_sets:
+        print(f"cleared {clear_box_set_answers(engine, store=args.store)} box-set answers")
+    if args.retry_ambiguous:
+        print(f"reset {reset_ambiguous(engine, store=args.store)} ambiguous matches to pending")
+    if jev is not None:
+        gate = gate_box_sets(engine, jev, store=args.store, limit=args.limit)
+        print(
+            f"box-set check {gate.checked}: {gate.box_sets} box sets, {gate.maybe} unsure, "
+            f"{gate.errors} errors"
+        )
+    result = match_pending(
+        engine, client, jev=jev, store=args.store, limit=args.limit, progress_level=logging.INFO
+    )
     print(
         f"considered {result.considered}: {result.auto} auto, {result.reused} reused, "
+        f"{result.jev} by Jev, {result.held} held as possible box sets, "
         f"{result.ambiguous} ambiguous, {result.unmatched} unmatched, "
         f"{result.not_applicable} collections, {result.errors} errors"
     )
@@ -194,6 +218,16 @@ def build_parser() -> argparse.ArgumentParser:
     match.add_argument("--store", choices=STORES, default=None)
     match.add_argument("--limit", type=int, default=None)
     match.add_argument(
+        "--retry-ambiguous",
+        action="store_true",
+        help="Send ambiguous matches back to pending so Jev decides them (needs JEV_API_KEY)",
+    )
+    match.add_argument(
+        "--recheck-box-sets",
+        action="store_true",
+        help="Ask Jev again about products it called box sets or unsure (after a wording change)",
+    )
+    match.add_argument(
         "--db", type=Path, default=None, help="Catalog SQLite path (default: DB_PATH)"
     )
 
@@ -233,6 +267,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    # Keep printed summaries in order with log lines (stderr) when piped or redirected.
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(line_buffering=True)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     parser = build_parser()
     args = parser.parse_args()
@@ -243,7 +280,12 @@ def main() -> None:
     if command is None:
         parser.print_help()
         return
-    command(args, parser)
+    try:
+        command(args, parser)
+    except KeyboardInterrupt:
+        # Stages commit per product or per run, so finished work is kept.
+        print("\ninterrupted; work committed so far is kept", file=sys.stderr)
+        raise SystemExit(130) from None
 
 
 if __name__ == "__main__":

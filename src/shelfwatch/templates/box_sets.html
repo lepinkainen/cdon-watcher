@@ -1,0 +1,40 @@
+{% extends "layout.html" %}
+{% block title %}Box sets · Movie offers{% endblock %}
+{% block content %}
+<section>
+  <p class="meta">Sets of several different films, in stock at any price. They are never matched to a single movie.</p>
+  <form class="filters" method="get" action="/box-sets">
+    <select name="format">
+      <option value="" {% if not page.filters.format %}selected{% endif %}>Any format</option>
+      <option value="bd" {% if page.filters.format == 'bd' %}selected{% endif %}>Blu-ray</option>
+      <option value="4k" {% if page.filters.format == '4k' %}selected{% endif %}>4K UHD</option>
+    </select>
+    <select name="store">
+      <option value="" {% if not page.filters.store %}selected{% endif %}>Any store</option>
+      {% for store in page.stores %}
+      <option value="{{ store.key }}" {% if page.filters.store == store.key %}selected{% endif %}>{{ store.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="condition">
+      <option value="" {% if not page.filters.condition %}selected{% endif %}>Any condition</option>
+      <option value="new" {% if page.filters.condition == 'new' %}selected{% endif %}>New</option>
+      <option value="used" {% if page.filters.condition == 'used' %}selected{% endif %}>Used</option>
+    </select>
+    <input type="search" name="q" placeholder="Title" value="{{ page.filters.q or '' }}">
+    <button type="submit">Filter</button>
+    <a class="reset" href="/box-sets">Reset</a>
+  </form>
+
+  {% if page.rows %}
+  <table>
+    <thead><tr><th></th><th>Title</th><th>Format</th><th>Cond.</th><th>Store</th><th>Price</th><th></th></tr></thead>
+    <tbody>
+    {% for row in page.rows %}{% include "_row.html" %}{% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No box sets in stock.</p>
+  {% endif %}
+  <p class="meta">{{ page.rows | length }} box sets</p>
+</section>
+{% endblock %}

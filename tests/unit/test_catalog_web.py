@@ -338,12 +338,12 @@ def test_queue_lists_unmatched_in_stock_single_movies_and_manual_match(client, e
         engine,
         [
             product("1", "Heat", price=900),
-            product("2", "Box", price=900, collection=True),
+            product("2", "Alien Quadrilogy", price=900, collection=True),
             product("3", "Gone", price=900, avail=Availability.OUT_OF_STOCK),
         ],
     )
     html = client.get("/queue").text
-    assert "Heat" in html and "Box" not in html and "Gone" not in html
+    assert "Heat" in html and "Quadrilogy" not in html and "Gone" not in html
     pid = ids(engine)["1"]
     assert client.post(f"/api/v2/products/{pid}/match", json={"tmdb_id": 949}).json() == {
         "status": "manual",
@@ -477,3 +477,22 @@ def test_rows_show_store_cover_else_tmdb_poster(client, engine):
     html = client.get("/").text
     assert 'src="https://image.tmdb.org/t/p/w154/p.jpg"' in html
     assert 'class="queue-cover" src="https://store.test/cover.jpg"' in client.get("/queue").text
+
+
+def test_box_sets_have_their_own_page_and_leave_the_main_page(client, engine):
+    seed(
+        engine,
+        [
+            product("1", "Heat", price=900),
+            product("2", "Alien Quadrilogy", price=4999, collection=True),
+            product(
+                "3", "Gone Trilogy", price=900, collection=True, avail=Availability.OUT_OF_STOCK
+            ),
+        ],
+    )
+    main = client.get("/").text
+    assert "Quadrilogy" not in main and '<a href="/box-sets">1 box set in stock</a>' in main
+    page = client.get("/box-sets").text
+    assert "Alien Quadrilogy" in page and "Gone Trilogy" not in page and "Heat</a>" not in page
+    assert "box set</span>" in page
+    assert "Alien Quadrilogy" not in client.get("/box-sets?q=heat").text

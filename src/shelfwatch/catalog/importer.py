@@ -17,6 +17,7 @@ from sqlalchemy import Engine
 from sqlmodel import Session, select
 
 from ..ingestion.contract import SEARCH_SCOPE, ParsedProduct, ParsedRun, ParsedSnapshot
+from .jev import is_box_set
 from .models import (
     CrawlRun,
     MatchState,
@@ -67,6 +68,8 @@ def _get_or_create_store(session: Session, key: str) -> Store:
 def _apply_current_state(
     product: StoreProduct, parsed: ParsedProduct, run_id: int, at: datetime
 ) -> None:
+    if product.raw_title != parsed.raw_title:
+        product.box_set_probability = None  # a new title gets a new box-set check
     product.raw_title = parsed.raw_title
     product.cleaned_title = parsed.cleaned_title
     product.edition_url = parsed.edition_url
@@ -79,7 +82,7 @@ def _apply_current_state(
     product.publisher = parsed.publisher
     product.edition_note = parsed.edition_note
     product.image_url = parsed.image_url
-    product.is_collection = parsed.is_collection
+    product.is_collection = parsed.is_collection or is_box_set(product.box_set_probability)
     product.current_price_cents = parsed.price_cents
     product.current_regular_price_cents = parsed.regular_price_cents
     product.currency = parsed.currency

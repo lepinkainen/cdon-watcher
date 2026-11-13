@@ -1,5 +1,6 @@
 """Read queries behind the web pages. Pure database reads, no crawling."""
 
+import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -81,6 +82,8 @@ class MainPage:
     last_refresh: datetime | None
     catalogue: Catalogue
     hidden_owned: int = 0
+    box_set_count: int = 0
+    """In-stock box sets; they have their own page."""
 
 
 @dataclass
@@ -237,7 +240,7 @@ def main_page(engine: Engine, filters: Filters, *, now: datetime | None = None) 
         catalogue, rows = _visible_rows(session, now)
         rest, hidden_owned = [], 0
         for row in rows:
-            if not _passes(row, filters):
+            if row.is_collection or not _passes(row, filters):
                 continue
             if not row.wished and catalogue.owns_disc(row.tmdb_id):
                 hidden_owned += 1
@@ -257,7 +260,35 @@ def main_page(engine: Engine, filters: Filters, *, now: datetime | None = None) 
         last_refresh=last,
         catalogue=catalogue,
         hidden_owned=hidden_owned,
+        box_set_count=sum(r.is_collection for r in rows),
     )
+
+
+@dataclass
+class BoxSetPage:
+    rows: list[Row]
+    filters: Filters
+    stores: list[Store]
+
+
+def box_sets_page(engine: Engine, filters: Filters, *, now: datetime | None = None) -> BoxSetPage:
+    """In-stock box sets at any price, cheapest first. Never matched to a movie."""
+    unlimited = Filters(
+        max_bd_cents=sys.maxsize,
+        max_4k_cents=sys.maxsize,
+        format=filters.format,
+        store=filters.store,
+        condition=filters.condition,
+        q=filters.q,
+    )
+    with Session(engine) as session:
+        _, rows = _visible_rows(session, now or _now())
+        boxes = sorted(
+            (r for r in rows if r.is_collection and _passes(r, unlimited)), key=_price_sort
+        )
+        stores = session.exec(select(Store).order_by(Store.key)).all()
+        session.expunge_all()
+    return BoxSetPage(rows=boxes, filters=filters, stores=list(stores))
 
 
 def wishlist_in_stock(engine: Engine, *, now: datetime | None = None) -> list[Row]:

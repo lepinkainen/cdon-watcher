@@ -230,3 +230,16 @@ def test_adapters_and_parsers_by_store():
     assert isinstance(refresh.make_adapter("cdon", 5), CdonAdapter)
     assert refresh.make_adapter("cdon", 5).max_pages == 5
     assert refresh.make_parser("cdon").store == "cdon"
+
+
+def test_a_dead_browser_on_close_does_not_mask_the_outcome(caplog):
+    from shelfwatch.refresh import _LazyFetcher
+
+    class Dead:
+        def close(self):
+            raise RuntimeError("Target page, context or browser has been closed")
+
+    fetcher = _LazyFetcher("cdon")
+    fetcher.fetcher = Dead()
+    fetcher.close()
+    assert "closing the cdon fetcher failed" in caplog.text

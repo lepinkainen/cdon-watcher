@@ -21,6 +21,8 @@ def load_config() -> dict[str, Any]:
         "db_path": os.environ.get("DB_PATH", "./data/catalog.db"),
         "raw_dir": Path(os.environ.get("RAW_DIR", "./data/raw")),
         "tmdb_api_key": os.environ.get("TMDB_API_KEY", ""),
+        "jev_api_key": os.environ.get("JEV_API_KEY", "").strip(),
+        "jev_model": os.environ.get("JEV_MODEL", "jev-1.14.0").strip(),
         "api_host": os.environ.get("API_HOST", "0.0.0.0"),
         "api_port": int(os.environ.get("API_PORT", 8080)),
         "api_debug": _bool("API_DEBUG", False),

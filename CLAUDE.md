@@ -73,6 +73,14 @@ failure keeps the stored lists) → per store: category crawl/parse/import →
 wishlist searches (`ingestion/search.py`, archive scope `wish-search`) →
 parse/import → match. Search runs share the store lock, delay and browser.
 
+Matching with `JEV_API_KEY`: the box-set gate runs before matching. When the
+title scores can't decide, `catalog/jev.py` asks Jev to pick among the top 5
+TMDB candidates (with popularity, vote count and Finnish titles from
+`movie_titles`). Accept, review (`ambiguous`) or none (`unmatched`) follows
+`jev.decide`. All question wording and thresholds live in `catalog/jev.py`.
+`match --retry-ambiguous` sends existing ambiguous matches back through it.
+Unit tests blank `JEV_API_KEY` (`tests/conftest.py`).
+
 Discovery source: `store_products.category_member` (seen by the newest category
 crawl) and `search_hits` (found by the latest search for a wished movie). A
 product stays active while either holds. Matching checks search hits against
@@ -83,14 +91,14 @@ Store facts that drive the design:
 - Äx: plain HTTP, listing rows carry everything (price, `<del>` regular price, stock text, format, edition id in URL fragment). The crawl makes four passes over the offer category, one per format filter (`?f2=blu|uhd|ultrasb|blusb`), sorted cheapest first (`o2=p`), each capped at `MAX_PAGES_PER_CATEGORY` pages: storewide sales put tens of thousands of products "on offer". A complete run expires unseen products, including offers priced past the cap.
 - CDON: Cloudflare challenge blocks plain HTTP, so `BrowserFetcher` renders listings in headless Chromium. Products come from `__NEXT_DATA__` articles (price, stock count, condition, `preset_media_format`). First N pages only; no product pages; no membership expiry, freshness (48 h) hides stale rows.
 - MyMovies: `/tuotteet.php` is an empty shell; its script POSTs the filter form to `/ajax/hae-tuotteet2.php`, which returns JSON with result cards as HTML. `MyMoviesFetcher` turns an archived `/tuotteet.php?q=&saatavuus=&page=` URL into that POST (fixed filters: Blu-ray + 4K only, new + used, all types, title search). The crawl is the empty query with `saatavuus=1` (all in-stock products, 60 per page, about 50 pages); a complete run expires unseen products. Searches send `saatavuus=0`. Each card has a new and a used price with separate stock (buy button `data-uusi` / `data-kaytetty`), so one card becomes products `<id>:new` and `<id>:used`. No product pages. Requests need a desktop Chrome User-Agent (403 otherwise). Details: `docs/11_mymovies.md`.
-- Collections (multi-movie boxes, TV seasons) are shown as-is under the store title and never matched.
+- Box sets (`is_collection`: several different films, TV seasons) are never matched and live on `/box-sets`, not `/`. Title patterns (`box_set_detector.py`) flag them at parse time; the Jev gate (`gate_box_sets`) asks once per title for the rest and stores `box_set_probability` (re-asked when the raw title changes). Over 0.7 is a box set; 0.3–0.7 is matched as usual but never accepted automatically (lands in `/queue`); a failed Jev call leaves the product unmatched until a later run gets an answer.
 - Search: Äx `/v2/search/?q=` returns offer-style rows mixed with music. CDON `/s?q=` renders no products; its script POSTs to `search-bff.cdon.se/search/v2/result`, and `BrowserFetcher.search` keeps that response from the page load. Never call that API directly. Most CDON hits are marketplace listings without `preset_media_format`, and CDON never returns an empty result.
 
 ## Pages and endpoints
 
 - `/` main page: in-stock offers under the hardcoded caps (BD ≤ €15, 4K ≤ €20), minus movies owned on Blu-ray/UHD; wished movies are badged and a link counts wishlist offers. Query params `max_bd`, `max_4k` (euros), `format=bd|4k`, `store=ax|cdon|mymovies`, `condition=new|used`, `q`.
 - `/in-stock`: wishlist offers in stock (accepted formats, any price, deals marked).
-- `/wishlist` (read-only, offers and searches per wish), `/queue` (manual TMDB matching), `/ignored`, `/products/<id>` (price history), `/status`. `/watchlist` redirects to `/wishlist`.
+- `/box-sets` (in-stock box sets, any price), `/wishlist` (read-only, offers and searches per wish), `/queue` (manual TMDB matching), `/ignored`, `/products/<id>` (price history), `/status`. `/watchlist` redirects to `/wishlist`.
 - `POST /api/v2/products/<id>/{ignore|unignore}`; `POST /api/v2/products/<id>/wish` (forwards to moviecatalog `POST /api/wants`); `POST /api/v2/products/<id>/match` with `{"tmdb_id": int|null}`; `GET /api/v2/tmdb/search?q=`.
 - `GET /api/v2/offers?tmdb_id=…` (repeatable): read API for moviecatalog; shape fixed by its SPEC.md.
 
@@ -110,6 +118,7 @@ Store facts that drive the design:
 ## Environment Variables
 
 See `.env.example`. Key ones: `TMDB_API_KEY` (matching skipped without it),
+`JEV_API_KEY` (box-set gate and Jev match decisions; 1Password `op://Development/Jev API/credential`), `JEV_MODEL` (pinned, default `jev-1.14.0`),
 `MOVIECATALOG_URL` (sync, wish action; unset = no owned filtering or searches),
 `SEARCH_DAILY_CAP` (search requests per store per 24 h),
 `SEARCH_MIN_INTERVAL_HOURS` (re-search gap per wish and store, default 24),
@@ -119,11 +128,9 @@ See `.env.example`. Key ones: `TMDB_API_KEY` (matching skipped without it),
 
 ## LLM Guidelines
 
-Shared conventions come from the `llm-shared` MCP server (no longer a
-submodule). Key rules it carries:
+Shared conventions come from the `llm-shared` MCP server. Key rules it carries:
 
 - Python: uv, ruff, strict mypy
 - Shell: use `rg` instead of `grep`, `fd` instead of `find`
-- GitHub: never commit to main directly, use feature branches
 
 When a store breaks, follow `ai-docs/crawler-investigation.md`.

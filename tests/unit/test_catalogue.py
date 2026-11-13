@@ -98,11 +98,11 @@ def test_remember_want_adds_once(tmp_path):
 
 def test_migration_is_current_and_idempotent(tmp_path):
     engine = open_catalog(tmp_path / "c.db")
-    assert migrate(engine) == CURRENT_VERSION == 4
+    assert migrate(engine) == CURRENT_VERSION == 5
     tables = set(inspect(engine).get_table_names())
     assert {"catalogue_sync", "wish_searches", "search_hits"} <= tables
     columns = {c["name"] for c in inspect(engine).get_columns("store_products")}
-    assert {"category_member", "category_run_id"} <= columns
+    assert {"category_member", "category_run_id", "box_set_probability"} <= columns
 
 
 def _response(status, payload=None, text=""):

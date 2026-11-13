@@ -14,8 +14,21 @@ from difflib import SequenceMatcher
 from sqlalchemy import Engine
 from sqlmodel import Session, select
 
+from ..box_set_detector import is_box_set as title_is_box_set
 from .catalogue import Catalogue, load_catalogue
-from .models import MatchState, MovieMetadata, SearchHit, StoreProduct
+from .jev import NO as JEV_NO
+from .jev import (
+    JevCandidate,
+    JevClient,
+    JevError,
+    ProductFacts,
+    box_set_probability,
+    is_box_set,
+    maybe_box_set,
+    pick_candidate,
+    tokens_used,
+)
+from .models import MatchState, MovieMetadata, SearchHit, Store, StoreProduct
 from .preferences import demote_movie_preferences, transfer_product_preferences
 from .tmdb import Candidate, MovieDetails, TmdbClient, TmdbError
 
@@ -31,6 +44,10 @@ TARGET_REVIEW_SCORE = 0.6
 """A search hit scoring at least this against the wished movie goes to the review queue."""
 RETRY_STATUSES = ("pending", "error")
 DECIDED_STATUSES = ("auto", "manual")
+USER_STATUSES = ("manual", "rejected")
+"""A person decided these; the box-set gate leaves them alone."""
+JEV_CANDIDATES = 5
+"""How many of the best-scored candidates Jev chooses among."""
 
 _TITLE_YEAR = re.compile(r"\((19\d{2}|20\d{2})\)")
 _NOISE = re.compile(
@@ -121,24 +138,32 @@ class MatchResult:
     errors: int = 0
     searched: int = 0
     """Accepted as the wished-for movie a search was looking for."""
+    jev: int = 0
+    """Accepted because Jev picked a candidate the title scores could not separate."""
+    held: int = 0
+    """Would have been accepted, but Jev was unsure whether it is a box set."""
 
 
 PROGRESS_EVERY = 50
 
 
-def _log_progress(result: MatchResult, total: int) -> None:
-    logger.debug(
-        "matched %d/%d: %d auto, %d reused, %d wished, %d ambiguous, %d unmatched, "
-        "%d not applicable, %d errors",
+def _log_progress(result: MatchResult, total: int, level: int, jev: JevClient | None) -> None:
+    logger.log(
+        level,
+        "matched %d/%d: %d auto, %d reused, %d wished, %d by Jev, %d held, %d ambiguous, "
+        "%d unmatched, %d not applicable, %d errors%s",
         result.considered,
         total,
         result.auto,
         result.reused,
         result.searched,
+        result.jev,
+        result.held,
         result.ambiguous,
         result.unmatched,
         result.not_applicable,
         result.errors,
+        tokens_used(jev),
     )
 
 
@@ -233,33 +258,56 @@ def _search_targets(
     return targets
 
 
+@dataclass
+class _Run:
+    """What one matching pass shares across products."""
+
+    session: Session
+    client: TmdbClient
+    jev: JevClient | None
+    now: datetime
+    result: MatchResult
+    catalogue: Catalogue
+
+
+def _hold(state: MatchState, product: StoreProduct, run: _Run, accepted: str) -> None:
+    """A possible box set is never matched automatically; a person confirms it."""
+    state.status, state.tmdb_id = "ambiguous", None
+    state.note = (
+        f"Possible box set (Jev {product.box_set_probability:.2f}); would have accepted {accepted}"
+    )
+    run.result.held += 1
+
+
 def _accept(
-    session: Session,
-    client: TmdbClient,
+    run: _Run,
     product: StoreProduct,
     state: MatchState,
     candidate: Candidate,
-    now: datetime,
     *,
     decided_by: str,
-) -> None:
-    _ensure_metadata(session, client, candidate.tmdb_id, now)
+    note: str | None = None,
+) -> bool:
+    """Record the match. False: held for review as a possible box set."""
+    accepted = f"{candidate.title!r} ({candidate.release_year})"
+    if maybe_box_set(product.box_set_probability):
+        _hold(state, product, run, accepted)
+        return False
+    _ensure_metadata(run.session, run.client, candidate.tmdb_id, run.now)
     state.status, state.tmdb_id = "auto", candidate.tmdb_id
-    state.note = f"Accepted {candidate.title!r} ({candidate.release_year})"
-    state.decided_at, state.decided_by = now, decided_by
+    state.note = note or f"Accepted {accepted}"
+    state.decided_at, state.decided_by = run.now, decided_by
     product.tmdb_id = candidate.tmdb_id
-    transfer_product_preferences(session, product)
+    transfer_product_preferences(run.session, product)
+    return True
 
 
 def _decide_against_targets(
-    session: Session,
-    client: TmdbClient,
+    run: _Run,
     product: StoreProduct,
     state: MatchState,
     targets: list[Candidate],
     year: int | None,
-    now: datetime,
-    result: MatchResult,
 ) -> bool:
     """Check a search hit against the wished movie. False: leave it to open matching."""
     scored = sorted(
@@ -268,60 +316,109 @@ def _decide_against_targets(
     best_score, best = scored[0]
     if best_score >= ACCEPT_SCORE:
         state.confidence = best_score
-        _accept(session, client, product, state, best, now, decided_by="search")
-        result.searched += 1
+        state.candidates_json = _candidates_json(scored)
+        if _accept(run, product, state, best, decided_by="search"):
+            run.result.searched += 1
         return True
     if best_score >= TARGET_REVIEW_SCORE:
         state.confidence = best_score
         state.candidates_json = _candidates_json(scored)
         state.status = "ambiguous"
         state.note = f"Search hit for {best.title!r} scored {best_score}; needs review"
-        result.ambiguous += 1
+        run.result.ambiguous += 1
         return True
     return False
 
 
-def _decide(
-    session: Session,
-    client: TmdbClient,
+def _reuse(run: _Run, product: StoreProduct, state: MatchState, reusable: MatchState) -> None:
+    if maybe_box_set(product.box_set_probability):
+        _hold(state, product, run, f"the match of product {reusable.store_product_id}")
+        return
+    state.status, state.tmdb_id = "auto", reusable.tmdb_id
+    state.confidence = reusable.confidence
+    state.note = f"Reused {reusable.status} match of product {reusable.store_product_id}"
+    state.decided_at, state.decided_by = run.now, "reuse"
+    product.tmdb_id = reusable.tmdb_id
+    transfer_product_preferences(run.session, product)
+    run.result.reused += 1
+
+
+def _facts(session: Session, product: StoreProduct) -> ProductFacts:
+    store = session.get(Store, product.store_id)
+    return ProductFacts(
+        store=store.name if store else "",
+        raw_title=product.raw_title,
+        format=product.format,
+        release_year=product.release_year,
+        publisher=product.publisher,
+        edition_note=product.edition_note,
+    )
+
+
+def _ask_jev(
+    run: _Run,
+    jev: JevClient,
     product: StoreProduct,
     state: MatchState,
-    now: datetime,
-    result: MatchResult,
-    catalogue: Catalogue,
+    scored: list[tuple[float, Candidate]],
 ) -> None:
+    """The scores could not decide: Jev picks among the top candidates, or none."""
+    candidates = []
+    for _, c in scored[:JEV_CANDIDATES]:
+        titles = run.client.movie_titles(c.tmdb_id)
+        candidates.append(
+            JevCandidate(
+                tmdb_id=c.tmdb_id,
+                title=c.title,
+                original_title=c.original_title,
+                release_year=c.release_year,
+                popularity=titles.popularity,
+                vote_count=titles.vote_count,
+                finnish_title=titles.finnish_title,
+                finland_titles=titles.finland_titles,
+            )
+        )
+    pick = pick_candidate(jev, _facts(run.session, product), candidates)
+    if pick.verdict == "accept":
+        chosen = next(c for _, c in scored if c.tmdb_id == pick.candidate.tmdb_id)
+        state.confidence = pick.probability
+        if _accept(run, product, state, chosen, decided_by="jev", note=pick.describe()):
+            run.result.jev += 1
+        return
+    state.note = pick.describe()
+    if pick.verdict == "none":
+        state.status = "unmatched"
+        run.result.unmatched += 1
+    else:
+        state.status = "ambiguous"
+        run.result.ambiguous += 1
+
+
+def _decide(run: _Run, product: StoreProduct, state: MatchState) -> None:
     query, title_year = search_query(product.cleaned_title)
     year = title_year or product.release_year
     state.query, state.query_year = query, year
-    targets = _search_targets(session, product, catalogue)
-    if targets and _decide_against_targets(
-        session, client, product, state, targets, year, now, result
-    ):
+    targets = _search_targets(run.session, product, run.catalogue)
+    if targets and _decide_against_targets(run, product, state, targets, year):
         return
     if not query:
         state.status, state.note = "unmatched", "Empty search query after cleanup"
-        result.unmatched += 1
+        run.result.unmatched += 1
         return
 
-    reusable = _find_reusable(session, product, query, year)
+    reusable = _find_reusable(run.session, product, query, year)
     if reusable is not None and reusable.tmdb_id is not None:
-        state.status, state.tmdb_id = "auto", reusable.tmdb_id
-        state.confidence = reusable.confidence
-        state.note = f"Reused {reusable.status} match of product {reusable.store_product_id}"
-        state.decided_at, state.decided_by = now, "reuse"
-        product.tmdb_id = reusable.tmdb_id
-        transfer_product_preferences(session, product)
-        result.reused += 1
+        _reuse(run, product, state, reusable)
         return
 
-    candidates = client.search_movies(query, year)
+    candidates = run.client.search_movies(query, year)
     if not candidates and year:
-        candidates = client.search_movies(query)
+        candidates = run.client.search_movies(query)
     scored = sorted(((score_candidate(query, year, c), c) for c in candidates), key=lambda x: -x[0])
     state.candidates_json = _candidates_json(scored)
     if not scored:
         state.status, state.note = "unmatched", "No TMDB results"
-        result.unmatched += 1
+        run.result.unmatched += 1
         return
     best_score, best = scored[0]
     runner_up = scored[1][0] if len(scored) > 1 else None
@@ -330,71 +427,262 @@ def _decide(
         or (runner_up is not None and best_score - runner_up >= ACCEPT_MARGIN)
     )
     state.confidence = best_score
-    if not accepted:
-        state.status = "ambiguous"
-        state.note = f"Best {best.title!r} scored {best_score}, runner-up {runner_up}"
-        result.ambiguous += 1
+    if accepted:
+        if _accept(run, product, state, best, decided_by="auto"):
+            run.result.auto += 1
         return
-    _accept(session, client, product, state, best, now, decided_by="auto")
-    result.auto += 1
+    if run.jev is not None:
+        _ask_jev(run, run.jev, product, state, scored)
+        return
+    state.status = "ambiguous"
+    state.note = f"Best {best.title!r} scored {best_score}, runner-up {runner_up}"
+    run.result.ambiguous += 1
+
+
+@dataclass
+class BoxSetResult:
+    checked: int = 0
+    box_sets: int = 0
+    maybe: int = 0
+    errors: int = 0
+
+
+def _gate_candidates(session: Session, store: str | None, limit: int | None):  # type: ignore[no-untyped-def]
+    """Active products without a box-set answer, minus title-pattern collections and
+    products a person already decided."""
+    query = (
+        select(StoreProduct, Store)
+        .join(Store, Store.id == StoreProduct.store_id)  # type: ignore[arg-type]
+        .outerjoin(MatchState, MatchState.store_product_id == StoreProduct.id)  # type: ignore[arg-type]
+        .where(
+            StoreProduct.active == True,  # noqa: E712
+            StoreProduct.is_collection == False,  # noqa: E712
+            StoreProduct.box_set_probability.is_(None),  # type: ignore[union-attr]
+            (MatchState.id.is_(None)) | (MatchState.status.not_in(USER_STATUSES)),  # type: ignore[attr-defined,union-attr]
+        )
+        .order_by(StoreProduct.id)  # type: ignore[arg-type]
+    )
+    if store is not None:
+        query = query.where(Store.key == store)
+    if limit is not None:
+        query = query.limit(limit)
+    return query
+
+
+def _mark_box_set(session: Session, product: StoreProduct, probability: float) -> None:
+    product.is_collection = True
+    state = _state_for(session, product)
+    state.status, state.tmdb_id = "not_applicable", None
+    state.note = f"Box set (Jev {probability:.2f})"
+    old_tmdb_id = product.tmdb_id
+    product.tmdb_id = None
+    if old_tmdb_id is not None:
+        demote_movie_preferences(session, product, old_tmdb_id)
+
+
+def _reopen_former_box_set(session: Session, product: StoreProduct, probability: float) -> None:
+    """A new answer that no longer calls the product a box set gets it matched again.
+
+    Happens after a retitle or a re-check with new question wording.
+    """
+    state = _state_for(session, product)
+    note = state.note or ""
+    was_box_set = state.status == "not_applicable" and note.startswith("Box set")
+    was_held = state.status == "ambiguous" and note.startswith("Possible box set")
+    if was_box_set or (was_held and not maybe_box_set(probability)):
+        state.status, state.note = "pending", None
+
+
+def _hold_decided(session: Session, product: StoreProduct, probability: float) -> None:
+    """An automatic match made before the gate goes back to the queue."""
+    state = _state_for(session, product)
+    if state.status != "auto":
+        return
+    state.status, state.tmdb_id = "ambiguous", None
+    state.note = f"Possible box set (Jev {probability:.2f}); was matched automatically"
+    old_tmdb_id = product.tmdb_id
+    product.tmdb_id = None
+    if old_tmdb_id is not None:
+        demote_movie_preferences(session, product, old_tmdb_id)
+
+
+def gate_box_sets(
+    engine: Engine,
+    jev: JevClient,
+    *,
+    store: str | None = None,
+    limit: int | None = None,
+) -> BoxSetResult:
+    """Ask Jev once per product title whether it is a box set of several films.
+
+    A box set becomes a collection and is never matched. An unsettled answer is
+    matched as usual but held for review. A failed call leaves the product
+    unchecked, and matching skips it until a later run gets an answer.
+    """
+    result = BoxSetResult()
+    with Session(engine) as session:
+        rows = session.exec(_gate_candidates(session, store, limit)).all()
+        logger.info("checking %d products for box sets", len(rows))
+        for done, (product, store_row) in enumerate(rows):
+            if done and done % PROGRESS_EVERY == 0:
+                _log_gate_progress(result, done, len(rows), jev)
+            facts = ProductFacts(
+                store=store_row.name,
+                raw_title=product.raw_title,
+                format=product.format,
+                release_year=product.release_year,
+                publisher=product.publisher,
+                edition_note=product.edition_note,
+            )
+            try:
+                probability = box_set_probability(jev, facts)
+            except JevError as error:
+                result.errors += 1
+                logger.warning("Jev box-set check failed for product %s: %s", product.id, error)
+                continue
+            result.checked += 1
+            product.box_set_probability = probability
+            if is_box_set(probability):
+                _mark_box_set(session, product, probability)
+                result.box_sets += 1
+            else:
+                _reopen_former_box_set(session, product, probability)
+                if maybe_box_set(probability):
+                    _hold_decided(session, product, probability)
+                    result.maybe += 1
+            session.commit()
+        if rows:
+            _log_gate_progress(result, len(rows), len(rows), jev)
+    return result
+
+
+def _log_gate_progress(result: BoxSetResult, done: int, total: int, jev: JevClient) -> None:
+    logger.info(
+        "box-set check %d/%d: %d box sets, %d unsure, %d errors%s",
+        done,
+        total,
+        result.box_sets,
+        result.maybe,
+        result.errors,
+        tokens_used(jev),
+    )
+
+
+def clear_box_set_answers(engine: Engine, *, store: str | None = None) -> int:
+    """Forget Jev's box-set answers of NO and above, so the gate asks again.
+
+    For new question wording. Title-pattern collections stay collections; the gate
+    reopens matches whose new answer differs.
+    """
+    with Session(engine) as session:
+        query = select(StoreProduct).where(
+            StoreProduct.box_set_probability >= JEV_NO  # type: ignore[operator]
+        )
+        if store is not None:
+            query = query.join(Store, Store.id == StoreProduct.store_id).where(Store.key == store)  # type: ignore[arg-type]
+        products = session.exec(query).all()
+        for product in products:
+            product.box_set_probability = None
+            product.is_collection = title_is_box_set(product.raw_title)
+        session.commit()
+    return len(products)
+
+
+def reset_ambiguous(engine: Engine, *, store: str | None = None) -> int:
+    """Send undecided ambiguous matches back to pending, to be decided again."""
+    with Session(engine) as session:
+        query = select(MatchState).where(MatchState.status == "ambiguous")
+        if store is not None:
+            query = (
+                query.join(StoreProduct, StoreProduct.id == MatchState.store_product_id)  # type: ignore[arg-type]
+                .join(Store, Store.id == StoreProduct.store_id)  # type: ignore[arg-type]
+                .where(Store.key == store)
+            )
+        states = session.exec(query).all()
+        for state in states:
+            state.status = "pending"
+        session.commit()
+    return len(states)
+
+
+def _pending_products(
+    session: Session, store: str | None, limit: int | None, gated: bool
+) -> list[StoreProduct]:
+    query = select(StoreProduct).outerjoin(
+        MatchState,
+        MatchState.store_product_id == StoreProduct.id,  # type: ignore[arg-type]
+    )
+    query = query.where(
+        (MatchState.id.is_(None)) | (MatchState.status.in_(RETRY_STATUSES))  # type: ignore[attr-defined,union-attr]
+    )
+    if gated:
+        # Not yet checked for a box set (the check failed): wait for an answer.
+        query = query.where(
+            (StoreProduct.is_collection == True)  # noqa: E712
+            | (StoreProduct.box_set_probability.is_not(None))  # type: ignore[union-attr]
+        )
+    if store is not None:
+        query = query.join(Store, Store.id == StoreProduct.store_id).where(Store.key == store)  # type: ignore[arg-type]
+    query = query.order_by(StoreProduct.id)  # type: ignore[arg-type]
+    if limit is not None:
+        query = query.limit(limit)
+    return list(session.exec(query).all())
+
+
+def _match_one(run: _Run, product: StoreProduct) -> None:
+    session, result = run.session, run.result
+    state = _state_for(session, product)
+    state.attempts += 1
+    state.last_attempt_at = run.now
+    state.last_error = None
+    if product.is_collection:
+        state.status = "not_applicable"
+        if not (state.note or "").startswith("Box set"):
+            state.note = "Collection"
+        result.not_applicable += 1
+        return
+    try:
+        _decide(run, product, state)
+    except (TmdbError, JevError) as error:
+        session.rollback()
+        state = _state_for(session, product)
+        state.attempts += 1
+        state.last_attempt_at = run.now
+        state.status, state.last_error = "error", str(error)
+        result.errors += 1
+        logger.warning("Matching error for product %s: %s", product.id, error)
 
 
 def match_pending(
     engine: Engine,
     client: TmdbClient,
     *,
+    jev: JevClient | None = None,
     store: str | None = None,
     limit: int | None = None,
     now: datetime | None = None,
+    progress_level: int = logging.DEBUG,
 ) -> MatchResult:
-    """Match products that have no decision yet, or whose last attempt errored."""
+    """Match products that have no decision yet, or whose last attempt errored.
+
+    With a Jev client, products must have passed the box-set gate first, and Jev
+    decides the cases the title scores cannot. Progress is logged every 50 products
+    at progress_level: DEBUG keeps refresh logs short, the match command uses INFO.
+    """
     now = now or datetime.now(UTC).replace(tzinfo=None)
     result = MatchResult()
     with Session(engine) as session:
-        query = select(StoreProduct).outerjoin(
-            MatchState,
-            MatchState.store_product_id == StoreProduct.id,  # type: ignore[arg-type]
-        )
-        query = query.where(
-            (MatchState.id.is_(None)) | (MatchState.status.in_(RETRY_STATUSES))  # type: ignore[attr-defined,union-attr]
-        )
-        if store is not None:
-            from .models import Store
-
-            query = query.join(Store, Store.id == StoreProduct.store_id).where(Store.key == store)  # type: ignore[arg-type]
-        query = query.order_by(StoreProduct.id)  # type: ignore[arg-type]
-        if limit is not None:
-            query = query.limit(limit)
-        products = session.exec(query).all()
-        catalogue = load_catalogue(session)
-        logger.debug("matching %d products against TMDB", len(products))
-
+        products = _pending_products(session, store, limit, gated=jev is not None)
+        run = _Run(session, client, jev, now, result, load_catalogue(session))
+        logger.log(progress_level, "matching %d products against TMDB", len(products))
         for product in products:
             if result.considered and result.considered % PROGRESS_EVERY == 0:
-                _log_progress(result, len(products))
+                _log_progress(result, len(products), progress_level, jev)
             result.considered += 1
-            state = _state_for(session, product)
-            state.attempts += 1
-            state.last_attempt_at = now
-            state.last_error = None
-            if product.is_collection:
-                state.status, state.note = "not_applicable", "Collection"
-                result.not_applicable += 1
-                session.commit()
-                continue
-            try:
-                _decide(session, client, product, state, now, result, catalogue)
-            except TmdbError as error:
-                session.rollback()
-                state = _state_for(session, product)
-                state.attempts += 1
-                state.last_attempt_at = now
-                state.status, state.last_error = "error", str(error)
-                result.errors += 1
-                logger.warning("TMDB error for product %s: %s", product.id, error)
+            _match_one(run, product)
             session.commit()
         if products:
-            _log_progress(result, len(products))
+            _log_progress(result, len(products), progress_level, jev)
     return result
 
 
