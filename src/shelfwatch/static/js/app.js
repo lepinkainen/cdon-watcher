@@ -120,28 +120,73 @@
 
   var queueFilter = document.getElementById('queue-filter')
   var queueCount = document.getElementById('queue-count')
+  var queueTabs = document.querySelectorAll('[role="tab"][data-tab]')
+  var activeTab = 'ambiguous'
 
+  // Ambiguous and unmatched items as tabs, combined with the title filter.
   function applyQueueFilter() {
     if (!queueFilter) return
     var words = queueFilter.value.toLowerCase().split(/\s+/).filter(Boolean)
     var items = document.querySelectorAll('section.queue-item')
+    var inTab = 0
     var shown = 0
+    var totals = {}
     items.forEach(function (item) {
+      var tab = item.getAttribute('data-tab')
+      totals[tab] = (totals[tab] || 0) + 1
       var text = (item.getAttribute('data-filter') || '').toLowerCase()
       var match = words.every(function (w) {
         return text.indexOf(w) !== -1
       })
-      item.hidden = !match
-      if (match) shown++
+      var here = tab === activeTab
+      item.hidden = !(here && match)
+      if (here) inTab++
+      if (here && match) shown++
+    })
+    queueTabs.forEach(function (button) {
+      var count = button.querySelector('.count')
+      if (count)
+        count.textContent = totals[button.getAttribute('data-tab')] || 0
     })
     if (queueCount) {
       queueCount.textContent = words.length
-        ? shown + ' of ' + items.length + ' items'
-        : items.length + ' items'
+        ? shown + ' of ' + inTab + ' items'
+        : inTab + ' items'
     }
   }
 
+  function selectQueueTab(tab) {
+    activeTab = tab
+    queueTabs.forEach(function (button) {
+      button.setAttribute(
+        'aria-selected',
+        button.getAttribute('data-tab') === tab ? 'true' : 'false'
+      )
+    })
+    applyQueueFilter()
+  }
+
+  // A link to one item (/queue#product-123) opens the tab that holds it.
+  function showLinkedItem() {
+    var target = location.hash
+      ? document.getElementById(location.hash.slice(1))
+      : null
+    var tab = target && target.getAttribute('data-tab')
+    if (!tab) return
+    selectQueueTab(tab)
+    target.scrollIntoView()
+  }
+
+  queueTabs.forEach(function (button) {
+    button.addEventListener('click', function () {
+      selectQueueTab(button.getAttribute('data-tab'))
+    })
+  })
+
   if (queueFilter) {
+    applyQueueFilter()
+    showLinkedItem()
+    window.addEventListener('hashchange', showLinkedItem)
     queueFilter.addEventListener('input', applyQueueFilter)
     queueFilter.addEventListener('keydown', function (event) {
       if (event.key === 'Escape') {

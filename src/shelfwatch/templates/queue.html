@@ -4,12 +4,17 @@
 <h2>Match queue</h2>
 {% if not has_tmdb %}<p class="warn">TMDB_API_KEY is not set; searching and confirming matches will fail.</p>{% endif %}
 {% if items %}
+{% set ambiguous = items | selectattr("0.match_status", "equalto", "ambiguous") | list | length %}
+<div class="tabs" role="tablist" aria-label="Queue">
+  <button type="button" role="tab" id="tab-ambiguous" data-tab="ambiguous" aria-selected="true">Ambiguous <span class="count">{{ ambiguous }}</span></button>
+  <button type="button" role="tab" id="tab-unmatched" data-tab="unmatched" aria-selected="false" title="No candidate fits, plus products not matched yet">Unmatched <span class="count">{{ items | length - ambiguous }}</span></button>
+</div>
 <form class="filters queue-filter" role="search" onsubmit="return false">
   <input type="search" id="queue-filter" placeholder="Filter by title" aria-label="Filter by title" autocomplete="off">
   <span class="meta" id="queue-count">{{ items | length }} items</span>
 </form>
 {% for row, candidates in items %}
-<section class="queue-item" id="product-{{ row.id }}" data-product-id="{{ row.id }}" data-filter="{{ row.raw_title }} {{ row.title }} {{ row.store_name }}">
+<section class="queue-item" id="product-{{ row.id }}" data-product-id="{{ row.id }}" data-tab="{{ 'ambiguous' if row.match_status == 'ambiguous' else 'unmatched' }}" data-filter="{{ row.raw_title }} {{ row.title }} {{ row.store_name }}">
   {% if row.cover_url %}<img class="queue-cover" src="{{ row.cover_url }}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% endif %}
   <h3>{{ row.raw_title }} <span class="tag muted">{{ row.match_status }}</span></h3>
   <p class="meta">{{ row.store_name }} · {{ row.format_label }} · {{ row.price_cents | euros }} · <a href="{{ row.edition_url }}" target="_blank" rel="noopener">store page</a></p>
@@ -19,10 +24,11 @@
     {% endfor %}
   </ul>
   <form class="search" data-search>
-    <input type="search" name="q" placeholder="Search TMDB" value="{{ row.raw_title }}">
-    <input type="number" name="year" placeholder="year" size="4">
+    <input type="search" name="q" placeholder="Search TMDB" value="{{ row.search_text }}" aria-label="Title">
+    <input type="text" name="year" placeholder="year" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" aria-label="Year">
     <button type="submit">Search</button>
     <button type="button" data-match="none">No match</button>
+    <button type="button" data-action="box-set" title="Several different films: list it under Box sets, never match it">Box set</button>
     <button type="button" data-action="ignore">Ignore</button>
   </form>
   <ul class="candidates results"></ul>

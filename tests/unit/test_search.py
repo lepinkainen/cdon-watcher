@@ -411,8 +411,13 @@ def test_search_hits_are_checked_against_the_wished_movie(engine):
         "Oldboy (Blu-ray)": ("auto", 670, "search"),
     }
     assert result.searched == 2
-    # Only the unrelated result fell through to an open TMDB search.
-    assert tmdb.searches == ["Destination Inner Space elokuva"]
+    # Only a clear wish score skips the open TMDB search; review-band hits are searched
+    # too, and with no TMDB results they stay ambiguous with the wish as the candidate.
+    assert tmdb.searches == [
+        "Innerspace 52 Brand New",
+        "Destination Inner Space elokuva",
+        "Oldboy Rare Josh Brolin",
+    ]
 
 
 def test_review_candidates_hold_the_wish(engine):

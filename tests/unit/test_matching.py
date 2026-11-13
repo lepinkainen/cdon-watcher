@@ -12,6 +12,7 @@ from shelfwatch.catalog.jev import JevError
 from shelfwatch.catalog.matching import (
     clear_box_set_answers,
     gate_box_sets,
+    mark_box_set,
     match_pending,
     reset_ambiguous,
     score_candidate,
@@ -569,3 +570,98 @@ def test_recheck_keeps_a_still_unsure_product_held(engine):
     clear_box_set_answers(engine)
     gate_box_sets(engine, FakeJev(box={"Heat": 0.45}))
     assert states(engine)["1"] == ("ambiguous", None, None)
+
+
+def wished(engine, tmdb_id, title, year, product_ids):
+    """Record a wish and make the products search hits for it."""
+    from shelfwatch.catalog.catalogue import WantedMovie, remember_want
+    from shelfwatch.catalog.models import SearchHit
+
+    at = T0.replace(tzinfo=None)
+    with Session(engine) as session:
+        remember_want(
+            session, WantedMovie(tmdb_id=tmdb_id, title=title, year=year, formats=["Blu-ray"])
+        )
+        for product_id in product_ids:
+            pid = session.exec(
+                select(StoreProduct.id).where(StoreProduct.product_id == product_id)
+            ).one()
+            session.add(
+                SearchHit(
+                    tmdb_id=tmdb_id,
+                    store_product_id=pid,
+                    run_id=1,
+                    first_found_at=at,
+                    last_found_at=at,
+                )
+            )
+        session.commit()
+
+
+SOUL = Candidate(732450, "Batman: Soul of the Dragon", release_year=2021, popularity=10)
+
+
+def test_a_review_band_search_hit_is_still_searched_on_tmdb(engine):
+    imported(engine, [product("1", "Batman - Soul of the Dragon")])
+    wished(engine, 414906, "The Batman", 2022, ["1"])
+    client = FakeTmdb({("Batman Soul of the Dragon", None): [SOUL]})
+    result = match_pending(engine, client)
+    assert client.searches == [("Batman Soul of the Dragon", None)]
+    assert states(engine)["1"] == ("auto", 732450, 732450)
+    assert result.auto == 1
+
+
+def test_a_review_band_wish_without_tmdb_results_stays_for_review(engine):
+    imported(engine, [product("1", "Batman - Soul of the Dragon")])
+    wished(engine, 414906, "The Batman", 2022, ["1"])
+    match_pending(engine, FakeTmdb())
+    assert states(engine)["1"] == ("ambiguous", None, None)
+    with Session(engine) as session:
+        assert '"tmdb_id": 414906' in session.exec(select(MatchState)).one().candidates_json
+
+
+def test_jev_chooses_between_the_wish_and_the_tmdb_results(engine):
+    imported(engine, [product("1", "Batman - Soul of the Dragon")])
+    wished(engine, 414906, "The Batman", 2022, ["1"])
+    gate_box_sets(engine, FakeJev())
+    close = Candidate(1, "Batman: Soul of the Dragon", release_year=2020, popularity=1)
+    client = FakeTmdb({("Batman Soul of the Dragon", None): [SOUL, close]})
+    seen: list[list[str]] = []
+
+    def pick(options):
+        seen.append(options)
+        return answer(options, "Batman: Soul of the Dragon (2021)")
+
+    match_pending(engine, client, jev=FakeJev(pick=pick))
+    assert "The Batman (2022)" in seen[0]  # the wish is still a candidate
+    assert states(engine)["1"] == ("auto", 732450, 732450)
+
+
+def test_a_clear_wish_score_is_accepted_without_a_search(engine):
+    imported(engine, [product("1", "The Batman (2022)")])
+    wished(engine, 414906, "The Batman", 2022, ["1"])
+    client = FakeTmdb()
+    match_pending(engine, client)
+    assert client.searches == []
+    assert states(engine)["1"] == ("auto", 414906, 414906)
+
+
+def test_a_hand_marked_box_set_outlasts_imports_retitles_and_rechecks(engine):
+    imported(engine, [product("1", "Heat", year=1995)])
+    client = FakeTmdb({("Heat", 1995): [Candidate(949, "Heat", release_year=1995, popularity=40)]})
+    match_pending(engine, client)
+    assert states(engine)["1"] == ("auto", 949, 949)
+    with Session(engine) as session:
+        pid = session.exec(select(StoreProduct)).one().id
+    mark_box_set(engine, pid)
+    assert states(engine)["1"] == ("not_applicable", None, None)
+
+    imported(engine, [product("1", "Heat / Heat 2")], run_id=2)  # retitled
+    jev = FakeJev(box={"Heat / Heat 2": 0.05})
+    assert gate_box_sets(engine, jev).checked == 0  # never asked
+    clear_box_set_answers(engine)
+    assert match_pending(engine, client, jev=jev).considered == 0
+    with Session(engine) as session:
+        marked = session.exec(select(StoreProduct)).one()
+        assert marked.is_collection and marked.marked_box_set
+    assert states(engine)["1"][0] == "not_applicable"

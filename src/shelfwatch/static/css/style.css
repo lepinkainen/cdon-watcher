@@ -219,6 +219,15 @@ form.search {
   flex-wrap: wrap;
   margin-top: 0.4rem;
 }
+/* Together as wide as the two default-width inputs they replace (about 370px in
+   Chromium): the year takes four digits plus padding and border, the title gets
+   the rest. Widths include padding and border (border-box). */
+form.search input[name='q'] {
+  width: calc(31ch + 0.8rem + 2px);
+}
+form.search input[name='year'] {
+  width: calc(4ch + 0.8rem + 2px);
+}
 tr.stale td {
   color: var(--warn);
 }
@@ -259,6 +268,34 @@ a.tag {
 }
 a.tag:hover {
   text-decoration: underline;
+}
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--line);
+  margin: 0.5rem 0 0.25rem;
+}
+.tabs [role='tab'] {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+.tabs [role='tab'][aria-selected='true'] {
+  border-color: var(--line);
+  background: #fff;
+  color: inherit;
+  font-weight: 600;
+}
+.tabs .count {
+  color: var(--muted);
+  font-weight: normal;
+  font-size: 0.85rem;
 }
 form.queue-filter input {
   min-width: 16rem;

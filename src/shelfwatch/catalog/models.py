@@ -77,6 +77,8 @@ class StoreProduct(CatalogModel, table=True):
     """A box set: the title patterns or Jev say it holds several different films."""
     box_set_probability: float | None = None
     """Jev's answer for the current raw title; None until checked."""
+    marked_box_set: bool = False
+    """A person tagged it as a box set in the queue; outlasts imports and Jev re-checks."""
     tmdb_id: int | None = Field(default=None, index=True)
 
     current_price_cents: int = Field(index=True)

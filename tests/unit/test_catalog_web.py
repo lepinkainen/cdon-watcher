@@ -496,3 +496,57 @@ def test_box_sets_have_their_own_page_and_leave_the_main_page(client, engine):
     assert "Alien Quadrilogy" in page and "Gone Trilogy" not in page and "Heat</a>" not in page
     assert "box set</span>" in page
     assert "Alien Quadrilogy" not in client.get("/box-sets?q=heat").text
+
+
+def test_queue_search_is_prefilled_with_the_cleaned_title(client, engine):
+    from shelfwatch.catalog.models import MatchState
+
+    untried = product("1", "Blade Runner 2049 (4K UHD+Blu-ray)")
+    untried.cleaned_title = "Blade Runner 2049"
+    seed(engine, [untried, product("2", "Heat (Blu-ray / Special Edition)")])
+    with Session(engine) as session:
+        session.add(MatchState(store_product_id=ids(engine)["2"], status="ambiguous", query="Heat"))
+        session.commit()
+    html = client.get("/queue").text
+    # Not tried yet: the matcher's cleanup of the parser's title; tried: what it searched.
+    assert 'name="q" placeholder="Search TMDB" value="Blade Runner 2049"' in html
+    assert 'name="q" placeholder="Search TMDB" value="Heat"' in html
+    assert 'value="Blade Runner 2049 (4K UHD+Blu-ray)"' not in html
+    assert 'name="year" placeholder="year" inputmode="numeric"' in html
+
+
+def test_queue_box_set_button_moves_the_product_to_the_box_set_page(client, engine):
+    from shelfwatch.catalog.models import MatchState
+
+    seed(engine, [product("1", "Heat (Blu-ray)"), product("2", "Young Guns / Young Guns II")])
+    pid = ids(engine)["2"]
+    html = client.get("/queue").text
+    assert 'data-action="box-set"' in html
+    response = client.post(f"/api/v2/products/{pid}/box-set")
+    assert response.json() == {"status": "not_applicable", "box_set": True}
+    assert "Young Guns" not in client.get("/queue").text
+    assert "Young Guns" not in client.get("/").text
+    assert "Young Guns / Young Guns II" in client.get("/box-sets").text
+    with Session(engine) as session:
+        state = session.exec(select(MatchState).where(MatchState.store_product_id == pid)).one()
+        assert (state.decided_by, state.note) == ("user", "Box set (marked by hand)")
+    assert client.post("/api/v2/products/999999/box-set").status_code == 404
+
+
+def test_queue_splits_ambiguous_and_unmatched_into_tabs(client, engine):
+    from shelfwatch.catalog.models import MatchState
+
+    seed(engine, [product("1", "Heat"), product("2", "The Thing"), product("3", "Nothing")])
+    pids = ids(engine)
+    with Session(engine) as session:
+        session.add(MatchState(store_product_id=pids["2"], status="ambiguous"))
+        session.add(MatchState(store_product_id=pids["3"], status="unmatched"))
+        session.commit()
+    html = client.get("/queue").text
+    assert (
+        'data-tab="ambiguous" aria-selected="true">Ambiguous <span class="count">1</span>' in html
+    )
+    assert 'Unmatched <span class="count">2</span>' in html  # unmatched plus not tried yet
+    assert f'id="product-{pids["2"]}" data-product-id="{pids["2"]}" data-tab="ambiguous"' in html
+    assert f'id="product-{pids["3"]}" data-product-id="{pids["3"]}" data-tab="unmatched"' in html
+    assert f'id="product-{pids["1"]}" data-product-id="{pids["1"]}" data-tab="unmatched"' in html

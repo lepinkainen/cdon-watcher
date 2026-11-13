@@ -19,7 +19,7 @@ from ..catalog.catalogue import (
     remember_want,
 )
 from ..catalog.db import open_catalog
-from ..catalog.matching import set_manual_match
+from ..catalog.matching import mark_box_set, set_manual_match
 from ..catalog.models import MovieMetadata, StoreProduct
 from ..catalog.tmdb import HttpTmdbClient, TmdbClient, TmdbError
 from ..config import CONFIG
@@ -202,6 +202,16 @@ async def product_match(request: Request, store_product_id: int) -> JSONResponse
     except TmdbError as error:
         raise HTTPException(502, str(error)) from error
     return JSONResponse({"status": state.status, "tmdb_id": state.tmdb_id})
+
+
+@router.post("/api/v2/products/{store_product_id}/box-set")
+def product_box_set(request: Request, store_product_id: int) -> JSONResponse:
+    """Tag a product as a box set by hand; it leaves the queue and the main page."""
+    try:
+        state = mark_box_set(_engine(request), store_product_id)
+    except LookupError as error:
+        raise HTTPException(404, str(error)) from error
+    return JSONResponse({"status": state.status, "box_set": True})
 
 
 @router.post("/api/v2/products/{store_product_id}/wish")

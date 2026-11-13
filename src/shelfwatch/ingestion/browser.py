@@ -99,7 +99,10 @@ class BrowserFetcher:
         except Exception:  # noqa: BLE001 - banner dismissal is best effort
             pass
         try:
-            self._page.wait_for_selector("script#__NEXT_DATA__", timeout=self.content_timeout_ms)
+            # A <script> is never visible: the default state="visible" always ran out the timeout.
+            self._page.wait_for_selector(
+                "script#__NEXT_DATA__", state="attached", timeout=self.content_timeout_ms
+            )
         except Exception:  # noqa: BLE001 - adapter validation reports a missing state
             pass
         time.sleep(self.settle_seconds)

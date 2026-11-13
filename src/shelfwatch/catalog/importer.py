@@ -82,7 +82,9 @@ def _apply_current_state(
     product.publisher = parsed.publisher
     product.edition_note = parsed.edition_note
     product.image_url = parsed.image_url
-    product.is_collection = parsed.is_collection or is_box_set(product.box_set_probability)
+    product.is_collection = (
+        parsed.is_collection or product.marked_box_set or is_box_set(product.box_set_probability)
+    )
     product.current_price_cents = parsed.price_cents
     product.current_regular_price_cents = parsed.regular_price_cents
     product.currency = parsed.currency

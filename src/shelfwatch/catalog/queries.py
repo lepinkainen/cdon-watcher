@@ -9,6 +9,7 @@ from sqlmodel import Session, select
 
 from ..ingestion.contract import SEARCH_SCOPE, Availability
 from .catalogue import Catalogue, WantedMovie, load_catalogue
+from .matching import search_query
 from .models import (
     CrawlRun,
     MatchState,
@@ -67,6 +68,8 @@ class Row:
     """Wished for in this format and at or under the wish's price cap."""
     own_dvd: bool = False
     """Owned on DVD only: an upgrade candidate."""
+    search_text: str = ""
+    """What the matcher searched TMDB for: the title without format and edition noise."""
 
     @property
     def can_wish(self) -> bool:
@@ -344,6 +347,7 @@ def match_queue(
             if product in ignored:
                 continue
             row = _row(product, store, meta, state.status if state else None)
+            row.search_text = _search_text(product, state)
             candidates = (
                 json.loads(state.candidates_json) if state and state.candidates_json else []
             )
@@ -351,6 +355,14 @@ def match_queue(
         session.expunge_all()
     items.sort(key=lambda item: (item[0].match_status != "ambiguous", item[0].title.casefold()))
     return items
+
+
+def _search_text(product: StoreProduct, state: MatchState | None) -> str:
+    """The query matching used; for a product not tried yet, the same cleanup."""
+    if state is not None and state.query:
+        return state.query
+    query, _ = search_query(product.cleaned_title)
+    return query or product.cleaned_title
 
 
 def wishlist_page(engine: Engine, *, now: datetime | None = None) -> list[WishEntry]:

@@ -308,8 +308,13 @@ def _decide_against_targets(
     state: MatchState,
     targets: list[Candidate],
     year: int | None,
-) -> bool:
-    """Check a search hit against the wished movie. False: leave it to open matching."""
+) -> list[tuple[float, Candidate]] | None:
+    """Check a search hit against the wished movie.
+
+    None: accepted as the wish. Otherwise the wishes that scored in the review band,
+    which open matching adds to its TMDB candidates: a store search returns many
+    loosely related titles, and only a clear score settles a hit without a search.
+    """
     scored = sorted(
         ((score_target(product.cleaned_title, year, t), t) for t in targets), key=lambda x: -x[0]
     )
@@ -319,15 +324,30 @@ def _decide_against_targets(
         state.candidates_json = _candidates_json(scored)
         if _accept(run, product, state, best, decided_by="search"):
             run.result.searched += 1
-        return True
-    if best_score >= TARGET_REVIEW_SCORE:
-        state.confidence = best_score
-        state.candidates_json = _candidates_json(scored)
-        state.status = "ambiguous"
-        state.note = f"Search hit for {best.title!r} scored {best_score}; needs review"
-        run.result.ambiguous += 1
-        return True
-    return False
+        return None
+    return [(score, t) for score, t in scored if score >= TARGET_REVIEW_SCORE]
+
+
+def _with_wishes(
+    query: str,
+    year: int | None,
+    found: list[Candidate],
+    wishes: list[tuple[float, Candidate]],
+) -> list[tuple[float, Candidate]]:
+    """TMDB results plus the wishes a search hit might be, best first.
+
+    A wish keeps the higher of its wish score and its open score, so it can still
+    win, but a TMDB result that fits the title better is never outranked by it.
+    """
+    wish_scores = {c.tmdb_id: score for score, c in wishes}
+    candidates = {c.tmdb_id: c for c in found}
+    for _, wish in wishes:
+        candidates.setdefault(wish.tmdb_id, wish)
+    scored = [
+        (max(score_candidate(query, year, c), wish_scores.get(c.tmdb_id, 0.0)), c)
+        for c in candidates.values()
+    ]
+    return sorted(scored, key=lambda x: -x[0])
 
 
 def _reuse(run: _Run, product: StoreProduct, state: MatchState, reusable: MatchState) -> None:
@@ -399,22 +419,26 @@ def _decide(run: _Run, product: StoreProduct, state: MatchState) -> None:
     year = title_year or product.release_year
     state.query, state.query_year = query, year
     targets = _search_targets(run.session, product, run.catalogue)
-    if targets and _decide_against_targets(run, product, state, targets, year):
-        return
-    if not query:
+    wishes: list[tuple[float, Candidate]] = []
+    if targets:
+        review = _decide_against_targets(run, product, state, targets, year)
+        if review is None:
+            return
+        wishes = review
+    if not query and not wishes:
         state.status, state.note = "unmatched", "Empty search query after cleanup"
         run.result.unmatched += 1
         return
 
-    reusable = _find_reusable(run.session, product, query, year)
+    reusable = _find_reusable(run.session, product, query, year) if query else None
     if reusable is not None and reusable.tmdb_id is not None:
         _reuse(run, product, state, reusable)
         return
 
-    candidates = run.client.search_movies(query, year)
-    if not candidates and year:
+    candidates = run.client.search_movies(query, year) if query else []
+    if not candidates and year and query:
         candidates = run.client.search_movies(query)
-    scored = sorted(((score_candidate(query, year, c), c) for c in candidates), key=lambda x: -x[0])
+    scored = _with_wishes(query, year, candidates, wishes)
     state.candidates_json = _candidates_json(scored)
     if not scored:
         state.status, state.note = "unmatched", "No TMDB results"
@@ -583,7 +607,7 @@ def clear_box_set_answers(engine: Engine, *, store: str | None = None) -> int:
         products = session.exec(query).all()
         for product in products:
             product.box_set_probability = None
-            product.is_collection = title_is_box_set(product.raw_title)
+            product.is_collection = product.marked_box_set or title_is_box_set(product.raw_title)
         session.commit()
     return len(products)
 
@@ -684,6 +708,32 @@ def match_pending(
         if products:
             _log_progress(result, len(products), progress_level, jev)
     return result
+
+
+def mark_box_set(
+    engine: Engine, store_product_id: int, *, now: datetime | None = None
+) -> MatchState:
+    """A person tags the product as a box set: never matched, listed on /box-sets."""
+    now = now or datetime.now(UTC).replace(tzinfo=None)
+    with Session(engine) as session:
+        product = session.get(StoreProduct, store_product_id)
+        if product is None:
+            raise LookupError(f"No store product {store_product_id}")
+        product.marked_box_set = True
+        product.is_collection = True
+        state = _state_for(session, product)
+        state.status, state.tmdb_id = "not_applicable", None
+        state.note = "Box set (marked by hand)"
+        state.decided_at, state.decided_by = now, "user"
+        state.last_error = None
+        old_tmdb_id = product.tmdb_id
+        product.tmdb_id = None
+        if old_tmdb_id is not None:
+            demote_movie_preferences(session, product, old_tmdb_id)
+        session.commit()
+        session.refresh(state)
+        session.expunge(state)
+        return state
 
 
 def set_manual_match(

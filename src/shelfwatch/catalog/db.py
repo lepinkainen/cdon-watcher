@@ -91,12 +91,25 @@ def _v5_box_set_probability(engine: Engine) -> None:
             )
 
 
+def _v6_marked_box_set(engine: Engine) -> None:
+    """Box sets tagged by hand in the match queue."""
+    columns = {c["name"] for c in inspect(engine).get_columns("store_products")}
+    if "marked_box_set" not in columns:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "ALTER TABLE store_products ADD COLUMN marked_box_set BOOLEAN NOT NULL DEFAULT 0"
+                )
+            )
+
+
 MIGRATIONS: list[tuple[int, Migration]] = [
     (1, _v1_create_tables),
     (2, _v2_matching_tables),
     (3, _v3_user_preferences),
     (4, _v4_catalogue_and_searches),
     (5, _v5_box_set_probability),
+    (6, _v6_marked_box_set),
 ]
 CURRENT_VERSION = MIGRATIONS[-1][0]
 
