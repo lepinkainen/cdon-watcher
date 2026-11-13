@@ -89,6 +89,19 @@ def test_refresh_all_runs_every_stage_and_skips_matching_without_key(env):
     assert "imported" in refresh.describe(reports[1])
 
 
+def test_parse_import_and_search_stages_log_summaries(env, caplog):
+    tmp_path, _ = env
+    with caplog.at_level("DEBUG", logger="shelfwatch.refresh"):
+        refresh.refresh_store(
+            "ax", raw_dir=tmp_path / "raw", db_path=tmp_path / "c.db", tmdb_api_key=""
+        )
+    assert caplog.messages == [
+        "ax category run 1 parsed: 334 products, 1 row errors",
+        "ax category run 1 imported: 334 products (334 new), 0 expired, 0 search hits",
+        "ax: 0 wishlist searches due",
+    ]
+
+
 def test_incomplete_crawl_still_imports(env):
     tmp_path, fetchers = env
     fetchers["cdon"].pages = lambda url: None if url.endswith("=2") else cdon_page(1)

@@ -123,6 +123,25 @@ class MatchResult:
     """Accepted as the wished-for movie a search was looking for."""
 
 
+PROGRESS_EVERY = 50
+
+
+def _log_progress(result: MatchResult, total: int) -> None:
+    logger.debug(
+        "matched %d/%d: %d auto, %d reused, %d wished, %d ambiguous, %d unmatched, "
+        "%d not applicable, %d errors",
+        result.considered,
+        total,
+        result.auto,
+        result.reused,
+        result.searched,
+        result.ambiguous,
+        result.unmatched,
+        result.not_applicable,
+        result.errors,
+    )
+
+
 def _candidates_json(scored: list[tuple[float, Candidate]]) -> str:
     return json.dumps(
         [
@@ -348,8 +367,11 @@ def match_pending(
             query = query.limit(limit)
         products = session.exec(query).all()
         catalogue = load_catalogue(session)
+        logger.debug("matching %d products against TMDB", len(products))
 
         for product in products:
+            if result.considered and result.considered % PROGRESS_EVERY == 0:
+                _log_progress(result, len(products))
             result.considered += 1
             state = _state_for(session, product)
             state.attempts += 1
@@ -371,6 +393,8 @@ def match_pending(
                 result.errors += 1
                 logger.warning("TMDB error for product %s: %s", product.id, error)
             session.commit()
+        if products:
+            _log_progress(result, len(products))
     return result
 
 

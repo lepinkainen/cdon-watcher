@@ -282,3 +282,22 @@ def test_corrected_or_rejected_match_moves_its_promoted_preferences(engine):
     # Rejection restores the product-level preference; 949's ignore from product 2 stays.
     set_manual_match(engine, None, ids["1"], None)
     assert prefs(engine) == {("ignore", None, ids["1"], ids["1"]), ("ignore", 949, None, ids["2"])}
+
+
+def test_progress_is_logged_every_50_products(engine, caplog):
+    imported(engine, [product(str(n), f"Movie {n}") for n in range(120)])
+    with caplog.at_level("DEBUG", logger="shelfwatch.catalog.matching"):
+        match_pending(engine, FakeTmdb())
+    assert caplog.messages[0] == "matching 120 products against TMDB"
+    assert [m.split(":")[0] for m in caplog.messages[1:]] == [
+        "matched 50/120",
+        "matched 100/120",
+        "matched 120/120",
+    ]
+    assert "120 unmatched" in caplog.messages[-1]
+
+
+def test_nothing_to_match_logs_only_the_count(engine, caplog):
+    with caplog.at_level("DEBUG", logger="shelfwatch.catalog.matching"):
+        match_pending(engine, FakeTmdb())
+    assert caplog.messages == ["matching 0 products against TMDB"]

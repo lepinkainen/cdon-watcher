@@ -211,6 +211,7 @@ def _search_stage(
     tasks = search_tasks(
         engine, store, cfg.search_cap, min_interval_hours=cfg.search_interval_hours
     )
+    logger.debug("%s: %d wishlist searches due", store, len(tasks))
     if not tasks:
         return None
     try:
@@ -241,7 +242,34 @@ def _import(
         parsed = parse_run(cfg.raw_dir, make_parser(store), run_id, search=search)
     except FileNotFoundError:
         return None
-    return import_run(engine, parsed)
+    _log_parsed(parsed)
+    return _logged_import(engine, parsed)
+
+
+def _log_parsed(parsed: ParsedRun) -> None:
+    logger.debug(
+        "%s %s run %d parsed: %d products, %d row errors",
+        parsed.store,
+        parsed.scope,
+        parsed.run_id,
+        len(parsed.products),
+        len(parsed.errors),
+    )
+
+
+def _logged_import(engine: Engine, parsed: ParsedRun) -> ImportResult:
+    result = import_run(engine, parsed)
+    logger.debug(
+        "%s %s run %d imported: %d products (%d new), %d expired, %d search hits",
+        result.store,
+        parsed.scope,
+        result.run_id,
+        result.products_seen,
+        result.products_created,
+        result.expired,
+        result.search_hits,
+    )
+    return result
 
 
 def _category_stages(
@@ -264,9 +292,10 @@ def _category_stages(
     except FileNotFoundError as error:
         report.notes.append(f"Nothing to parse: {error}")
         return
+    _log_parsed(report.parsed)
     if report.parsed.errors:
         report.notes.append(f"{len(report.parsed.errors)} row parse errors")
-    report.imported = import_run(engine, report.parsed)
+    report.imported = _logged_import(engine, report.parsed)
 
 
 def refresh_store(
